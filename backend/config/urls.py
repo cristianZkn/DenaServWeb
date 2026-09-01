@@ -14,6 +14,9 @@ api = NinjaAPI(title="DenaServ API")
 def health_check(request):
     return {"status": "ok", "message": "DenaServ API esta funcionando correctamente"}
 
+from cotizaciones.api import router as cotizaciones_router
+api.add_router("", cotizaciones_router)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/", api.urls)
