@@ -52,6 +52,23 @@ class CotizacionSchema(Schema):
 class CotizacionPublicaSchema(CotizacionSchema):
     contrato: Optional[ContratoSchema] = None
 
+# --- Schemas para Portafolio (Módulo 5) ---
+class FotoProyectoSchema(Schema):
+    url_imagen: str
+    es_portada: bool
+    orden: int
+
+class ProyectoRealizadoSchema(Schema):
+    slug: str
+    titulo_descriptivo: str
+    superficie_construida_m2: float
+    comuna: str
+    material_revestimiento_usado: str
+    plazo_ejecucion_dias: int
+    mensaje_whatsapp_predefinido: str
+    fecha_publicacion: datetime
+    fotos: List[FotoProyectoSchema]
+
 # --- Schemas de Creación ---
 class CrearCotizacionSchema(Schema):
     cliente_nombre: str

@@ -125,3 +125,11 @@ def obtener_cotizacion_publica(request, uuid_publico: str):
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}
+
+from .models import ProyectoRealizado
+from .schemas import ProyectoRealizadoSchema
+from typing import List
+
+@router.get("/portafolio/", response=List[ProyectoRealizadoSchema])
+def listar_portafolio(request):
+    return ProyectoRealizado.objects.filter(esta_publicado=True).prefetch_related('fotos').order_by('-fecha_publicacion')
