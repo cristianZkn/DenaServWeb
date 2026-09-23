@@ -43,8 +43,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'cotizaciones',
+    'core',
 ]
+
+AUTH_USER_MODEL = 'core.Usuario'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
