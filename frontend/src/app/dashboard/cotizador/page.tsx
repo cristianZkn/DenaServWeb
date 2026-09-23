@@ -14,16 +14,16 @@ export default function CotizadorPage() {
     cliente_email: "",
     cliente_comuna: "",
     
-    superficie_m2: 0,
+    superficie_m2: "",
     tipo_base: "RADIER_HORMIGON",
     tipo_revestimiento_exterior: "SMART_PANEL",
     tipo_cubierta: "ZINC_ONDULADO",
-    costo_base_casa_global: 0,
+    costo_base_casa_global: "",
     
     requiere_nivelacion: false,
-    costo_nivelacion_global: 0,
-    distancia_traslado_km: 0,
-    costo_logistica_global: 0,
+    costo_nivelacion_global: "",
+    distancia_traslado_km: "",
+    costo_logistica_global: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -31,7 +31,7 @@ export default function CotizadorPage() {
     let finalValue: any = value;
     
     if (type === "number") {
-      finalValue = parseFloat(value) || 0;
+      finalValue = value === "" ? "" : parseFloat(value);
     } else if (type === "checkbox") {
       finalValue = (e.target as HTMLInputElement).checked;
     }
@@ -40,9 +40,9 @@ export default function CotizadorPage() {
   };
 
   const calcularTotales = () => {
-    let total = formData.costo_base_casa_global + formData.costo_logistica_global;
+    let total = (parseFloat(formData.costo_base_casa_global as any) || 0) + (parseFloat(formData.costo_logistica_global as any) || 0);
     if (formData.requiere_nivelacion) {
-      total += formData.costo_nivelacion_global;
+      total += (parseFloat(formData.costo_nivelacion_global as any) || 0);
     }
     return total;
   };
@@ -53,6 +53,15 @@ export default function CotizadorPage() {
     setError("");
     const token = localStorage.getItem("token");
 
+    const payload = {
+      ...formData,
+      superficie_m2: parseFloat(formData.superficie_m2 as any) || 0,
+      costo_base_casa_global: parseFloat(formData.costo_base_casa_global as any) || 0,
+      costo_nivelacion_global: parseFloat(formData.costo_nivelacion_global as any) || 0,
+      distancia_traslado_km: parseFloat(formData.distancia_traslado_km as any) || 0,
+      costo_logistica_global: parseFloat(formData.costo_logistica_global as any) || 0,
+    };
+
     try {
       const res = await fetch("http://127.0.0.1:8000/api/cotizaciones/", {
         method: "POST",
@@ -60,7 +69,7 @@ export default function CotizadorPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {

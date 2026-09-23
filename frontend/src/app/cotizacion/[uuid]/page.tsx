@@ -71,6 +71,16 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
     <div className="min-h-screen bg-slate-100 py-10">
       <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden border border-slate-300">
         
+        {/* Botón Volver */}
+        <div className="bg-slate-100 p-4 border-b border-slate-300">
+          <button 
+            onClick={() => window.history.back()} 
+            className="text-blue-900 font-bold hover:underline flex items-center"
+          >
+            ← Volver Atrás
+          </button>
+        </div>
+
         {/* Header Publico */}
         <div className="bg-blue-900 text-white p-8 text-center">
           <h1 className="text-4xl font-black mb-2">Cotización Formal</h1>
