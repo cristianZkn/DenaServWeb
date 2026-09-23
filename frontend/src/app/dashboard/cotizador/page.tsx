@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function CotizadorPage() {
@@ -12,14 +12,18 @@ export default function CotizadorPage() {
     cliente_nombre: "",
     cliente_telefono: "",
     cliente_email: "",
-    presupuesto_estimado: 0,
-    tipo_proyecto: "Personalizado",
+    cliente_comuna: "",
+    
     superficie_m2: 0,
-    costo_base_casa: 0,
+    tipo_base: "RADIER_HORMIGON",
+    tipo_revestimiento_exterior: "SMART_PANEL",
+    tipo_cubierta: "ZINC_ONDULADO",
+    costo_base_casa_global: 0,
+    
     requiere_nivelacion: false,
-    costo_nivelacion: 0,
-    distancia_terreno_km: 0,
-    costo_logistica: 0,
+    costo_nivelacion_global: 0,
+    distancia_traslado_km: 0,
+    costo_logistica_global: 0,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -36,7 +40,10 @@ export default function CotizadorPage() {
   };
 
   const calcularTotales = () => {
-    const total = formData.costo_base_casa + formData.costo_nivelacion + formData.costo_logistica;
+    let total = formData.costo_base_casa_global + formData.costo_logistica_global;
+    if (formData.requiere_nivelacion) {
+      total += formData.costo_nivelacion_global;
+    }
     return total;
   };
 
@@ -60,7 +67,8 @@ export default function CotizadorPage() {
         const data = await res.json();
         router.push(`/cotizacion/${data.uuid_publico}`);
       } else {
-        setError("Error al crear la cotización. Verifica los datos.");
+        const errData = await res.json();
+        setError(`Error al crear la cotización: ${errData.message || JSON.stringify(errData)}`);
       }
     } catch (err) {
       setError("Error de red. Asegúrate de que el servidor esté encendido.");
@@ -71,7 +79,7 @@ export default function CotizadorPage() {
 
   return (
     <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-slate-800 mb-8 border-b pb-4">Nueva Cotización</h1>
+      <h1 className="text-3xl font-bold text-slate-800 mb-8 border-b pb-4">Nueva Cotización (Cálculo Global)</h1>
 
       {error && (
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
@@ -89,39 +97,56 @@ export default function CotizadorPage() {
               <input type="text" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleChange} required />
             </div>
             <div>
-              <label className="block font-semibold mb-2">Teléfono</label>
-              <input type="text" name="cliente_telefono" value={formData.cliente_telefono} onChange={handleChange} />
+              <label className="block font-semibold mb-2">Teléfono (WhatsApp) *</label>
+              <input type="text" name="cliente_telefono" value={formData.cliente_telefono} onChange={handleChange} required />
             </div>
             <div>
               <label className="block font-semibold mb-2">Email</label>
               <input type="email" name="cliente_email" value={formData.cliente_email} onChange={handleChange} />
             </div>
             <div>
-              <label className="block font-semibold mb-2">Presupuesto Estimado ($)</label>
-              <input type="number" name="presupuesto_estimado" value={formData.presupuesto_estimado} onChange={handleChange} />
+              <label className="block font-semibold mb-2">Comuna</label>
+              <input type="text" name="cliente_comuna" value={formData.cliente_comuna} onChange={handleChange} />
             </div>
           </div>
         </section>
 
         {/* Proyecto */}
         <section className="bg-slate-50 p-6 rounded-md border border-slate-200">
-          <h2 className="text-xl font-bold text-slate-700 mb-4">Detalles del Proyecto</h2>
+          <h2 className="text-xl font-bold text-slate-700 mb-4">Detalles Arquitectónicos</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block font-semibold mb-2">Tipo de Proyecto</label>
-              <select name="tipo_proyecto" value={formData.tipo_proyecto} onChange={handleChange}>
-                <option value="Personalizado">Personalizado</option>
-                <option value="Prediseñado">Prediseñado</option>
+              <label className="block font-semibold mb-2">Superficie Total (m²)</label>
+              <input type="number" name="superficie_m2" value={formData.superficie_m2} onChange={handleChange} required min="15" />
+            </div>
+            <div>
+              <label className="block font-semibold mb-2">Tipo de Base</label>
+              <select name="tipo_base" value={formData.tipo_base} onChange={handleChange}>
+                <option value="RADIER_HORMIGON">Radier Hormigón</option>
+                <option value="BASE_MADERA_PILOTES">Base Madera / Pilotes</option>
+                <option value="SIN_BASE">Sin Base (Provee Cliente)</option>
               </select>
             </div>
             <div>
-              <label className="block font-semibold mb-2">Superficie Total (m²)</label>
-              <input type="number" name="superficie_m2" value={formData.superficie_m2} onChange={handleChange} required />
+              <label className="block font-semibold mb-2">Revestimiento Exterior</label>
+              <select name="tipo_revestimiento_exterior" value={formData.tipo_revestimiento_exterior} onChange={handleChange}>
+                <option value="SMART_PANEL">Smart Panel</option>
+                <option value="SIDING_FIBROCEMENTO">Siding Fibrocemento</option>
+                <option value="SMART_LAP">Smart Lap</option>
+                <option value="METAL_SIDING">Metal Siding</option>
+                <option value="OSB_ESTRUCTURAL">OSB Estructural (Desnudo)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold mb-2">Tipo de Cubierta</label>
+              <select name="tipo_cubierta" value={formData.tipo_cubierta} onChange={handleChange}>
+                <option value="ZINC_ONDULADO">Zinc Ondulado</option>
+                <option value="ZINC_5V">Zinc 5V</option>
+              </select>
             </div>
             <div className="md:col-span-2">
-              <label className="block font-semibold mb-2">Costo Base de Casa ($)</label>
-              <input type="number" name="costo_base_casa" value={formData.costo_base_casa} onChange={handleChange} required />
-              <p className="text-sm text-slate-500 mt-1">Costo calculado o acordado para la construcción principal.</p>
+              <label className="block font-semibold mb-2">Costo Base de Casa Global ($)</label>
+              <input type="number" name="costo_base_casa_global" value={formData.costo_base_casa_global} onChange={handleChange} required min="0" />
             </div>
           </div>
         </section>
@@ -138,24 +163,24 @@ export default function CotizadorPage() {
                 onChange={handleChange} 
                 className="w-6 h-6 mr-3"
               />
-              <label className="font-semibold text-lg">Incluir Preparación y Nivelación de Terreno</label>
+              <label className="font-semibold text-lg">Incluir Nivelación de Terreno</label>
             </div>
             
             {formData.requiere_nivelacion && (
               <div>
-                <label className="block font-semibold mb-2">Costo de Nivelación ($)</label>
-                <input type="number" name="costo_nivelacion" value={formData.costo_nivelacion} onChange={handleChange} />
+                <label className="block font-semibold mb-2">Costo Global Nivelación ($)</label>
+                <input type="number" name="costo_nivelacion_global" value={formData.costo_nivelacion_global} onChange={handleChange} min="0" />
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-4 border-t border-slate-300">
               <div>
                 <label className="block font-semibold mb-2">Distancia al Terreno (Km)</label>
-                <input type="number" name="distancia_terreno_km" value={formData.distancia_terreno_km} onChange={handleChange} />
+                <input type="number" name="distancia_traslado_km" value={formData.distancia_traslado_km} onChange={handleChange} min="0" />
               </div>
               <div>
-                <label className="block font-semibold mb-2">Costo Total Logística (Flete y Obreros) ($)</label>
-                <input type="number" name="costo_logistica" value={formData.costo_logistica} onChange={handleChange} />
+                <label className="block font-semibold mb-2">Costo Global Logística ($)</label>
+                <input type="number" name="costo_logistica_global" value={formData.costo_logistica_global} onChange={handleChange} min="0" />
               </div>
             </div>
           </div>

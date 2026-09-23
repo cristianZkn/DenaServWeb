@@ -4,14 +4,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface Cliente {
+  nombre_completo: string;
+  telefono_whatsapp: string;
+}
+
 interface Cotizacion {
   id: number;
   uuid_publico: string;
-  cliente_nombre: string;
-  cliente_telefono: string;
-  costo_total: number;
+  cliente: Cliente;
+  monto_total_bruto: number;
   estado: string;
-  fecha_creacion: string;
+  fecha_emision: string;
 }
 
 export default function DashboardPage() {
@@ -86,13 +90,13 @@ export default function DashboardPage() {
             ) : (
               cotizaciones.map((cotizacion) => (
                 <tr key={cotizacion.id} className="border-b border-slate-200 hover:bg-slate-50">
-                  <td className="p-4 text-lg font-medium">{cotizacion.cliente_nombre}</td>
-                  <td className="p-4 text-lg">{cotizacion.cliente_telefono}</td>
+                  <td className="p-4 text-lg font-medium">{cotizacion.cliente?.nombre_completo || "Desconocido"}</td>
+                  <td className="p-4 text-lg">{cotizacion.cliente?.telefono_whatsapp || "-"}</td>
                   <td className="p-4 text-lg">
-                    {new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
+                    {new Date(cotizacion.fecha_emision).toLocaleDateString("es-CL")}
                   </td>
                   <td className="p-4 text-lg font-semibold text-blue-900">
-                    ${cotizacion.costo_total.toLocaleString("es-CL")}
+                    ${cotizacion.monto_total_bruto.toLocaleString("es-CL")}
                   </td>
                   <td className="p-4 text-lg">
                     <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-bold border border-yellow-300">

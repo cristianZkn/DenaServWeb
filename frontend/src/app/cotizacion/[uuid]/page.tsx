@@ -5,26 +5,37 @@ import Link from "next/link";
 
 interface HitoPago {
   id: number;
-  nombre: string;
-  porcentaje: string;
-  monto: number;
-  detalle_cobertura: string;
-  estado: string;
+  numero_hito: number;
+  nombre_fase: string;
+  porcentaje_exigido: number;
+  monto_esperado: number;
+  estado_pago: string;
+}
+
+interface Contrato {
+  monto_total_pactado: number;
+  hitos: HitoPago[];
+}
+
+interface Cliente {
+  nombre_completo: string;
+  telefono_whatsapp: string;
+  correo_electronico?: string;
 }
 
 interface Cotizacion {
   uuid_publico: string;
-  cliente_nombre: string;
+  cliente: Cliente;
   superficie_m2: number;
-  costo_base_casa: number;
+  tipo_base: string;
+  tipo_revestimiento_exterior: string;
+  tipo_cubierta: string;
   requiere_nivelacion: boolean;
-  costo_nivelacion: number;
-  distancia_terreno_km: number;
-  costo_logistica: number;
-  costo_total: number;
+  distancia_traslado_km: number;
+  monto_total_bruto: number;
   estado: string;
-  fecha_creacion: string;
-  hitos: HitoPago[];
+  fecha_emision: string;
+  contrato: Contrato | null;
 }
 
 export default function FichaCotizacion({ params }: { params: Promise<{ uuid: string }> }) {
@@ -71,9 +82,9 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
           <div className="flex flex-col md:flex-row justify-between mb-10 pb-6 border-b-2 border-slate-200">
             <div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Estimado/a:</h2>
-              <p className="text-xl text-slate-700">{cotizacion.cliente_nombre}</p>
+              <p className="text-xl text-slate-700">{cotizacion.cliente.nombre_completo}</p>
               <p className="text-lg text-slate-500 mt-2">
-                Fecha: {new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
+                Fecha: {new Date(cotizacion.fecha_emision).toLocaleDateString("es-CL")}
               </p>
             </div>
             <div className="mt-6 md:mt-0 md:text-right">
@@ -88,55 +99,53 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             </div>
           </div>
 
+          {/* Especificaciones Constructivas */}
+          <h3 className="text-2xl font-bold text-blue-900 mb-4 border-b pb-2">Especificaciones Técnicas</h3>
+          <ul className="list-disc pl-5 mb-8 text-lg text-slate-700 space-y-2">
+            <li><strong>Base:</strong> {cotizacion.tipo_base.replace(/_/g, ' ')}</li>
+            <li><strong>Revestimiento Exterior:</strong> {cotizacion.tipo_revestimiento_exterior.replace(/_/g, ' ')}</li>
+            <li><strong>Cubierta:</strong> {cotizacion.tipo_cubierta.replace(/_/g, ' ')}</li>
+            {cotizacion.requiere_nivelacion && (
+              <li><strong>Incluye Preparación y Nivelación de Terreno</strong></li>
+            )}
+            {cotizacion.distancia_traslado_km > 0 && (
+              <li><strong>Desplazamiento Logístico:</strong> {cotizacion.distancia_traslado_km} km</li>
+            )}
+          </ul>
+
           {/* Desglose de Costos */}
-          <h3 className="text-2xl font-bold text-blue-900 mb-6">Desglose de Costos</h3>
+          <h3 className="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Inversión Estimada</h3>
           <table className="w-full text-left mb-10 text-lg border border-slate-200">
             <tbody>
-              <tr className="border-b border-slate-200">
-                <td className="p-4 font-semibold text-slate-700">Construcción Base (Casa)</td>
-                <td className="p-4 text-right font-bold">${cotizacion.costo_base_casa.toLocaleString("es-CL")}</td>
-              </tr>
-              {cotizacion.requiere_nivelacion && (
-                <tr className="border-b border-slate-200">
-                  <td className="p-4 font-semibold text-slate-700">Preparación y Nivelación de Terreno</td>
-                  <td className="p-4 text-right font-bold">${cotizacion.costo_nivelacion.toLocaleString("es-CL")}</td>
-                </tr>
-              )}
-              {cotizacion.costo_logistica > 0 && (
-                <tr className="border-b border-slate-200">
-                  <td className="p-4 font-semibold text-slate-700">Logística y Traslados ({cotizacion.distancia_terreno_km} km)</td>
-                  <td className="p-4 text-right font-bold">${cotizacion.costo_logistica.toLocaleString("es-CL")}</td>
-                </tr>
-              )}
               <tr className="bg-slate-50">
-                <td className="p-6 font-black text-2xl text-slate-900">COSTO TOTAL</td>
+                <td className="p-6 font-black text-2xl text-slate-900">COSTO TOTAL BRUTO</td>
                 <td className="p-6 text-right font-black text-3xl text-blue-900">
-                  ${cotizacion.costo_total.toLocaleString("es-CL")}
+                  ${cotizacion.monto_total_bruto.toLocaleString("es-CL")}
                 </td>
               </tr>
             </tbody>
           </table>
 
           {/* Hitos de Pago (Esquema Notarial) */}
-          <h3 className="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Esquema de Pagos (Cotizaciones Parciales)</h3>
+          <h3 className="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Esquema Notarial de Pagos</h3>
           <div className="space-y-6">
-            {cotizacion.hitos.map((hito, index) => (
+            {cotizacion.contrato?.hitos.sort((a, b) => a.numero_hito - b.numero_hito).map((hito) => (
               <div key={hito.id} className="bg-slate-50 border border-slate-300 rounded-lg p-6 relative">
-                {hito.estado === 'Pagado' && (
+                {hito.estado_pago === 'PAGADO' && (
                   <div className="absolute top-6 right-6 px-4 py-1 bg-green-600 text-white font-bold rounded-full transform rotate-12 shadow-md">
                     PAGADO
                   </div>
                 )}
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="text-2xl font-black text-slate-800">
-                    Pago {index + 1}: {hito.nombre}
+                    Pago {hito.numero_hito}: {hito.porcentaje_exigido}%
                   </h4>
                   <span className="text-3xl font-black text-blue-800">
-                    ${hito.monto.toLocaleString("es-CL")}
+                    ${hito.monto_esperado.toLocaleString("es-CL")}
                   </span>
                 </div>
                 <p className="text-lg text-slate-600">
-                  <strong className="text-slate-800">Qué incluye:</strong> {hito.detalle_cobertura}
+                  <strong className="text-slate-800">Corresponde a:</strong> {hito.nombre_fase.replace(/_/g, ' ')}
                 </p>
               </div>
             ))}
