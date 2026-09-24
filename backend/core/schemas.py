@@ -69,6 +69,46 @@ class ProyectoRealizadoSchema(Schema):
     fecha_publicacion: datetime
     fotos: List[FotoProyectoSchema]
 
+# --- Schemas para Proveedores e Inventario (Módulo 2) ---
+class ProveedorSchema(Schema):
+    id: int
+    rut_proveedor: str
+    razon_social: str
+    porcentaje_descuento_base: float
+    telefono_contacto: Optional[str] = None
+    habilitado: bool
+
+class ProveedorInSchema(Schema):
+    rut_proveedor: str
+    razon_social: str
+    porcentaje_descuento_base: float
+    telefono_contacto: Optional[str] = None
+    habilitado: bool = True
+
+class InsumoSchema(Schema):
+    id: int
+    codigo_sku: str
+    proveedor: ProveedorSchema
+    nombre_material: str
+    categoria_constructiva: str
+    etapa_predeterminada: str
+    unidad_medida: str
+    precio_lista_vigente: int
+    stock_actual: float
+    stock_minimo_seguridad: float
+    costo_neto: int  # Propiedad calculada
+
+class InsumoInSchema(Schema):
+    codigo_sku: str
+    proveedor_id: int
+    nombre_material: str
+    categoria_constructiva: str
+    etapa_predeterminada: str
+    unidad_medida: str
+    precio_lista_vigente: int
+    stock_actual: float
+    stock_minimo_seguridad: float
+
 # --- Schemas de Creación ---
 class CrearCotizacionSchema(Schema):
     cliente_nombre: str

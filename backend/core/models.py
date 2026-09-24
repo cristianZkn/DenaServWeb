@@ -93,6 +93,11 @@ class Insumo(models.Model):
     class Meta:
         db_table = 'insumo'
 
+    @property
+    def costo_neto(self):
+        descuento = self.proveedor.porcentaje_descuento_base / 100
+        return int(self.precio_lista_vigente * (1 - descuento))
+
     def __str__(self):
         return f"{self.codigo_sku} - {self.nombre_material}"
 

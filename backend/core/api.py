@@ -133,3 +133,86 @@ from typing import List
 @router.get("/portafolio/", response=List[ProyectoRealizadoSchema])
 def listar_portafolio(request):
     return ProyectoRealizado.objects.filter(esta_publicado=True).prefetch_related('fotos').order_by('-fecha_publicacion')
+
+from .models import Proveedor, Insumo
+from .schemas import ProveedorSchema, ProveedorInSchema, InsumoSchema, InsumoInSchema
+from django.db.models import F
+
+# --- CRUD Proveedores ---
+@router.get("/proveedores/", response=List[ProveedorSchema], auth=AuthBearer())
+def listar_proveedores(request):
+    return Proveedor.objects.all().order_by('razon_social')
+
+@router.post("/proveedores/", response={200: ProveedorSchema, 400: MessageSchema}, auth=AuthBearer())
+def crear_proveedor(request, data: ProveedorInSchema):
+    try:
+        proveedor = Proveedor.objects.create(**data.dict())
+        return 200, proveedor
+    except Exception as e:
+        return 400, {"message": str(e)}
+
+@router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
+    try:
+        proveedor = Proveedor.objects.get(id=proveedor_id)
+        for attr, value in data.dict().items():
+            setattr(proveedor, attr, value)
+        proveedor.save()
+        return 200, proveedor
+    except Proveedor.DoesNotExist:
+        return 404, {"message": "Proveedor no encontrado"}
+    except Exception as e:
+        return 400, {"message": str(e)}
+
+@router.delete("/proveedores/{proveedor_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def eliminar_proveedor(request, proveedor_id: int):
+    try:
+        proveedor = Proveedor.objects.get(id=proveedor_id)
+        proveedor.delete()
+        return 200, {"message": "Proveedor eliminado"}
+    except Proveedor.DoesNotExist:
+        return 404, {"message": "Proveedor no encontrado"}
+    except Exception as e:
+        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+
+# --- CRUD Insumos (Catálogo de Inventario) ---
+@router.get("/insumos/", response=List[InsumoSchema], auth=AuthBearer())
+def listar_insumos(request):
+    return Insumo.objects.select_related('proveedor').all().order_by('nombre_material')
+
+@router.post("/insumos/", response={200: InsumoSchema, 400: MessageSchema}, auth=AuthBearer())
+def crear_insumo(request, data: InsumoInSchema):
+    try:
+        insumo = Insumo.objects.create(**data.dict())
+        return 200, insumo
+    except Exception as e:
+        return 400, {"message": str(e)}
+
+@router.put("/insumos/{insumo_id}", response={200: InsumoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def actualizar_insumo(request, insumo_id: int, data: InsumoInSchema):
+    try:
+        insumo = Insumo.objects.get(id=insumo_id)
+        for attr, value in data.dict().items():
+            setattr(insumo, attr, value)
+        insumo.save()
+        return 200, insumo
+    except Insumo.DoesNotExist:
+        return 404, {"message": "Insumo no encontrado"}
+    except Exception as e:
+        return 400, {"message": str(e)}
+
+@router.delete("/insumos/{insumo_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def eliminar_insumo(request, insumo_id: int):
+    try:
+        insumo = Insumo.objects.get(id=insumo_id)
+        insumo.delete()
+        return 200, {"message": "Insumo eliminado"}
+    except Insumo.DoesNotExist:
+        return 404, {"message": "Insumo no encontrado"}
+    except Exception as e:
+        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+
+@router.get("/insumos/alertas/", response=List[InsumoSchema], auth=AuthBearer())
+def alertas_insumos(request):
+    # Fila donde el stock_actual es <= stock_minimo_seguridad
+    return Insumo.objects.select_related('proveedor').filter(stock_actual__lte=F('stock_minimo_seguridad')).order_by('stock_actual')
