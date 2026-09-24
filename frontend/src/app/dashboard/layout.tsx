@@ -30,6 +30,12 @@ export default function DashboardLayout({
                 <Link href="/dashboard/cotizador" className="hover:text-blue-200 font-medium px-3 py-2 rounded-md text-lg">
                   Nueva Cotización
                 </Link>
+                <Link href="/dashboard/proveedores" className="hover:text-blue-200 font-medium px-3 py-2 rounded-md text-lg">
+                  Proveedores
+                </Link>
+                <Link href="/dashboard/inventario" className="hover:text-blue-200 font-medium px-3 py-2 rounded-md text-lg">
+                  Inventario
+                </Link>
               </div>
             </div>
             <div>
