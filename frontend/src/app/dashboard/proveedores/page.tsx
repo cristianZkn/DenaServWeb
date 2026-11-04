@@ -4,24 +4,27 @@ import { useEffect, useState } from "react";
 
 interface Proveedor {
   id: number;
-  rut_proveedor: string;
+  rut_empresa: string;
   razon_social: string;
-  porcentaje_descuento_base: number;
-  telefono_contacto: string;
-  habilitado: boolean;
+  contacto_nombre: string | null;
+  telefono: string | null;
+  email: string | null;
+  activo: boolean;
 }
 
 export default function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState("");
+
   const [formData, setFormData] = useState({
     id: 0,
-    rut_proveedor: "",
+    rut_empresa: "",
     razon_social: "",
-    porcentaje_descuento_base: "",
-    telefono_contacto: "",
-    habilitado: true,
+    contacto_nombre: "",
+    telefono: "",
+    email: "",
+    activo: true,
   });
   const [isEditing, setIsEditing] = useState(false);
 
@@ -29,13 +32,15 @@ export default function ProveedoresPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("http://127.0.0.1:8000/api/proveedores/", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setProveedores(await res.json());
+      } else {
+        setError("Error al cargar proveedores");
       }
     } catch (err) {
-      console.error(err);
+      setError("Error de red");
     } finally {
       setLoading(false);
     }
@@ -48,142 +53,261 @@ export default function ProveedoresPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
-    
-    const url = isEditing 
-      ? `http://127.0.0.1:8000/api/proveedores/${formData.id}` 
+
+    const url = isEditing
+      ? `http://127.0.0.1:8000/api/proveedores/${formData.id}`
       : "http://127.0.0.1:8000/api/proveedores/";
     const method = isEditing ? "PUT" : "POST";
 
     const payload = {
-      ...formData,
-      porcentaje_descuento_base: parseFloat(formData.porcentaje_descuento_base as any) || 0
+      rut_empresa: formData.rut_empresa,
+      razon_social: formData.razon_social,
+      contacto_nombre: formData.contacto_nombre || null,
+      telefono: formData.telefono || null,
+      email: formData.email || null,
+      activo: formData.activo,
     };
 
     try {
       const res = await fetch(url, {
         method,
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
+
       if (res.ok) {
         resetForm();
         fetchProveedores();
+      } else {
+        const err = await res.json();
+        alert(err.message || "Error al procesar la solicitud.");
       }
     } catch (err) {
-      console.error(err);
+      alert("Error de conexión");
     }
   };
 
   const handleEdit = (p: Proveedor) => {
     setFormData({
       id: p.id,
-      rut_proveedor: p.rut_proveedor,
+      rut_empresa: p.rut_empresa,
       razon_social: p.razon_social,
-      porcentaje_descuento_base: p.porcentaje_descuento_base.toString(),
-      telefono_contacto: p.telefono_contacto || "",
-      habilitado: p.habilitado,
+      contacto_nombre: p.contacto_nombre || "",
+      telefono: p.telefono || "",
+      email: p.email || "",
+      activo: p.activo,
     });
     setIsEditing(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Deseas eliminar este proveedor?")) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://127.0.0.1:8000/api/proveedores/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        fetchProveedores();
+      } else {
+        const err = await res.json();
+        alert(err.message || "No se pudo eliminar.");
+      }
+    } catch (e) {
+      alert("Error al comunicarse con el backend.");
+    }
   };
 
   const resetForm = () => {
     setFormData({
       id: 0,
-      rut_proveedor: "",
+      rut_empresa: "",
       razon_social: "",
-      porcentaje_descuento_base: "",
-      telefono_contacto: "",
-      habilitado: true,
+      contacto_nombre: "",
+      telefono: "",
+      email: "",
+      activo: true,
     });
     setIsEditing(false);
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Gestión de Proveedores</h1>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800">Directorio de Proveedores</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Gestión de empresas aliadas y distribuidores de insumos constructivos.
+          </p>
+        </div>
+      </div>
 
-      {/* Formulario */}
-      <form onSubmit={handleSubmit} className="bg-slate-50 p-6 rounded-md mb-10 border border-slate-200">
-        <h2 className="text-xl font-bold mb-4 text-blue-900">
-          {isEditing ? "Editar Proveedor" : "Registrar Nuevo Proveedor"}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-semibold mb-1">RUT *</label>
-            <input type="text" className="w-full p-2 border rounded" value={formData.rut_proveedor} onChange={e => setFormData({...formData, rut_proveedor: e.target.value})} required />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Razón Social *</label>
-            <input type="text" className="w-full p-2 border rounded" value={formData.razon_social} onChange={e => setFormData({...formData, razon_social: e.target.value})} required />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">Teléfono</label>
-            <input type="text" className="w-full p-2 border rounded" value={formData.telefono_contacto} onChange={e => setFormData({...formData, telefono_contacto: e.target.value})} />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold mb-1">% Descuento Comercial *</label>
-            <input type="number" step="0.01" className="w-full p-2 border rounded" value={formData.porcentaje_descuento_base} onChange={e => setFormData({...formData, porcentaje_descuento_base: e.target.value})} required />
-          </div>
-          <div className="flex items-end">
-            <label className="flex items-center space-x-2 pb-2">
-              <input type="checkbox" checked={formData.habilitado} onChange={e => setFormData({...formData, habilitado: e.target.checked})} className="w-5 h-5" />
-              <span className="font-semibold">Habilitado</span>
-            </label>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Formulario */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
+          <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">
+            {isEditing ? "Editar Proveedor" : "Registrar Proveedor"}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">RUT Empresa *</label>
+              <input
+                type="text"
+                value={formData.rut_empresa}
+                onChange={(e) => setFormData({ ...formData, rut_empresa: e.target.value })}
+                placeholder="Ej: 76.123.456-7"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">Razón Social *</label>
+              <input
+                type="text"
+                value={formData.razon_social}
+                onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })}
+                placeholder="Ej: Maderas del Sur SpA"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">Contacto Comercial</label>
+              <input
+                type="text"
+                value={formData.contacto_nombre}
+                onChange={(e) => setFormData({ ...formData, contacto_nombre: e.target.value })}
+                placeholder="Ej: Pedro Valdivia"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">Teléfono</label>
+              <input
+                type="text"
+                value={formData.telefono}
+                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                placeholder="+56 9 1234 5678"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">Correo Electrónico</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="contacto@proveedor.cl"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="activo_p"
+                checked={formData.activo}
+                onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
+                className="w-4 h-4 rounded text-blue-900"
+              />
+              <label htmlFor="activo_p" className="font-semibold text-slate-700">
+                Proveedor Activo
+              </label>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <button
+                type="submit"
+                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg shadow-sm cursor-pointer"
+              >
+                {isEditing ? "Actualizar" : "Crear Proveedor"}
+              </button>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-3 rounded-lg cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Listado */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
+                  <th className="p-4">RUT</th>
+                  <th className="p-4">Razón Social</th>
+                  <th className="p-4">Contacto & Teléfono</th>
+                  <th className="p-4">Estado</th>
+                  <th className="p-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                      Cargando proveedores...
+                    </td>
+                  </tr>
+                ) : proveedores.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                      No hay proveedores registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  proveedores.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-4 font-mono font-medium text-slate-600">{p.rut_empresa}</td>
+                      <td className="p-4">
+                        <span className="font-bold text-slate-800">{p.razon_social}</span>
+                        {p.email && <div className="text-xs text-slate-400">{p.email}</div>}
+                      </td>
+                      <td className="p-4">
+                        <div className="text-slate-700">{p.contacto_nombre || "-"}</div>
+                        <div className="text-xs text-slate-400">{p.telefono || "-"}</div>
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            p.activo
+                              ? "bg-green-100 text-green-800"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {p.activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right space-x-2">
+                        <button
+                          onClick={() => handleEdit(p)}
+                          className="text-blue-600 hover:text-blue-900 font-semibold text-xs cursor-pointer"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          className="text-red-600 hover:text-red-900 font-semibold text-xs cursor-pointer"
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div className="flex space-x-4">
-          <button type="submit" className="bg-blue-900 text-white px-6 py-2 rounded font-bold hover:bg-blue-800">
-            {isEditing ? "Actualizar" : "Guardar"}
-          </button>
-          {isEditing && (
-            <button type="button" onClick={resetForm} className="bg-slate-300 px-6 py-2 rounded font-bold">
-              Cancelar
-            </button>
-          )}
-        </div>
-      </form>
-
-      {/* Lista */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-blue-900 text-white">
-              <th className="p-3">RUT</th>
-              <th className="p-3">Razón Social</th>
-              <th className="p-3">Teléfono</th>
-              <th className="p-3">% Descuento</th>
-              <th className="p-3">Estado</th>
-              <th className="p-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="p-4 text-center">Cargando...</td></tr>
-            ) : proveedores.map(p => (
-              <tr key={p.id} className="border-b hover:bg-slate-50">
-                <td className="p-3">{p.rut_proveedor}</td>
-                <td className="p-3 font-semibold">{p.razon_social}</td>
-                <td className="p-3">{p.telefono_contacto || "-"}</td>
-                <td className="p-3 text-green-700 font-bold">{p.porcentaje_descuento_base}%</td>
-                <td className="p-3">
-                  {p.habilitado ? (
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded">Activo</span>
-                  ) : (
-                    <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded">Inactivo</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  <button onClick={() => handleEdit(p)} className="text-blue-600 font-bold hover:underline">
-                    Editar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );

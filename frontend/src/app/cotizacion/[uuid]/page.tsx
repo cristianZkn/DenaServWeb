@@ -3,39 +3,39 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 
+interface CatalogoItem {
+  id: number;
+  nombre: string;
+  categoria: string;
+}
+
 interface HitoPago {
   id: number;
-  numero_hito: number;
-  nombre_fase: string;
-  porcentaje_exigido: number;
-  monto_esperado: number;
-  estado_pago: string;
-}
-
-interface Contrato {
-  monto_total_pactado: number;
-  hitos: HitoPago[];
-}
-
-interface Cliente {
-  nombre_completo: string;
-  telefono_whatsapp: string;
-  correo_electronico?: string;
+  fase: string;
+  porcentaje: number;
+  monto_pago: number;
+  estado: string;
+  fecha_pago: string | null;
+  comprobante_ref: string | null;
 }
 
 interface Cotizacion {
-  uuid_publico: string;
-  cliente: Cliente;
+  id: number;
+  codigo_cotizacion: string;
+  cliente_nombre: string;
+  cliente_telefono: string | null;
+  direccion_terreno: string;
   superficie_m2: number;
-  tipo_base: string;
-  tipo_revestimiento_exterior: string;
-  tipo_cubierta: string;
-  requiere_nivelacion: boolean;
-  distancia_traslado_km: number;
-  monto_total_bruto: number;
+  distancia_flete_km: number;
+  base_terreno?: CatalogoItem | null;
+  revestimiento?: CatalogoItem | null;
+  costo_materiales: number;
+  costo_mano_obra: number;
+  costo_flete: number;
+  costo_total: number;
   estado: string;
-  fecha_emision: string;
-  contrato: Contrato | null;
+  fecha_creacion: string;
+  hitos_pago: HitoPago[];
 }
 
 export default function FichaCotizacion({ params }: { params: Promise<{ uuid: string }> }) {
@@ -55,7 +55,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
           setError("Cotización no encontrada o enlace inválido.");
         }
       } catch (err) {
-        setError("Error de conexión al servidor.");
+        setError("Error de conexión al servidor backend.");
       } finally {
         setLoading(false);
       }
@@ -64,101 +64,188 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
     fetchCotizacion();
   }, [resolvedParams.uuid]);
 
-  if (loading) return <div className="text-xl p-8 text-center mt-20 font-bold">Cargando cotización...</div>;
-  if (error || !cotizacion) return <div className="text-xl p-8 text-center mt-20 text-red-600 font-bold">{error}</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold text-lg">
+        Cargando cotización...
+      </div>
+    );
+  }
+
+  if (error || !cotizacion) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+        <div className="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 max-w-md">
+          <p className="font-bold text-lg mb-2">Aviso</p>
+          <p>{error || "No se encontró la cotización requerida."}</p>
+        </div>
+        <Link href="/" className="mt-4 text-blue-900 underline font-semibold text-sm">
+          ← Volver al sitio web
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 py-10">
-      <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden border border-slate-300">
+    <div className="min-h-screen bg-slate-100 py-10 px-4">
+      <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-xl overflow-hidden border border-slate-200">
         
-        {/* Botón Volver */}
-        <div className="bg-slate-100 p-4 border-b border-slate-300">
+        {/* Barra superior / Regreso */}
+        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center text-sm">
           <button 
             onClick={() => window.history.back()} 
-            className="text-blue-900 font-bold hover:underline flex items-center"
+            className="text-blue-900 font-bold hover:underline cursor-pointer"
           >
             ← Volver Atrás
           </button>
+          <span className="font-mono text-xs text-slate-500 font-semibold">
+            REF: {cotizacion.codigo_cotizacion}
+          </span>
         </div>
 
-        {/* Header Publico */}
+        {/* Encabezado Principal */}
         <div className="bg-blue-900 text-white p-8 text-center">
-          <h1 className="text-4xl font-black mb-2">Cotización Formal</h1>
-          <p className="text-xl">DenaServ - Casas Prefabricadas</p>
+          <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tight">Cotización Formal de Obra</h1>
+          <p className="text-lg text-blue-200 font-medium">DENASERV — Fabricación y Montaje de Casas Prefabricadas</p>
         </div>
 
-        <div className="p-8">
-          {/* Datos del Cliente y Resumen */}
-          <div className="flex flex-col md:flex-row justify-between mb-10 pb-6 border-b-2 border-slate-200">
+        <div className="p-8 space-y-8">
+          {/* Ficha Cliente & Estado */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-slate-200">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">Estimado/a:</h2>
-              <p className="text-xl text-slate-700">{cotizacion.cliente.nombre_completo}</p>
-              <p className="text-lg text-slate-500 mt-2">
-                Fecha: {new Date(cotizacion.fecha_emision).toLocaleDateString("es-CL")}
+              <span className="text-xs uppercase font-bold text-slate-400">Cliente Receptor</span>
+              <h2 className="text-2xl font-bold text-slate-900">{cotizacion.cliente_nombre}</h2>
+              {cotizacion.cliente_telefono && (
+                <p className="text-sm text-slate-600 mt-1">Contacto: {cotizacion.cliente_telefono}</p>
+              )}
+              <p className="text-xs text-slate-400 mt-1">
+                Fecha de Emisión: {new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
               </p>
             </div>
-            <div className="mt-6 md:mt-0 md:text-right">
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">Proyecto:</h2>
-              <p className="text-xl text-slate-700">{cotizacion.superficie_m2} m²</p>
-              <span className={`inline-block mt-2 px-4 py-1 font-bold rounded-full ${
-                cotizacion.estado === 'Aceptada' ? 'bg-green-100 text-green-800' : 
-                cotizacion.estado === 'Rechazada' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                Estado: {cotizacion.estado}
-              </span>
+
+            <div className="sm:text-right">
+              <span className="text-xs uppercase font-bold text-slate-400">Estado del Proyecto</span>
+              <div>
+                <span className={`inline-block mt-1 px-4 py-1.5 font-extrabold rounded-full text-xs uppercase tracking-wider ${
+                  cotizacion.estado === "ACEPTADA"
+                    ? "bg-green-100 text-green-800 border border-green-300"
+                    : cotizacion.estado === "FINALIZADA"
+                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                    : "bg-yellow-100 text-yellow-800 border border-yellow-300"
+                }`}>
+                  {cotizacion.estado}
+                </span>
+              </div>
             </div>
           </div>
 
+          {/* Ubicación Terreno (Campo Crítico) */}
+          <div className="bg-blue-50/70 p-5 rounded-xl border border-blue-200">
+            <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+              Ubicación de la Faena / Terreno
+            </span>
+            <p className="text-lg font-bold text-slate-900 mt-1">{cotizacion.direccion_terreno}</p>
+            <p className="text-xs text-slate-600 mt-1">
+              Distancia estimada de traslado y flete: <strong>{cotizacion.distancia_flete_km} km</strong>
+            </p>
+          </div>
+
           {/* Especificaciones Constructivas */}
-          <h3 className="text-2xl font-bold text-blue-900 mb-4 border-b pb-2">Especificaciones Técnicas</h3>
-          <ul className="list-disc pl-5 mb-8 text-lg text-slate-700 space-y-2">
-            <li><strong>Base:</strong> {cotizacion.tipo_base.replace(/_/g, ' ')}</li>
-            <li><strong>Revestimiento Exterior:</strong> {cotizacion.tipo_revestimiento_exterior.replace(/_/g, ' ')}</li>
-            <li><strong>Cubierta:</strong> {cotizacion.tipo_cubierta.replace(/_/g, ' ')}</li>
-            {cotizacion.requiere_nivelacion && (
-              <li><strong>Incluye Preparación y Nivelación de Terreno</strong></li>
-            )}
-            {cotizacion.distancia_traslado_km > 0 && (
-              <li><strong>Desplazamiento Logístico:</strong> {cotizacion.distancia_traslado_km} km</li>
-            )}
-          </ul>
-
-          {/* Desglose de Costos */}
-          <h3 className="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Inversión Estimada</h3>
-          <table className="w-full text-left mb-10 text-lg border border-slate-200">
-            <tbody>
-              <tr className="bg-slate-50">
-                <td className="p-6 font-black text-2xl text-slate-900">COSTO TOTAL BRUTO</td>
-                <td className="p-6 text-right font-black text-3xl text-blue-900">
-                  ${cotizacion.monto_total_bruto.toLocaleString("es-CL")}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Hitos de Pago (Esquema Notarial) */}
-          <h3 className="text-2xl font-bold text-blue-900 mb-6 border-b pb-2">Esquema Notarial de Pagos</h3>
-          <div className="space-y-6">
-            {cotizacion.contrato?.hitos.sort((a, b) => a.numero_hito - b.numero_hito).map((hito) => (
-              <div key={hito.id} className="bg-slate-50 border border-slate-300 rounded-lg p-6 relative">
-                {hito.estado_pago === 'PAGADO' && (
-                  <div className="absolute top-6 right-6 px-4 py-1 bg-green-600 text-white font-bold rounded-full transform rotate-12 shadow-md">
-                    PAGADO
-                  </div>
-                )}
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-2xl font-black text-slate-800">
-                    Pago {hito.numero_hito}: {hito.porcentaje_exigido}%
-                  </h4>
-                  <span className="text-3xl font-black text-blue-800">
-                    ${hito.monto_esperado.toLocaleString("es-CL")}
-                  </span>
-                </div>
-                <p className="text-lg text-slate-600">
-                  <strong className="text-slate-800">Corresponde a:</strong> {hito.nombre_fase.replace(/_/g, ' ')}
+          <div>
+            <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">
+              Especificaciones Constructivas
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <span className="text-xs font-semibold text-slate-500">Superficie Total</span>
+                <p className="text-xl font-black text-slate-900 mt-1">{cotizacion.superficie_m2} m²</p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <span className="text-xs font-semibold text-slate-500">Tipo de Base</span>
+                <p className="text-base font-bold text-slate-800 mt-1">
+                  {cotizacion.base_terreno?.nombre || "No especificada"}
                 </p>
               </div>
-            ))}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <span className="text-xs font-semibold text-slate-500">Revestimiento Exterior</span>
+                <p className="text-base font-bold text-slate-800 mt-1">
+                  {cotizacion.revestimiento?.nombre || "No especificado"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Resumen Económico */}
+          <div>
+            <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">
+              Desglose Financiero de la Cotización
+            </h3>
+            <div className="space-y-2 text-sm bg-slate-50 p-6 rounded-xl border border-slate-200">
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <span className="text-slate-600">Suministro de Materiales:</span>
+                <span className="font-semibold">${Number(cotizacion.costo_materiales).toLocaleString("es-CL")}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <span className="text-slate-600">Mano de Obra Especializada:</span>
+                <span className="font-semibold">${Number(cotizacion.costo_mano_obra).toLocaleString("es-CL")}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200">
+                <span className="text-slate-600">Transporte y Logística de Flete:</span>
+                <span className="font-semibold">${Number(cotizacion.costo_flete).toLocaleString("es-CL")}</span>
+              </div>
+              <div className="flex justify-between pt-3 text-lg font-black text-blue-900">
+                <span>COSTO TOTAL ESTIMADO:</span>
+                <span>${Number(cotizacion.costo_total).toLocaleString("es-CL")}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Hitos de Pago Notariales */}
+          <div>
+            <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">
+              Cronograma de Pagos por Hitos de Avance
+            </h3>
+            <div className="space-y-4">
+              {cotizacion.hitos_pago && cotizacion.hitos_pago.length > 0 ? (
+                cotizacion.hitos_pago.map((hito, idx) => (
+                  <div
+                    key={hito.id}
+                    className={`p-5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+                      hito.estado === "PAGADO" ? "bg-green-50/70 border-green-300" : "bg-white border-slate-200"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          Etapa {idx + 1}
+                        </span>
+                        <span className="font-extrabold text-slate-800 text-base">
+                          {hito.fase.replace(/_/g, " ")} ({hito.porcentaje}%)
+                        </span>
+                      </div>
+                      <p className="text-2xl font-black text-slate-900 mt-1">
+                        ${Number(hito.monto_pago).toLocaleString("es-CL")}
+                      </p>
+                      {hito.fecha_pago && (
+                        <p className="text-xs text-slate-500 mt-1">Fecha de pago: {hito.fecha_pago}</p>
+                      )}
+                    </div>
+
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        hito.estado === "PAGADO"
+                          ? "bg-green-200 text-green-900"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {hito.estado}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400 italic">No hay hitos de pago asociados.</div>
+              )}
+            </div>
           </div>
 
         </div>
