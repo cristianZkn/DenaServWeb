@@ -45,8 +45,8 @@ export default function CotizadorPage() {
         }
 
         const [resBases, resRevest] = await Promise.all([
-          fetch("http://127.0.0.1:8000/api/catalogo-tipos/?categoria=BASE_TERRENO"),
-          fetch("http://127.0.0.1:8000/api/catalogo-tipos/?categoria=REVESTIMIENTO"),
+          fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO"),
+          fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO"),
         ]);
 
         if (resBases.ok && resRevest.ok) {
@@ -139,7 +139,7 @@ export default function CotizadorPage() {
         costo_total: parseFloat(formData.costo_total as any),
       };
 
-      const res = await fetch("http://127.0.0.1:8000/api/cotizaciones/", {
+      const res = await fetch("/api/cotizaciones", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

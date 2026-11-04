@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const res = await fetch("http://127.0.0.1:8000/api/cotizaciones/", { headers });
+      const res = await fetch("/api/cotizaciones", { headers });
 
       if (res.ok) {
         const data = await res.json();
@@ -80,7 +80,7 @@ export default function DashboardPage() {
   const handleCambiarEstadoCotizacion = async (cotizacionId: number, nuevoEstado: string) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://127.0.0.1:8000/api/cotizaciones/${cotizacionId}/estado`, {
+      const res = await fetch(`/api/cotizaciones/${cotizacionId}/estado`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -106,7 +106,7 @@ export default function DashboardPage() {
     setModalHitosAbierto(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://127.0.0.1:8000/api/cotizaciones/${cotizacion.id}/hitos/`, {
+      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/hitos`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -122,7 +122,7 @@ export default function DashboardPage() {
     const nuevoEstado = estadoActual === "PAGADO" ? "PENDIENTE" : "PAGADO";
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://127.0.0.1:8000/api/hitos-pago/${hitoId}/`, {
+      const res = await fetch(`/api/hitos-pago/${hitoId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

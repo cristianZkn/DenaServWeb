@@ -47,7 +47,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
   useEffect(() => {
     const fetchCotizacion = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/cotizaciones/public/${resolvedParams.uuid}`);
+        const res = await fetch(`/api/cotizaciones/public/${resolvedParams.uuid}`);
         if (res.ok) {
           const data = await res.json();
           setCotizacion(data);

@@ -31,7 +31,7 @@ export default function ProveedoresPage() {
   const fetchProveedores = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/api/proveedores/", {
+      const res = await fetch("/api/proveedores", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -55,8 +55,8 @@ export default function ProveedoresPage() {
     const token = localStorage.getItem("token");
 
     const url = isEditing
-      ? `http://127.0.0.1:8000/api/proveedores/${formData.id}`
-      : "http://127.0.0.1:8000/api/proveedores/";
+      ? `/api/proveedores/${formData.id}`
+      : "/api/proveedores";
     const method = isEditing ? "PUT" : "POST";
 
     const payload = {
@@ -107,7 +107,7 @@ export default function ProveedoresPage() {
     if (!confirm("¿Deseas eliminar este proveedor?")) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://127.0.0.1:8000/api/proveedores/${id}`, {
+      const res = await fetch(`/api/proveedores/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

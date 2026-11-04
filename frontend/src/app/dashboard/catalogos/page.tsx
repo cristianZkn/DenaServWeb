@@ -65,8 +65,8 @@ export default function CatalogosPage() {
 
       const headers = { Authorization: `Bearer ${token}` };
       const [resCatalogos, resProveedores] = await Promise.all([
-        fetch("http://127.0.0.1:8000/api/catalogo-tipos/", { headers }),
-        fetch("http://127.0.0.1:8000/api/proveedores/", { headers }),
+        fetch("/api/catalogo-tipos", { headers }),
+        fetch("/api/proveedores", { headers }),
       ]);
 
       if (resCatalogos.ok) {
@@ -123,8 +123,8 @@ export default function CatalogosPage() {
     try {
       const token = localStorage.getItem("token");
       const url = itemEdicion
-        ? `http://127.0.0.1:8000/api/catalogo-tipos/${itemEdicion.id}`
-        : "http://127.0.0.1:8000/api/catalogo-tipos/";
+        ? `/api/catalogo-tipos/${itemEdicion.id}`
+        : "/api/catalogo-tipos";
       const method = itemEdicion ? "PUT" : "POST";
 
       const payload = {
@@ -160,7 +160,7 @@ export default function CatalogosPage() {
     if (!confirm("¿Seguro que deseas eliminar este elemento del catálogo?")) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://127.0.0.1:8000/api/catalogo-tipos/${id}`, {
+      const res = await fetch(`/api/catalogo-tipos/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

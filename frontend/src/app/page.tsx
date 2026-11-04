@@ -18,7 +18,7 @@ export default function PortafolioPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/portafolio/")
+    fetch("/api/portafolio/")
       .then((res) => res.json())
       .then((data) => {
         setProyectos(data);
