@@ -22,6 +22,9 @@ async function handleProxy(
     : `${subPath}/`;
 
   const targetUrl = `${BACKEND_URL}/api/${normalizedPath}${queryString}`;
+  // Django Ninja distingue rutas con y sin "/" final: si la primera variante no existe, se prueba la otra.
+  const altPath = normalizedPath.endsWith("/") ? normalizedPath.replace(/\/+$/, "") : `${normalizedPath}/`;
+  const altUrl = `${BACKEND_URL}/api/${altPath}${queryString}`;
 
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
@@ -41,13 +44,14 @@ async function handleProxy(
   }
 
   try {
-    const backendResponse = await fetch(targetUrl, {
-      method,
-      headers,
-      body: bodyData,
-      redirect: "follow",
-      cache: "no-store",
-    });
+    const send = (url: string) =>
+      fetch(url, { method, headers, body: bodyData, redirect: "follow", cache: "no-store" });
+    let backendResponse = await send(targetUrl);
+    // 404 con HTML = ruta inexistente (un 404 de la API responde JSON)
+    if (backendResponse.status === 404 && !(backendResponse.headers.get("content-type") || "").includes("json")) {
+      const retry = await send(altUrl);
+      if (retry.status !== 404) backendResponse = retry;
+    }
 
     const responseHeaders = new Headers();
     backendResponse.headers.forEach((value, key) => {
