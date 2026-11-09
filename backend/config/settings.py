@@ -25,12 +25,17 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-y^#447_l#&)-si6$80=6t1!c7*sz09@li@b85-@1-6#b@qq=u%'
+DEBUG = os.getenv('DJANGO_DEBUG', '0') == '1'
+# En producción la clave es obligatoria; solo en desarrollo hay una clave de respaldo.
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY') or ('dev-only-insecure-key' if DEBUG else None)
+if not SECRET_KEY:
+    raise RuntimeError('Falta DJANGO_SECRET_KEY en el entorno.')
+
+# Client ID de Google OAuth para verificar el ID token (login SSO).
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
 
 
 # Application definition
@@ -140,7 +145,7 @@ MAILERS = {
     },
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',') if o]
 CORS_ALLOW_CREDENTIALS = True
 
 # Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)

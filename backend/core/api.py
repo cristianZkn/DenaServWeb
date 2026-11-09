@@ -1,4 +1,6 @@
 import jwt
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 import uuid
 from datetime import datetime, timedelta, timezone as tz, date
 from typing import List, Optional
@@ -80,42 +82,33 @@ def create_jwt_token(usuario: Usuario) -> str:
 # ==============================================================================
 @router.post("/auth/google", response={200: TokenSchema, 401: MessageSchema, 403: MessageSchema})
 def google_sso_login(request, data: GoogleAuthInSchema):
-    email = data.email
-    nombre_completo = data.nombre_completo
-    google_id = data.google_id
+    email, nombre_completo, google_id = None, data.nombre_completo, data.google_id
 
-    # Si viene el credential (Google ID Token), intentamos decodificar su payload
     if data.credential:
+        # Se verifica firma, audiencia (client id), expiración y emisor del ID token de Google.
+        if not settings.GOOGLE_CLIENT_ID:
+            return 401, {"message": "Login con Google no configurado en el servidor."}
         try:
-            decoded = jwt.decode(data.credential, options={"verify_signature": False})
-            email = decoded.get("email", email)
-            nombre_completo = decoded.get("name", nombre_completo)
-            google_id = decoded.get("sub", google_id)
-        except Exception:
-            pass
-
+            info = google_id_token.verify_oauth2_token(
+                data.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID)
+        except ValueError:
+            return 401, {"message": "Token de Google inválido."}
+        if not info.get("email_verified"):
+            return 401, {"message": "El correo de Google no está verificado."}
+        email, nombre_completo, google_id = info["email"], info.get("name"), info["sub"]
+    elif settings.DEBUG and not settings.GOOGLE_CLIENT_ID:
+        # Solo desarrollo local: login simulado con el email enviado.
+        email = data.email
     if not email:
-        return 401, {"message": "Token de Google inválido o no contiene email."}
+        return 401, {"message": "Autenticación requerida."}
 
-    # Validar si el usuario existe en la tabla usuario
-    usuario = Usuario.objects.filter(email=email).first()
-
-    if not usuario:
-        # Auto-registro para agilizar acceso SSO si no existía previamente
-        rut_dummy = f"{Usuario.objects.count() + 10000000}-K"
-        usuario = Usuario.objects.create(
-            rut=rut_dummy,
-            nombre_completo=nombre_completo or email.split("@")[0],
-            email=email,
-            google_id=google_id,
-            activo=True
-        )
-    elif not usuario.activo:
-        return 403, {"message": "El usuario se encuentra inactivo en el sistema."}
-    else:
-        if google_id and usuario.google_id != google_id:
-            usuario.google_id = google_id
-            usuario.save(update_fields=["google_id"])
+    # Solo ingresan correos previamente registrados y autorizados (RBAC del informe).
+    usuario = Usuario.objects.filter(email__iexact=email).first()
+    if not usuario or not usuario.activo:
+        return 403, {"message": "Correo no autorizado."}
+    if google_id and usuario.google_id != google_id and data.credential:
+        usuario.google_id = google_id
+        usuario.save(update_fields=["google_id"])
 
     token = create_jwt_token(usuario)
     return 200, {"token": token, "usuario": usuario}
@@ -174,7 +167,7 @@ def eliminar_proveedor(request, proveedor_id: int):
 # ==============================================================================
 # 3. CATALOGO_TIPO (Unificación de todos los "Tipos")
 # ==============================================================================
-@router.get("/catalogo-tipos/", response=List[CatalogoTipoSchema])
+@router.get("/catalogo-tipos/", response=List[CatalogoTipoSchema], auth=AuthBearer())
 def listar_catalogo_tipos(request, categoria: Optional[str] = None, activo: Optional[bool] = None):
     qs = CatalogoTipo.objects.select_related("proveedor").all()
     if categoria:
@@ -184,7 +177,7 @@ def listar_catalogo_tipos(request, categoria: Optional[str] = None, activo: Opti
     return qs.order_by("categoria", "nombre")
 
 
-@router.get("/catalogo-tipos/categorias/", response=List[str])
+@router.get("/catalogo-tipos/categorias/", response=List[str], auth=AuthBearer())
 def listar_categorias_disponibles(request):
     categorias = CatalogoTipo.objects.values_list("categoria", flat=True).distinct()
     return list(categorias)
@@ -238,7 +231,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
     try:
         with transaction.atomic():
             usuario = request.auth
-            codigo = f"COT-{datetime.now().strftime('%Y%m')}-{uuid.uuid4().hex[:4].upper()}"
+            codigo = f"COT-{datetime.now().strftime('%Y%m')}-{uuid.uuid4().hex[:10].upper()}"
 
             # El backend recalcula todo: no se confía en los montos enviados por el cliente.
             r = _calcular_desde_catalogo(CalculoInSchema(
@@ -288,7 +281,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
         return 400, {"message": str(e)}
 
 
-@router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema})
+@router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
 def calcular_cotizacion(request, data: CalculoInSchema):
     try:
         return 200, _calcular_desde_catalogo(data)
@@ -359,7 +352,7 @@ def agregar_insumo_cotizacion(request, cotizacion_id: int, data: DetalleCotizaci
 # ==============================================================================
 # 6. HITOS DE PAGO
 # ==============================================================================
-@router.get("/cotizaciones/{cotizacion_id}/hitos/", response=List[HitoPagoSchema])
+@router.get("/cotizaciones/{cotizacion_id}/hitos/", response=List[HitoPagoSchema], auth=AuthBearer())
 def listar_hitos_cotizacion(request, cotizacion_id: int):
     return HitoPago.objects.filter(cotizacion_id=cotizacion_id).order_by("id")
 

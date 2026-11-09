@@ -49,10 +49,11 @@ export default function CotizadorPage() {
           return;
         }
 
+        const authHeaders = { Authorization: `Bearer ${token}` };
         const [resBases, resRevest, resEstab] = await Promise.all([
-          fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO"),
-          fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO"),
-          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO"),
+          fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO", { headers: authHeaders }),
+          fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO", { headers: authHeaders }),
+          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO", { headers: authHeaders }),
         ]);
 
         if (resBases.ok && resRevest.ok) {
@@ -92,7 +93,7 @@ export default function CotizadorPage() {
       try {
         const res = await fetch("/api/cotizaciones/calcular", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
           body: JSON.stringify({
             superficie_m2: Number(formData.superficie_m2) || 0,
             distancia_km: Number(formData.distancia_flete_km) || 0,

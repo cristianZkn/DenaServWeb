@@ -1,4 +1,4 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion
 
 
@@ -35,6 +35,7 @@ class DenaServMigrationTests(TestCase):
             activo=True
         )
 
+    @override_settings(DEBUG=True, GOOGLE_CLIENT_ID="")
     def test_google_auth_endpoint(self):
         res = self.client.post(
             "/api/auth/google",
@@ -46,8 +47,30 @@ class DenaServMigrationTests(TestCase):
         self.assertIn("token", data)
         self.assertEqual(data["usuario"]["email"], "admin@denaserv.cl")
 
+    def _auth(self):
+        from .api import create_jwt_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.usuario)}"}
+
+    def test_catalogo_requiere_auth(self):
+        self.assertEqual(self.client.get("/api/catalogo-tipos/").status_code, 401)
+
+    @override_settings(DEBUG=True, GOOGLE_CLIENT_ID="")
+    def test_login_solo_correos_registrados(self):
+        res = self.client.post("/api/auth/google", {"email": "intruso@x.cl"}, content_type="application/json")
+        self.assertEqual(res.status_code, 403)
+
+    @override_settings(DEBUG=False, GOOGLE_CLIENT_ID="")
+    def test_login_simulado_deshabilitado_en_produccion(self):
+        res = self.client.post("/api/auth/google", {"email": "admin@denaserv.cl"}, content_type="application/json")
+        self.assertEqual(res.status_code, 401)
+
+    @override_settings(GOOGLE_CLIENT_ID="cid")
+    def test_token_google_falso_rechazado(self):
+        res = self.client.post("/api/auth/google", {"credential": "basura"}, content_type="application/json")
+        self.assertEqual(res.status_code, 401)
+
     def test_catalogo_tipo_filter(self):
-        res = self.client.get("/api/catalogo-tipos/?categoria=REVESTIMIENTO")
+        res = self.client.get("/api/catalogo-tipos/?categoria=REVESTIMIENTO", **self._auth())
         self.assertEqual(res.status_code, 200)
         items = res.json()
         self.assertEqual(len(items), 1)
@@ -55,7 +78,8 @@ class DenaServMigrationTests(TestCase):
 
     def test_cotizacion_and_hitos_creation(self):
         # Primero login para obtener token
-        login_res = self.client.post(
+        with override_settings(DEBUG=True, GOOGLE_CLIENT_ID=""):
+          login_res = self.client.post(
             "/api/auth/google",
             {"email": "admin@denaserv.cl"},
             content_type="application/json"
@@ -131,8 +155,10 @@ class CalculoTests(TestCase):
         self.assertEqual(r["costo_nivelacion"], 0)
 
     def test_endpoint(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="8-8", nombre_completo="T", email="t@d.cl")
         res = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 60, "distancia_km": 10, "espesor_cm": 10},
-            content_type="application/json")
+            content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
         self.assertEqual(res.status_code, 200)
         self.assertIn("total", res.json())
 
@@ -162,7 +188,8 @@ class BomTests(TestCase):
                                     proveedor=prov, etapa_obra="ETAPA_1", rendimiento_m2=2)
         CatalogoTipo.objects.create(categoria="INSUMO", nombre="Yeso", unidad_medida="UN", precio_base_unitario=500,
                                     etapa_obra="ETAPA_2", rendimiento_m2=1)
-        r = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 10}, content_type="application/json").json()
+        r = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 10}, content_type="application/json",
+                          HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}").json()
         pino = next(i for i in r["insumos"] if i["nombre"] == "Pino 2x3")
         self.assertEqual(float(pino["cantidad"]), 20.0)
         self.assertEqual(float(pino["subtotal"]), 18000.0)  # 20 x 1000 x 0.9
