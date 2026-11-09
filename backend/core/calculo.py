@@ -1,0 +1,73 @@
+"""Motor de cálculo DenaServ (fórmulas del informe, sección 2.8). Todo en Decimal."""
+import math
+from decimal import Decimal as D, ROUND_HALF_UP
+
+K_COMPACTACION = D("1.20")
+IVA = D("0.19")
+# shortcut: parámetros de negocio fijos por defecto, mover a tabla de configuración cuando el jefe los quiera editar.
+DEFAULTS = {
+    "flete_base": D("45000"),
+    "tarifa_combustible_km": D("900"),
+    "f_peso": D("350"),            # CLP por m² de casa
+    "viatico_dia": D("25000"),
+    "dias_estimados": None,        # None -> se estima desde los m²
+    "margen": D("1.30"),
+}
+
+
+def _clp(x: D) -> D:
+    return x.quantize(D("1"), rounding=ROUND_HALF_UP)
+
+
+def costo_neto(precio_lista: D, descuento_pct: D) -> D:
+    return precio_lista * (1 - descuento_pct / 100)
+
+
+def volumen_estabilizado(m2: D, espesor_cm: D) -> D:
+    return m2 * (espesor_cm / 100) * K_COMPACTACION
+
+
+def costo_flete(m2, km, p) -> D:
+    dias = p["dias_estimados"] or D(max(1, math.ceil(float(m2) / 4)))  # supuesto: ~4 m²/día de cuadrilla
+    return (p["flete_base"] + 2 * km * p["tarifa_combustible_km"]
+            + m2 * p["f_peso"] + p["viatico_dia"] * dias)
+
+
+def tabiqueria(m2: D, separacion_cm: int = 40) -> dict:
+    """Piezas estimadas. Supuestos (no vienen en el informe): casa cuadrada, muros = perímetro x1.5 (tabiques interiores), altura 2.44 m."""
+    if separacion_cm not in (40, 60):
+        raise ValueError("separacion_cm debe ser 40 o 60")
+    largo_ml = D(4 * math.sqrt(float(m2)) * 1.5)
+    pies = math.ceil(float(largo_ml) / (separacion_cm / 100)) + 1
+    return {"pies_derechos_2x3": pies, "soleras_2x3_ml": _clp(largo_ml * 2), "cerchas_1x4_ml": _clp(m2 * D("2.5"))}
+
+
+def precio_venta(costos_directos: D, margen: D) -> dict:
+    neto = costos_directos * margen
+    iva = neto * IVA
+    return {"neto": _clp(neto), "iva": _clp(iva), "total": _clp(neto + iva)}
+
+
+def hitos(total: D) -> list:
+    a, b = _clp(total * D("0.40")), _clp(total * D("0.30"))
+    return [("ANTICIPO_40", D(40), a), ("AVANCE_30", D(30), b), ("ENTREGA_30", D(30), total - a - b)]
+
+
+def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabilizado_m3,
+             arido_empresa=True, descuento_pct=0, separacion_cm=40, **over) -> dict:
+    p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
+    m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
+    desc = D(str(descuento_pct))
+    materiales = m2 * (costo_neto(D(str(precio_base_m2)), desc) + costo_neto(D(str(precio_revest_m2)), desc))
+    vol = volumen_estabilizado(m2, espesor_cm)
+    nivelacion = vol * costo_neto(D(str(precio_estabilizado_m3)), desc) if arido_empresa else D(0)
+    flete = costo_flete(m2, km, p)
+    directos = materiales + nivelacion + flete
+    pv = precio_venta(directos, p["margen"])
+    return {
+        "volumen_estabilizado_m3": vol.quantize(D("0.01")),
+        "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete),
+        "costos_directos": _clp(directos), **pv,
+        "tabiqueria": tabiqueria(m2, separacion_cm),
+        "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
+    }

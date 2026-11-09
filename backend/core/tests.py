@@ -113,3 +113,26 @@ class DenaServMigrationTests(TestCase):
         hitos[0].refresh_from_db()
         self.assertEqual(hitos[0].estado, "PAGADO")
         self.assertIsNotNone(hitos[0].fecha_pago)
+
+
+from decimal import Decimal as D
+from . import calculo
+
+
+class CalculoTests(TestCase):
+    def test_formulas(self):
+        self.assertEqual(calculo.volumen_estabilizado(D(60), D(10)), D("7.2"))
+        self.assertEqual(calculo.costo_neto(D(1000), D(15)), D("850"))
+        self.assertEqual(calculo.precio_venta(D(1000), D("1.3"))["total"], D("1547"))
+        self.assertEqual(sum(h[2] for h in calculo.hitos(D("1547"))), D("1547"))
+
+    def test_arido_cliente_cuesta_cero(self):
+        r = calculo.calcular(60, 10, 10, 1000, 1000, 5000, arido_empresa=False)
+        self.assertEqual(r["costo_nivelacion"], 0)
+
+    def test_endpoint(self):
+        res = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 60, "distancia_km": 10, "espesor_cm": 10,
+            "precio_base_m2": 25000, "precio_revest_m2": 28000, "precio_estabilizado_m3": 20000},
+            content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("total", res.json())

@@ -22,8 +22,9 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema
+    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema
 )
+from . import calculo
 
 router = Router()
 
@@ -267,6 +268,16 @@ def crear_cotizacion(request, data: CotizacionInSchema):
 
             return 200, cotizacion
     except Exception as e:
+        return 400, {"message": str(e)}
+
+
+@router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema})
+def calcular_cotizacion(request, data: CalculoInSchema):
+    try:
+        d = data.dict()
+        d["m2"], d["km"] = d.pop("superficie_m2"), d.pop("distancia_km")
+        return 200, calculo.calcular(**d)
+    except ValueError as e:
         return 400, {"message": str(e)}
 
 

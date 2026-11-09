@@ -182,3 +182,18 @@ class PortafolioProyectoInSchema(Schema):
     imagen_url: Optional[str] = None
     publicado: bool = True
     cotizacion_id: Optional[int] = None
+
+
+# --- Motor de cálculo ---
+class CalculoInSchema(Schema):
+    superficie_m2: float
+    distancia_km: float = 0
+    espesor_cm: float = 10
+    precio_base_m2: float
+    precio_revest_m2: float
+    precio_estabilizado_m3: float = 0
+    arido_empresa: bool = True
+    descuento_pct: float = 0
+    separacion_cm: int = 40
+    margen: Optional[float] = None
+    dias_estimados: Optional[int] = None
