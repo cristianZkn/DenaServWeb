@@ -38,6 +38,17 @@ interface Cotizacion {
   hitos_pago: HitoPago[];
 }
 
+async function descargarPdf(c: Cotizacion) {
+  // react-pdf se carga solo al descargar (pesado y solo cliente).
+  const [{ pdf }, { default: FichaPdf }] = await Promise.all([import("@react-pdf/renderer"), import("./FichaPdf")]);
+  const blob = await pdf(<FichaPdf c={c} />).toBlob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${c.codigo_cotizacion}.pdf`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export default function FichaCotizacion({ params }: { params: Promise<{ uuid: string }> }) {
   const resolvedParams = use(params);
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null);
@@ -101,6 +112,12 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
           <span className="font-mono text-xs text-slate-500 font-semibold">
             REF: {cotizacion.codigo_cotizacion}
           </span>
+          <button
+            onClick={() => descargarPdf(cotizacion)}
+            className="bg-blue-900 text-white font-bold px-3 py-1 rounded hover:bg-blue-800 cursor-pointer"
+          >
+            Descargar PDF
+          </button>
         </div>
 
         {/* Encabezado Principal */}
