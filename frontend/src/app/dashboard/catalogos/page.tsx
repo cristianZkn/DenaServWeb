@@ -18,6 +18,9 @@ interface CatalogoItem {
   proveedor_id: number | null;
   etapa_obra?: string;
   rendimiento_m2?: number;
+  fuente_url?: string;
+  fuente_termino?: string;
+  precio_actualizado_en?: string | null;
   proveedor?: Proveedor | null;
   activo: boolean;
 }
@@ -57,8 +60,35 @@ export default function CatalogosPage() {
     proveedor_id: "" as string | number,
     etapa_obra: "",
     rendimiento_m2: 0,
+    fuente_url: "",
+    fuente_termino: "",
     activo: true,
   });
+
+  const [actualizando, setActualizando] = useState(false);
+  const actualizarPrecios = async () => {
+    setActualizando(true);
+    try {
+      const res = await fetch("/api/catalogo-tipos/actualizar-precios", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.message);
+      alert(
+        `Precios actualizados: ${r.actualizados}. Sin cambio: ${r.sin_cambio}.` +
+          (r.no_encontrados.length ? `
+No encontrados: ${r.no_encontrados.join(", ")}` : "") +
+          (r.errores.length ? `
+Errores: ${r.errores.join("; ")}` : "")
+      );
+      fetchData();
+    } catch (e: any) {
+      alert(`No se pudo actualizar: ${e.message}`);
+    } finally {
+      setActualizando(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -104,6 +134,8 @@ export default function CatalogosPage() {
       proveedor_id: "",
       etapa_obra: "",
       rendimiento_m2: 0,
+      fuente_url: "",
+      fuente_termino: "",
       activo: true,
     });
     setModalAbierto(true);
@@ -120,6 +152,8 @@ export default function CatalogosPage() {
       proveedor_id: item.proveedor_id || "",
       etapa_obra: item.etapa_obra || "",
       rendimiento_m2: Number(item.rendimiento_m2) || 0,
+      fuente_url: item.fuente_url || "",
+      fuente_termino: item.fuente_termino || "",
       activo: item.activo,
     });
     setModalAbierto(true);
@@ -206,12 +240,21 @@ export default function CatalogosPage() {
             Administración centralizada de materiales, revestimientos, bases y componentes constructivos.
           </p>
         </div>
+        <div className="flex gap-2">
+        <button
+          onClick={actualizarPrecios}
+          disabled={actualizando}
+          className="bg-white border border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 py-2.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
+        >
+          {actualizando ? "Actualizando..." : "Actualizar precios (Sodimac)"}
+        </button>
         <button
           onClick={abrirModalCrear}
           className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 py-2.5 rounded-lg shadow transition flex items-center gap-2 cursor-pointer"
         >
           <span>+</span> Nuevo Tipo
         </button>
+        </div>
       </div>
 
       {error && (
@@ -301,6 +344,11 @@ export default function CatalogosPage() {
                     <td className="p-4 font-medium text-slate-600">{item.unidad_medida}</td>
                     <td className="p-4 font-bold text-slate-900">
                       ${Number(item.precio_base_unitario).toLocaleString("es-CL")}
+                      {item.precio_actualizado_en && (
+                        <div className="text-[10px] font-normal text-slate-400">
+                          act. {new Date(item.precio_actualizado_en).toLocaleDateString("es-CL")}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 text-slate-600">
                       {item.proveedor?.razon_social || (
@@ -449,6 +497,26 @@ export default function CatalogosPage() {
                     </div>
                   </>
                 )}
+                <div>
+                  <label className="block font-semibold mb-1 text-slate-700">URL del producto en Sodimac (opcional)</label>
+                  <input
+                    type="url"
+                    value={formData.fuente_url}
+                    onChange={(e) => setFormData({ ...formData, fuente_url: e.target.value })}
+                    placeholder="https://www.sodimac.cl/sodimac-cl/articulo/..."
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1 text-slate-700">Término de búsqueda (para actualizar precio)</label>
+                  <input
+                    type="text"
+                    value={formData.fuente_termino}
+                    onChange={(e) => setFormData({ ...formData, fuente_termino: e.target.value })}
+                    placeholder="ej. pino impregnado 2x3"
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700">Proveedor</label>
                   <select

@@ -217,3 +217,19 @@ class GananciasWhatsappTests(TestCase):
         PortafolioProyecto.objects.create(titulo="Casa Maipú", cotizacion_id=cot["id"])
         url = c.get("/api/portafolio/").json()[0]["whatsapp_url"]
         self.assertTrue(url.startswith("https://wa.me/") and "Casa%20Maip" in url and "50" in url)
+
+
+class PreciosTests(TestCase):
+    def test_actualiza_por_id_de_articulo_y_no_pisa_con_vacio(self):
+        from . import precios
+        a = CatalogoTipo.objects.create(categoria="INSUMO", nombre="A", unidad_medida="UN", precio_base_unitario=100,
+                                        fuente_url="https://www.sodimac.cl/sodimac-cl/articulo/111/a?exp=x", fuente_termino="pino")
+        b = CatalogoTipo.objects.create(categoria="INSUMO", nombre="B", unidad_medida="UN", precio_base_unitario=200,
+                                        fuente_url="https://www.sodimac.cl/sodimac-cl/articulo/222/b", fuente_termino="pino")
+        fake = lambda term: [{"url": "https://www.sodimac.cl/sodimac-cl/articulo/111/otro-slug", "price": 150},
+                             {"url": "https://www.sodimac.cl/sodimac-cl/articulo/222/b", "price": None}]
+        r = precios.actualizar_precios(runner=fake)
+        a.refresh_from_db(); b.refresh_from_db()
+        self.assertEqual(float(a.precio_base_unitario), 150.0)
+        self.assertEqual(float(b.precio_base_unitario), 200.0)
+        self.assertEqual((r["actualizados"], r["no_encontrados"]), (1, ["B"]))

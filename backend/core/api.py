@@ -27,7 +27,7 @@ from .schemas import (
     ObraEjecucionSchema, ObraEjecucionInSchema,
     PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema
 )
-from . import calculo
+from . import calculo, precios
 
 
 def _neto(item):
@@ -185,6 +185,14 @@ def listar_catalogo_tipos(request, categoria: Optional[str] = None, activo: Opti
 def listar_categorias_disponibles(request):
     categorias = CatalogoTipo.objects.values_list("categoria", flat=True).distinct()
     return list(categorias)
+
+
+@router.post("/catalogo-tipos/actualizar-precios/", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
+def actualizar_precios_catalogo(request):
+    try:
+        return 200, precios.actualizar_precios()
+    except Exception as e:
+        return 400, {"message": str(e)}
 
 
 @router.post("/catalogo-tipos/", response={200: CatalogoTipoSchema, 400: MessageSchema}, auth=AuthBearer())

@@ -64,6 +64,9 @@ class CatalogoTipoSchema(Schema):
     proveedor: Optional[ProveedorSchema] = None
     etapa_obra: str = ''
     rendimiento_m2: float = 0
+    fuente_url: str = ''
+    fuente_termino: str = ''
+    precio_actualizado_en: Optional[datetime] = None
     activo: bool
 
 class CatalogoTipoInSchema(Schema):
@@ -75,6 +78,8 @@ class CatalogoTipoInSchema(Schema):
     proveedor_id: Optional[int] = None
     etapa_obra: str = ''
     rendimiento_m2: float = 0
+    fuente_url: str = ''
+    fuente_termino: str = ''
     activo: bool = True
 
 

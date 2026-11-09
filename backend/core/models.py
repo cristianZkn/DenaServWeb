@@ -53,6 +53,10 @@ class CatalogoTipo(models.Model):
         related_name='catalogos'
     )
     # Solo categoria 'INSUMO': etapa constructiva ('ETAPA_1'/'ETAPA_2') y cantidad por m² de casa.
+    # Fuente de precio (Sodimac/Apify): URL del producto y término de búsqueda para encontrarlo.
+    fuente_url = models.CharField(max_length=500, blank=True, default='')
+    fuente_termino = models.CharField(max_length=150, blank=True, default='')
+    precio_actualizado_en = models.DateTimeField(null=True, blank=True)
     etapa_obra = models.CharField(max_length=50, blank=True, default='')
     rendimiento_m2 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     activo = models.BooleanField(default=True)
