@@ -23,7 +23,7 @@ def _clp(x: D) -> D:
 
 
 def costo_neto(precio_lista: D, descuento_pct: D) -> D:
-    return precio_lista * (1 - descuento_pct / 100)
+    return D(str(precio_lista)) * (1 - D(str(descuento_pct)) / 100)
 
 
 def volumen_estabilizado(m2: D, espesor_cm: D) -> D:
@@ -56,8 +56,17 @@ def hitos(total: D) -> list:
     return [("ANTICIPO_40", D(40), a), ("AVANCE_30", D(30), b), ("ENTREGA_30", D(30), total - a - b)]
 
 
+def bom_insumos(m2: D, insumos) -> list:
+    """Lista de materiales por etapa. insumos: dicts {id, nombre, unidad, etapa, rendimiento, precio_neto}."""
+    out = []
+    for i in insumos:
+        cant = (m2 * D(str(i["rendimiento"]))).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+        out.append({**i, "cantidad": cant, "subtotal": _clp(cant * D(str(i["precio_neto"])))})
+    return out
+
+
 def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabilizado_m3,
-             arido_empresa=True, descuento_pct=0, separacion_cm=40, **over) -> dict:
+             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), **over) -> dict:
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
     desc = D(str(descuento_pct))
@@ -66,11 +75,14 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     nivelacion = vol * costo_neto(D(str(precio_estabilizado_m3)), desc) if arido_empresa else D(0)
     flete = costo_flete(m2, km, p)
     mano_obra = m2 * p["mano_obra_m2"]
-    directos = materiales + nivelacion + flete + mano_obra
+    bom = bom_insumos(m2, insumos)
+    costo_insumos = sum((i["subtotal"] for i in bom), D(0))
+    directos = materiales + nivelacion + flete + mano_obra + costo_insumos
     pv = precio_venta(directos, p["margen"])
     return {
         "volumen_estabilizado_m3": vol.quantize(D("0.01")),
         "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
+        "costo_insumos": _clp(costo_insumos), "insumos": bom,
         "costos_directos": _clp(directos), **pv,
         "tabiqueria": tabiqueria(m2, separacion_cm, p),
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],

@@ -9,6 +9,7 @@ interface Proveedor {
   contacto_nombre: string | null;
   telefono: string | null;
   email: string | null;
+  descuento_pct: number;
   activo: boolean;
 }
 
@@ -24,6 +25,7 @@ export default function ProveedoresPage() {
     contacto_nombre: "",
     telefono: "",
     email: "",
+    descuento_pct: 0,
     activo: true,
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -65,6 +67,7 @@ export default function ProveedoresPage() {
       contacto_nombre: formData.contacto_nombre || null,
       telefono: formData.telefono || null,
       email: formData.email || null,
+      descuento_pct: Number(formData.descuento_pct) || 0,
       activo: formData.activo,
     };
 
@@ -98,6 +101,7 @@ export default function ProveedoresPage() {
       contacto_nombre: p.contacto_nombre || "",
       telefono: p.telefono || "",
       email: p.email || "",
+      descuento_pct: Number(p.descuento_pct) || 0,
       activo: p.activo,
     });
     setIsEditing(true);
@@ -130,6 +134,7 @@ export default function ProveedoresPage() {
       contacto_nombre: "",
       telefono: "",
       email: "",
+      descuento_pct: 0,
       activo: true,
     });
     setIsEditing(false);
@@ -202,6 +207,18 @@ export default function ProveedoresPage() {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="contacto@proveedor.cl"
+                className="w-full px-3 py-2 border rounded-lg border-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-slate-700">Descuento comercial (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={formData.descuento_pct}
+                onChange={(e) => setFormData({ ...formData, descuento_pct: parseFloat(e.target.value) || 0 })}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
               />
             </div>

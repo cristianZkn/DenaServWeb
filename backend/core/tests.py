@@ -131,8 +131,42 @@ class CalculoTests(TestCase):
         self.assertEqual(r["costo_nivelacion"], 0)
 
     def test_endpoint(self):
-        res = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 60, "distancia_km": 10, "espesor_cm": 10,
-            "precio_base_m2": 25000, "precio_revest_m2": 28000, "precio_estabilizado_m3": 20000},
+        res = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 60, "distancia_km": 10, "espesor_cm": 10},
             content_type="application/json")
         self.assertEqual(res.status_code, 200)
         self.assertIn("total", res.json())
+
+
+class CrearCotizacionTests(TestCase):
+    def test_backend_recalcula_y_hitos_suman_total(self):
+        u = Usuario.objects.create(rut="1-9", nombre_completo="A", email="a@d.cl")
+        from .api import create_jwt_token
+        base = CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="R", unidad_medida="M2", precio_base_unitario=25000)
+        rev = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="S", unidad_medida="M2", precio_base_unitario=28000)
+        res = Client().post("/api/cotizaciones/", {
+            "cliente_nombre": "X", "direccion_terreno": "Calle 1", "superficie_m2": 54, "distancia_flete_km": 25,
+            "base_terreno_id": base.id, "revestimiento_id": rev.id, "costo_total": 1,
+        }, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
+        self.assertEqual(res.status_code, 200, res.content)
+        c = Cotizacion.objects.get()
+        self.assertGreater(c.costo_total, 1)
+        self.assertEqual(sum(h.monto_pago for h in c.hitos_pago.all()), c.costo_total)
+
+
+class BomTests(TestCase):
+    def test_insumos_por_etapa_con_descuento_y_detalle_guardado(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="2-7", nombre_completo="B", email="b@d.cl")
+        prov = Proveedor.objects.create(rut_empresa="9-9", razon_social="Sodimac", descuento_pct=10)
+        CatalogoTipo.objects.create(categoria="INSUMO", nombre="Pino 2x3", unidad_medida="UN", precio_base_unitario=1000,
+                                    proveedor=prov, etapa_obra="ETAPA_1", rendimiento_m2=2)
+        CatalogoTipo.objects.create(categoria="INSUMO", nombre="Yeso", unidad_medida="UN", precio_base_unitario=500,
+                                    etapa_obra="ETAPA_2", rendimiento_m2=1)
+        r = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 10}, content_type="application/json").json()
+        pino = next(i for i in r["insumos"] if i["nombre"] == "Pino 2x3")
+        self.assertEqual(float(pino["cantidad"]), 20.0)
+        self.assertEqual(float(pino["subtotal"]), 18000.0)  # 20 x 1000 x 0.9
+        res = Client().post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10},
+                            content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(Cotizacion.objects.get().detalles_insumo.count(), 2)

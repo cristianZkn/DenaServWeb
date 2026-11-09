@@ -26,6 +26,7 @@ class Proveedor(models.Model):
     contacto_nombre = models.CharField(max_length=100, null=True, blank=True)
     telefono = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(max_length=150, null=True, blank=True)
+    descuento_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # convenio comercial
     activo = models.BooleanField(default=True)
 
     class Meta:
@@ -51,6 +52,9 @@ class CatalogoTipo(models.Model):
         blank=True,
         related_name='catalogos'
     )
+    # Solo categoria 'INSUMO': etapa constructiva ('ETAPA_1'/'ETAPA_2') y cantidad por m² de casa.
+    etapa_obra = models.CharField(max_length=50, blank=True, default='')
+    rendimiento_m2 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     activo = models.BooleanField(default=True)
 
     class Meta:

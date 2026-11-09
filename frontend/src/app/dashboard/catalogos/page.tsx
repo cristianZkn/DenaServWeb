@@ -16,6 +16,8 @@ interface CatalogoItem {
   unidad_medida: string;
   precio_base_unitario: number;
   proveedor_id: number | null;
+  etapa_obra?: string;
+  rendimiento_m2?: number;
   proveedor?: Proveedor | null;
   activo: boolean;
 }
@@ -25,6 +27,7 @@ const CATEGORIAS_PREDEFINIDAS = [
   { key: "BASE_TERRENO", label: "Base Terreno" },
   { key: "REVESTIMIENTO", label: "Revestimiento" },
   { key: "ESTABILIZADO", label: "Estabilizado (m³)" },
+  { key: "INSUMO", label: "Insumos (BOM)" },
   { key: "TABIQUERIA", label: "Tabiquería" },
   { key: "TECHUMBRE", label: "Techumbre" },
   { key: "TERMINACION", label: "Terminación" },
@@ -52,6 +55,8 @@ export default function CatalogosPage() {
     unidad_medida: "M2",
     precio_base_unitario: 0,
     proveedor_id: "" as string | number,
+    etapa_obra: "",
+    rendimiento_m2: 0,
     activo: true,
   });
 
@@ -97,6 +102,8 @@ export default function CatalogosPage() {
       unidad_medida: "M2",
       precio_base_unitario: 0,
       proveedor_id: "",
+      etapa_obra: "",
+      rendimiento_m2: 0,
       activo: true,
     });
     setModalAbierto(true);
@@ -111,6 +118,8 @@ export default function CatalogosPage() {
       unidad_medida: item.unidad_medida,
       precio_base_unitario: item.precio_base_unitario,
       proveedor_id: item.proveedor_id || "",
+      etapa_obra: item.etapa_obra || "",
+      rendimiento_m2: Number(item.rendimiento_m2) || 0,
       activo: item.activo,
     });
     setModalAbierto(true);
@@ -132,6 +141,7 @@ export default function CatalogosPage() {
         ...formData,
         precio_base_unitario: parseFloat(formData.precio_base_unitario as any) || 0,
         proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id as any) : null,
+        rendimiento_m2: Number(formData.rendimiento_m2) || 0,
       };
 
       const res = await fetch(url, {
@@ -351,6 +361,7 @@ export default function CatalogosPage() {
                     <option value="REVESTIMIENTO">REVESTIMIENTO</option>
                     <option value="BASE_TERRENO">BASE_TERRENO</option>
                     <option value="ESTABILIZADO">ESTABILIZADO</option>
+                    <option value="INSUMO">INSUMO</option>
                     <option value="TABIQUERIA">TABIQUERIA</option>
                     <option value="TECHUMBRE">TECHUMBRE</option>
                     <option value="TERMINACION">TERMINACION</option>
@@ -409,6 +420,35 @@ export default function CatalogosPage() {
                     required
                   />
                 </div>
+                {formData.categoria === "INSUMO" && (
+                  <>
+                    <div>
+                      <label className="block font-semibold mb-1 text-slate-700">Etapa de obra</label>
+                      <select
+                        value={formData.etapa_obra}
+                        onChange={(e) => setFormData({ ...formData, etapa_obra: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                        required
+                      >
+                        <option value="">-- Seleccione --</option>
+                        <option value="ETAPA_1">Etapa 1 (obra gruesa)</option>
+                        <option value="ETAPA_2">Etapa 2 (terminaciones)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold mb-1 text-slate-700">Cantidad por m² de casa</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        value={formData.rendimiento_m2}
+                        onChange={(e) => setFormData({ ...formData, rendimiento_m2: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border rounded-lg border-slate-300"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700">Proveedor</label>
                   <select
