@@ -225,9 +225,9 @@ class PreciosTests(TestCase):
         a = CatalogoTipo.objects.create(categoria="INSUMO", nombre="A", unidad_medida="UN", precio_base_unitario=100,
                                         fuente_url="https://www.sodimac.cl/sodimac-cl/articulo/111/a?exp=x", fuente_termino="pino")
         b = CatalogoTipo.objects.create(categoria="INSUMO", nombre="B", unidad_medida="UN", precio_base_unitario=200,
-                                        fuente_url="https://www.sodimac.cl/sodimac-cl/articulo/222/b", fuente_termino="pino")
+                                        fuente_url="https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", fuente_termino="pino")
         fake = lambda term: [{"url": "https://www.sodimac.cl/sodimac-cl/articulo/111/otro-slug", "price": 150},
-                             {"url": "https://www.sodimac.cl/sodimac-cl/articulo/222/b", "price": None}]
+                             {"product_id": "222X", "url": "https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", "price": None}]
         r = precios.actualizar_precios(runner=fake)
         a.refresh_from_db(); b.refresh_from_db()
         self.assertEqual(float(a.precio_base_unitario), 150.0)

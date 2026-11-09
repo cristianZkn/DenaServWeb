@@ -12,7 +12,7 @@ MAX_ITEMS = 100
 
 
 def _articulo_id(url: str):
-    m = re.search(r"/articulo/(\d+)", url or "")
+    m = re.search(r"/(?:articulo|product)/([0-9A-Za-z]+)", url or "")
     return m.group(1) if m else None
 
 
@@ -39,7 +39,7 @@ def actualizar_precios(runner=ejecutar_actor) -> dict:
     res = {"actualizados": 0, "sin_cambio": 0, "no_encontrados": [], "errores": []}
     for term, lista in por_termino.items():
         try:
-            precios = {_articulo_id(p.get("url")): p.get("price") for p in runner(term)}
+            precios = {str(p.get("product_id") or _articulo_id(p.get("url"))): p.get("price") for p in runner(term)}
         except Exception as e:  # un término caído no debe detener a los demás
             res["errores"].append(f"{term}: {e}")
             continue
