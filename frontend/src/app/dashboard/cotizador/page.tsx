@@ -72,30 +72,38 @@ export default function CotizadorPage() {
     fetchCatalogos();
   }, [router]);
 
-  // Recalcular costos estimados dinámicamente
+  // Recalcular costos en el backend (motor de cálculo, debounce 300 ms)
   useEffect(() => {
-    const m2 = parseFloat(formData.superficie_m2 as any) || 0;
-    const km = parseFloat(formData.distancia_flete_km as any) || 0;
-
     const baseSel = basesTerreno.find((b) => b.id === Number(formData.base_terreno_id));
     const revestSel = revestimientos.find((r) => r.id === Number(formData.revestimiento_id));
+    if (!baseSel || !revestSel) return;
 
-    const precioBaseM2 = baseSel ? Number(baseSel.precio_base_unitario) : 18000;
-    const precioRevestM2 = revestSel ? Number(revestSel.precio_base_unitario) : 22000;
-
-    // Estimación paramétrica básica
-    const materialesEstimados = Math.round(m2 * (precioBaseM2 + precioRevestM2 + 35000));
-    const manoObraEstimada = Math.round(m2 * 28000);
-    const fleteEstimado = Math.round(km * 1800 + 45000);
-    const total = materialesEstimados + manoObraEstimada + fleteEstimado;
-
-    setFormData((prev) => ({
-      ...prev,
-      costo_materiales: materialesEstimados,
-      costo_mano_obra: manoObraEstimada,
-      costo_flete: fleteEstimado,
-      costo_total: total,
-    }));
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/cotizaciones/calcular", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            superficie_m2: Number(formData.superficie_m2) || 0,
+            distancia_km: Number(formData.distancia_flete_km) || 0,
+            precio_base_m2: Number(baseSel.precio_base_unitario),
+            precio_revest_m2: Number(revestSel.precio_base_unitario),
+          }),
+        });
+        if (!res.ok) return;
+        const r = await res.json();
+        setFormData((prev) => ({
+          ...prev,
+          costo_materiales: Number(r.costo_materiales) + Number(r.costo_nivelacion),
+          costo_mano_obra: Number(r.costo_mano_obra),
+          costo_flete: Number(r.costo_flete),
+          costo_total: Number(r.total),
+        }));
+      } catch {
+        setError("No se pudo calcular el presupuesto en el servidor.");
+      }
+    }, 300);
+    return () => clearTimeout(timer);
   }, [
     formData.superficie_m2,
     formData.distancia_flete_km,

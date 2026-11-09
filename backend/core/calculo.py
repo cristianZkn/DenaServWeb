@@ -12,6 +12,9 @@ DEFAULTS = {
     "viatico_dia": D("25000"),
     "dias_estimados": None,        # None -> se estima desde los m²
     "margen": D("1.30"),
+    "mano_obra_m2": D("28000"),    # CLP por m² (valor que usaba el cotizador previo)
+    "m2_por_dia": D("4"),          # avance de la cuadrilla, para estimar días
+    "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
 }
 
 
@@ -28,16 +31,16 @@ def volumen_estabilizado(m2: D, espesor_cm: D) -> D:
 
 
 def costo_flete(m2, km, p) -> D:
-    dias = p["dias_estimados"] or D(max(1, math.ceil(float(m2) / 4)))  # supuesto: ~4 m²/día de cuadrilla
+    dias = p["dias_estimados"] or D(max(1, math.ceil(m2 / p["m2_por_dia"])))
     return (p["flete_base"] + 2 * km * p["tarifa_combustible_km"]
             + m2 * p["f_peso"] + p["viatico_dia"] * dias)
 
 
-def tabiqueria(m2: D, separacion_cm: int = 40) -> dict:
-    """Piezas estimadas. Supuestos (no vienen en el informe): casa cuadrada, muros = perímetro x1.5 (tabiques interiores), altura 2.44 m."""
+def tabiqueria(m2: D, separacion_cm: int = 40, p=DEFAULTS) -> dict:
+    """Piezas estimadas. Supuesto: casa cuadrada (valores en DEFAULTS)."""
     if separacion_cm not in (40, 60):
         raise ValueError("separacion_cm debe ser 40 o 60")
-    largo_ml = D(4 * math.sqrt(float(m2)) * 1.5)
+    largo_ml = D(4 * math.sqrt(float(m2))) * p["tabique_factor_muros"]
     pies = math.ceil(float(largo_ml) / (separacion_cm / 100)) + 1
     return {"pies_derechos_2x3": pies, "soleras_2x3_ml": _clp(largo_ml * 2), "cerchas_1x4_ml": _clp(m2 * D("2.5"))}
 
@@ -62,12 +65,13 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     vol = volumen_estabilizado(m2, espesor_cm)
     nivelacion = vol * costo_neto(D(str(precio_estabilizado_m3)), desc) if arido_empresa else D(0)
     flete = costo_flete(m2, km, p)
-    directos = materiales + nivelacion + flete
+    mano_obra = m2 * p["mano_obra_m2"]
+    directos = materiales + nivelacion + flete + mano_obra
     pv = precio_venta(directos, p["margen"])
     return {
         "volumen_estabilizado_m3": vol.quantize(D("0.01")),
-        "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete),
+        "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
         "costos_directos": _clp(directos), **pv,
-        "tabiqueria": tabiqueria(m2, separacion_cm),
+        "tabiqueria": tabiqueria(m2, separacion_cm, p),
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
     }

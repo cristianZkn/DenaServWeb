@@ -197,3 +197,4 @@ class CalculoInSchema(Schema):
     separacion_cm: int = 40
     margen: Optional[float] = None
     dias_estimados: Optional[int] = None
+    mano_obra_m2: Optional[float] = None
