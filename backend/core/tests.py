@@ -136,3 +136,19 @@ class CalculoTests(TestCase):
             content_type="application/json")
         self.assertEqual(res.status_code, 200)
         self.assertIn("total", res.json())
+
+
+class CrearCotizacionTests(TestCase):
+    def test_backend_recalcula_y_hitos_suman_total(self):
+        u = Usuario.objects.create(rut="1-9", nombre_completo="A", email="a@d.cl")
+        from .api import create_jwt_token
+        base = CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="R", unidad_medida="M2", precio_base_unitario=25000)
+        rev = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="S", unidad_medida="M2", precio_base_unitario=28000)
+        res = Client().post("/api/cotizaciones/", {
+            "cliente_nombre": "X", "direccion_terreno": "Calle 1", "superficie_m2": 54, "distancia_flete_km": 25,
+            "base_terreno_id": base.id, "revestimiento_id": rev.id, "costo_total": 1,
+        }, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
+        self.assertEqual(res.status_code, 200, res.content)
+        c = Cotizacion.objects.get()
+        self.assertGreater(c.costo_total, 1)
+        self.assertEqual(sum(h.monto_pago for h in c.hitos_pago.all()), c.costo_total)

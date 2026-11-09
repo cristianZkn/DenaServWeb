@@ -216,6 +216,18 @@ def crear_cotizacion(request, data: CotizacionInSchema):
             usuario = request.auth
             codigo = f"COT-{datetime.now().strftime('%Y%m')}-{uuid.uuid4().hex[:4].upper()}"
 
+            # El backend recalcula todo: no se confía en los montos enviados por el cliente.
+            base = CatalogoTipo.objects.filter(id=data.base_terreno_id).first()
+            revest = CatalogoTipo.objects.filter(id=data.revestimiento_id).first()
+            estab = CatalogoTipo.objects.filter(id=data.estabilizado_id).first()
+            r = calculo.calcular(
+                m2=data.superficie_m2, km=data.distancia_flete_km, espesor_cm=data.espesor_cm,
+                precio_base_m2=base.precio_base_unitario if base else 0,
+                precio_revest_m2=revest.precio_base_unitario if revest else 0,
+                precio_estabilizado_m3=estab.precio_base_unitario if estab else 0,
+                arido_empresa=data.arido_empresa, margen=data.margen,
+            )
+
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
                 cliente_nombre=data.cliente_nombre,
@@ -225,37 +237,19 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 distancia_flete_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id,
                 revestimiento_id=data.revestimiento_id,
-                costo_materiales=data.costo_materiales,
-                costo_mano_obra=data.costo_mano_obra,
-                costo_flete=data.costo_flete,
-                costo_total=data.costo_total,
+                costo_materiales=r["costo_materiales"] + r["costo_nivelacion"],
+                costo_mano_obra=r["costo_mano_obra"],
+                costo_flete=r["costo_flete"],
+                costo_total=r["total"],
                 estado=data.estado or "BORRADOR",
-                usuario=usuario
+                usuario=request.auth
             )
 
-            # Generar automáticamente los 3 Hitos de Pago (40%, 30%, 30%)
-            costo_total = float(data.costo_total)
-            HitoPago.objects.create(
-                cotizacion=cotizacion,
-                fase="ANTICIPO_40",
-                porcentaje=40.00,
-                monto_pago=costo_total * 0.40,
-                estado="PENDIENTE"
-            )
-            HitoPago.objects.create(
-                cotizacion=cotizacion,
-                fase="AVANCE_30",
-                porcentaje=30.00,
-                monto_pago=costo_total * 0.30,
-                estado="PENDIENTE"
-            )
-            HitoPago.objects.create(
-                cotizacion=cotizacion,
-                fase="ENTREGA_30",
-                porcentaje=30.00,
-                monto_pago=costo_total * 0.30,
-                estado="PENDIENTE"
-            )
+            # Hitos 40/30/30 en Decimal; el último absorbe el redondeo.
+            for fase, pct, monto in calculo.hitos(r["total"]):
+                HitoPago.objects.create(
+                    cotizacion=cotizacion, fase=fase, porcentaje=pct, monto_pago=monto, estado="PENDIENTE"
+                )
 
             # Inicializar ficha de seguimiento de obra
             ObraEjecucion.objects.create(

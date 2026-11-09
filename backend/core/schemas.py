@@ -129,11 +129,16 @@ class CotizacionInSchema(Schema):
     distancia_flete_km: float = 0.00
     base_terreno_id: Optional[int] = None
     revestimiento_id: Optional[int] = None
+    # Los costos los calcula el backend; estos campos se ignoran y se mantienen por compatibilidad.
     costo_materiales: float = 0.00
     costo_mano_obra: float = 0.00
     costo_flete: float = 0.00
     costo_total: float = 0.00
     estado: str = "BORRADOR"  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
+    espesor_cm: float = 10
+    arido_empresa: bool = True
+    estabilizado_id: Optional[int] = None
+    margen: Optional[float] = None
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
