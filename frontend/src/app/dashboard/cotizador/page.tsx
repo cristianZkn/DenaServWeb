@@ -19,6 +19,7 @@ export default function CotizadorPage() {
 
   const [basesTerreno, setBasesTerreno] = useState<CatalogoItem[]>([]);
   const [revestimientos, setRevestimientos] = useState<CatalogoItem[]>([]);
+  const [estabilizados, setEstabilizados] = useState<CatalogoItem[]>([]);
 
   const [formData, setFormData] = useState({
     cliente_nombre: "",
@@ -29,6 +30,10 @@ export default function CotizadorPage() {
     distancia_flete_km: 25,
     base_terreno_id: "" as string | number,
     revestimiento_id: "" as string | number,
+    espesor_cm: 10,
+    arido_empresa: true,
+    estabilizado_id: "" as string | number,
+    margen: 1.3,
     costo_materiales: 0,
     costo_mano_obra: 0,
     costo_flete: 0,
@@ -44,9 +49,10 @@ export default function CotizadorPage() {
           return;
         }
 
-        const [resBases, resRevest] = await Promise.all([
+        const [resBases, resRevest, resEstab] = await Promise.all([
           fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO"),
           fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO"),
+          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO"),
         ]);
 
         if (resBases.ok && resRevest.ok) {
@@ -54,12 +60,15 @@ export default function CotizadorPage() {
           const revest = await resRevest.json();
           setBasesTerreno(bases);
           setRevestimientos(revest);
+          const estab = resEstab.ok ? await resEstab.json() : [];
+          setEstabilizados(estab);
 
           // Defaults
           setFormData((prev) => ({
             ...prev,
             base_terreno_id: bases.length > 0 ? bases[0].id : "",
             revestimiento_id: revest.length > 0 ? revest[0].id : "",
+            estabilizado_id: estab.length > 0 ? estab[0].id : "",
           }));
         }
       } catch (err) {
@@ -76,6 +85,7 @@ export default function CotizadorPage() {
   useEffect(() => {
     const baseSel = basesTerreno.find((b) => b.id === Number(formData.base_terreno_id));
     const revestSel = revestimientos.find((r) => r.id === Number(formData.revestimiento_id));
+    const estabSel = estabilizados.find((e) => e.id === Number(formData.estabilizado_id));
     if (!baseSel || !revestSel) return;
 
     const timer = setTimeout(async () => {
@@ -88,6 +98,10 @@ export default function CotizadorPage() {
             distancia_km: Number(formData.distancia_flete_km) || 0,
             precio_base_m2: Number(baseSel.precio_base_unitario),
             precio_revest_m2: Number(revestSel.precio_base_unitario),
+            espesor_cm: Number(formData.espesor_cm) || 0,
+            arido_empresa: formData.arido_empresa,
+            precio_estabilizado_m3: estabSel ? Number(estabSel.precio_base_unitario) : 0,
+            margen: Number(formData.margen) || undefined,
           }),
         });
         if (!res.ok) return;
@@ -109,13 +123,19 @@ export default function CotizadorPage() {
     formData.distancia_flete_km,
     formData.base_terreno_id,
     formData.revestimiento_id,
+    formData.espesor_cm,
+    formData.arido_empresa,
+    formData.estabilizado_id,
+    formData.margen,
     basesTerreno,
     revestimientos,
+    estabilizados,
   ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     let finalVal: any = value;
+    if (name === "arido_empresa") finalVal = value === "true";
     if (type === "number") {
       finalVal = value === "" ? 0 : parseFloat(value);
     }
@@ -343,6 +363,76 @@ export default function CotizadorPage() {
                   ))
                 )}
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                Espesor capa de estabilizado (cm)
+              </label>
+              <input
+                type="number"
+                name="espesor_cm"
+                min="0"
+                value={formData.espesor_cm}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                Suministro del estabilizado
+              </label>
+              <select
+                name="arido_empresa"
+                value={String(formData.arido_empresa)}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+              >
+                <option value="true">Provisto por la empresa</option>
+                <option value="false">Comprado por el cliente</option>
+              </select>
+            </div>
+
+            {formData.arido_empresa && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Material de nivelación (Catálogo)
+                </label>
+                <select
+                  name="estabilizado_id"
+                  value={formData.estabilizado_id}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+                >
+                  {estabilizados.length === 0 ? (
+                    <option value="">Sin materiales ESTABILIZADO en el catálogo</option>
+                  ) : (
+                    estabilizados.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.nombre} (${Number(e.precio_base_unitario).toLocaleString("es-CL")}/{e.unidad_medida})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                Margen de utilidad (multiplicador)
+              </label>
+              <input
+                type="number"
+                name="margen"
+                min="1"
+                step="0.01"
+                value={formData.margen}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+              />
             </div>
           </div>
         </section>
