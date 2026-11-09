@@ -37,6 +37,7 @@ class ProveedorSchema(Schema):
     contacto_nombre: Optional[str] = None
     telefono: Optional[str] = None
     email: Optional[str] = None
+    descuento_pct: float = 0
     activo: bool
 
 class ProveedorInSchema(Schema):
@@ -45,6 +46,7 @@ class ProveedorInSchema(Schema):
     contacto_nombre: Optional[str] = None
     telefono: Optional[str] = None
     email: Optional[str] = None
+    descuento_pct: float = 0
     activo: bool = True
 
 
@@ -58,6 +60,8 @@ class CatalogoTipoSchema(Schema):
     precio_base_unitario: float
     proveedor_id: Optional[int] = None
     proveedor: Optional[ProveedorSchema] = None
+    etapa_obra: str = ''
+    rendimiento_m2: float = 0
     activo: bool
 
 class CatalogoTipoInSchema(Schema):
@@ -67,6 +71,8 @@ class CatalogoTipoInSchema(Schema):
     unidad_medida: str
     precio_base_unitario: float = 0.00
     proveedor_id: Optional[int] = None
+    etapa_obra: str = ''
+    rendimiento_m2: float = 0
     activo: bool = True
 
 
@@ -194,12 +200,9 @@ class CalculoInSchema(Schema):
     superficie_m2: float
     distancia_km: float = 0
     espesor_cm: float = 10
-    precio_base_m2: float
-    precio_revest_m2: float
-    precio_estabilizado_m3: float = 0
+    base_terreno_id: Optional[int] = None
+    revestimiento_id: Optional[int] = None
+    estabilizado_id: Optional[int] = None
     arido_empresa: bool = True
-    descuento_pct: float = 0
     separacion_cm: int = 40
     margen: Optional[float] = None
-    dias_estimados: Optional[int] = None
-    mano_obra_m2: Optional[float] = None

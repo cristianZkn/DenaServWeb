@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import type { FichaData } from "./FichaPdf";
 
 interface CatalogoItem {
   id: number;
@@ -36,6 +37,7 @@ interface Cotizacion {
   estado: string;
   fecha_creacion: string;
   hitos_pago: HitoPago[];
+  detalles_insumo?: FichaData["detalles_insumo"];
 }
 
 async function descargarPdf(c: Cotizacion) {

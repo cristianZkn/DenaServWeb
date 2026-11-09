@@ -96,11 +96,11 @@ export default function CotizadorPage() {
           body: JSON.stringify({
             superficie_m2: Number(formData.superficie_m2) || 0,
             distancia_km: Number(formData.distancia_flete_km) || 0,
-            precio_base_m2: Number(baseSel.precio_base_unitario),
-            precio_revest_m2: Number(revestSel.precio_base_unitario),
+            base_terreno_id: baseSel.id,
+            revestimiento_id: revestSel.id,
+            estabilizado_id: estabSel ? estabSel.id : null,
             espesor_cm: Number(formData.espesor_cm) || 0,
             arido_empresa: formData.arido_empresa,
-            precio_estabilizado_m3: estabSel ? Number(estabSel.precio_base_unitario) : 0,
             margen: Number(formData.margen) || undefined,
           }),
         });
@@ -108,7 +108,7 @@ export default function CotizadorPage() {
         const r = await res.json();
         setFormData((prev) => ({
           ...prev,
-          costo_materiales: Number(r.costo_materiales) + Number(r.costo_nivelacion),
+          costo_materiales: Number(r.costo_materiales) + Number(r.costo_nivelacion) + Number(r.costo_insumos),
           costo_mano_obra: Number(r.costo_mano_obra),
           costo_flete: Number(r.costo_flete),
           costo_total: Number(r.total),

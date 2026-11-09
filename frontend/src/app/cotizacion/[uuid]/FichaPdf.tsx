@@ -14,6 +14,7 @@ export interface FichaData {
   costo_flete: number;
   costo_total: number;
   fecha_creacion: string;
+  detalles_insumo?: { id: number; etapa_obra: string; cantidad_calculada: number; subtotal_costo: number; catalogo_tipo?: { nombre: string; unidad_medida: string } | null }[];
   hitos_pago: { id: number; fase: string; porcentaje: number; monto_pago: number }[];
 }
 
@@ -63,6 +64,18 @@ export default function FichaPdf({ c }: { c: FichaData }) {
         <Row a="Base" b={c.base_terreno?.nombre ?? "No especificada"} />
         <Row a="Revestimiento exterior" b={c.revestimiento?.nombre ?? "No especificado"} />
         <Row a="Distancia de traslado" b={`${c.distancia_flete_km} km`} />
+
+        {[["ETAPA_1", "Lista de materiales — Etapa 1 (obra gruesa)"], ["ETAPA_2", "Lista de materiales — Etapa 2 (terminaciones)"]].map(([et, titulo]) => {
+          const items = (c.detalles_insumo ?? []).filter((d) => d.etapa_obra === et);
+          return items.length === 0 ? null : (
+            <View key={et}>
+              <Text style={s.h2}>{titulo}</Text>
+              {items.map((d) => (
+                <Row key={d.id} a={`${d.catalogo_tipo?.nombre ?? "Insumo"} — ${d.cantidad_calculada} ${d.catalogo_tipo?.unidad_medida ?? ""}`} b={clp(d.subtotal_costo)} />
+              ))}
+            </View>
+          );
+        })}
 
         <Text style={s.h2}>Desglose económico</Text>
         <Row a="Materiales" b={clp(c.costo_materiales)} />

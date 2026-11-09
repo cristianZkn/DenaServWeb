@@ -26,6 +26,30 @@ from .schemas import (
 )
 from . import calculo
 
+
+def _neto(item):
+    """Costo neto unitario aplicando el descuento del proveedor (convenio)."""
+    if not item:
+        return Decimal(0)
+    d = item.proveedor.descuento_pct if item.proveedor else 0
+    return calculo.costo_neto(item.precio_base_unitario, d)
+
+
+def _calcular_desde_catalogo(data):
+    """Resuelve precios e insumos desde la BD y ejecuta el motor. Devuelve (resultado, insumos_db)."""
+    get = lambda i: CatalogoTipo.objects.select_related('proveedor').filter(id=i).first() if i else None
+    insumos_db = list(CatalogoTipo.objects.select_related('proveedor').filter(
+        categoria='INSUMO', activo=True, rendimiento_m2__gt=0))
+    insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
+                'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
+    r = calculo.calcular(
+        m2=data.superficie_m2, km=data.distancia_km, espesor_cm=data.espesor_cm,
+        precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
+        precio_estabilizado_m3=_neto(get(data.estabilizado_id)), arido_empresa=data.arido_empresa,
+        separacion_cm=data.separacion_cm, margen=data.margen, insumos=insumos)
+    return r
+
+
 router = Router()
 
 
@@ -217,16 +241,10 @@ def crear_cotizacion(request, data: CotizacionInSchema):
             codigo = f"COT-{datetime.now().strftime('%Y%m')}-{uuid.uuid4().hex[:4].upper()}"
 
             # El backend recalcula todo: no se confía en los montos enviados por el cliente.
-            base = CatalogoTipo.objects.filter(id=data.base_terreno_id).first()
-            revest = CatalogoTipo.objects.filter(id=data.revestimiento_id).first()
-            estab = CatalogoTipo.objects.filter(id=data.estabilizado_id).first()
-            r = calculo.calcular(
-                m2=data.superficie_m2, km=data.distancia_flete_km, espesor_cm=data.espesor_cm,
-                precio_base_m2=base.precio_base_unitario if base else 0,
-                precio_revest_m2=revest.precio_base_unitario if revest else 0,
-                precio_estabilizado_m3=estab.precio_base_unitario if estab else 0,
-                arido_empresa=data.arido_empresa, margen=data.margen,
-            )
+            r = _calcular_desde_catalogo(CalculoInSchema(
+                superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km, espesor_cm=data.espesor_cm,
+                base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
+                estabilizado_id=data.estabilizado_id, arido_empresa=data.arido_empresa, margen=data.margen))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -237,13 +255,18 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 distancia_flete_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id,
                 revestimiento_id=data.revestimiento_id,
-                costo_materiales=r["costo_materiales"] + r["costo_nivelacion"],
+                costo_materiales=r["costo_materiales"] + r["costo_nivelacion"] + r["costo_insumos"],
                 costo_mano_obra=r["costo_mano_obra"],
                 costo_flete=r["costo_flete"],
                 costo_total=r["total"],
                 estado=data.estado or "BORRADOR",
                 usuario=request.auth
             )
+
+            DetalleCotizacionInsumo.objects.bulk_create([
+                DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
+                                        cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"])
+                for i in r["insumos"]])
 
             # Hitos 40/30/30 en Decimal; el último absorbe el redondeo.
             for fase, pct, monto in calculo.hitos(r["total"]):
@@ -268,9 +291,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
 @router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema})
 def calcular_cotizacion(request, data: CalculoInSchema):
     try:
-        d = data.dict()
-        d["m2"], d["km"] = d.pop("superficie_m2"), d.pop("distancia_km")
-        return 200, calculo.calcular(**d)
+        return 200, _calcular_desde_catalogo(data)
     except ValueError as e:
         return 400, {"message": str(e)}
 
