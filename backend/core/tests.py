@@ -233,3 +233,19 @@ class PreciosTests(TestCase):
         self.assertEqual(float(a.precio_base_unitario), 150.0)
         self.assertEqual(float(b.precio_base_unitario), 200.0)
         self.assertEqual((r["actualizados"], r["no_encontrados"]), (1, ["B"]))
+
+
+    def test_sincronizar_crea_solo_lo_requerido_y_el_mas_barato(self):
+        from . import precios
+        fake = lambda term: [
+            {"name": "Pino Impregnado 2 x 3 x 3,2 m", "price": 5000, "url": "https://s/product/A1/x", "product_id": "A1"},
+            {"name": "Pino impregnado 2x3 económico", "price": 4000, "url": "https://s/product/A2/x", "product_id": "A2"},
+            {"name": "Pino impregnado 2x3 mkt", "price": 100, "url": "https://s/product/A3/x", "is_marketplace": True},
+            {"name": "Toldo 2x3", "price": 50, "url": "https://s/product/A4/x"},
+        ]
+        r = precios.sincronizar_catalogo(runner=fake)
+        it = CatalogoTipo.objects.get(fuente_termino="pino impregnado 2x3")
+        self.assertEqual(float(it.precio_base_unitario), 4000.0)
+        self.assertEqual(it.etapa_obra, "ETAPA_1")
+        self.assertNotIn("pino impregnado 2x3", r["sin_coincidencia"])
+        self.assertEqual(precios.sincronizar_catalogo(runner=fake)["creados"], [])  # idempotente

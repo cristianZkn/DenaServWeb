@@ -190,7 +190,7 @@ def listar_categorias_disponibles(request):
 @router.post("/catalogo-tipos/actualizar-precios/", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_precios_catalogo(request):
     try:
-        return 200, precios.actualizar_precios()
+        return 200, precios.sincronizar_y_actualizar()
     except Exception as e:
         return 400, {"message": str(e)}
 

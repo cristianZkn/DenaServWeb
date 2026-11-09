@@ -246,7 +246,7 @@ Errores: ${r.errores.join("; ")}` : "")
           disabled={actualizando}
           className="bg-white border border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 py-2.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
         >
-          {actualizando ? "Actualizando..." : "Actualizar precios (Sodimac)"}
+          {actualizando ? "Actualizando..." : "Sincronizar catálogo y precios"}
         </button>
         <button
           onClick={abrirModalCrear}
