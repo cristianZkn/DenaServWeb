@@ -24,6 +24,7 @@ const CATEGORIAS_PREDEFINIDAS = [
   { key: "TODAS", label: "Todas las Categorías" },
   { key: "BASE_TERRENO", label: "Base Terreno" },
   { key: "REVESTIMIENTO", label: "Revestimiento" },
+  { key: "ESTABILIZADO", label: "Estabilizado (m³)" },
   { key: "TABIQUERIA", label: "Tabiquería" },
   { key: "TECHUMBRE", label: "Techumbre" },
   { key: "TERMINACION", label: "Terminación" },
@@ -349,6 +350,7 @@ export default function CatalogosPage() {
                   >
                     <option value="REVESTIMIENTO">REVESTIMIENTO</option>
                     <option value="BASE_TERRENO">BASE_TERRENO</option>
+                    <option value="ESTABILIZADO">ESTABILIZADO</option>
                     <option value="TABIQUERIA">TABIQUERIA</option>
                     <option value="TECHUMBRE">TECHUMBRE</option>
                     <option value="TERMINACION">TERMINACION</option>
