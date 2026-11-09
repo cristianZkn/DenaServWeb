@@ -1,3 +1,4 @@
+import logging
 import jwt
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
@@ -53,6 +54,7 @@ def _calcular_desde_catalogo(data):
 
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 # --- Seguridad & JWT ---
@@ -90,8 +92,10 @@ def google_sso_login(request, data: GoogleAuthInSchema):
             return 401, {"message": "Login con Google no configurado en el servidor."}
         try:
             info = google_id_token.verify_oauth2_token(
-                data.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID)
-        except ValueError:
+                data.credential, google_requests.Request(), settings.GOOGLE_CLIENT_ID,
+                clock_skew_in_seconds=10)  # tolera pequeño desfase del reloj local vs Google
+        except ValueError as e:
+            logger.warning("Token de Google rechazado: %s", e)
             return 401, {"message": "Token de Google inválido."}
         if not info.get("email_verified"):
             return 401, {"message": "El correo de Google no está verificado."}
