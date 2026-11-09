@@ -22,7 +22,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema
+    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema
 )
 from . import calculo
 
@@ -395,6 +395,23 @@ def obtener_obra_cotizacion(request, cotizacion_id: int):
     return 200, obra
 
 
+@router.get("/cotizaciones/{cotizacion_id}/ganancias/", response={200: GananciasSchema, 404: MessageSchema}, auth=AuthBearer())
+def resumen_ganancias(request, cotizacion_id: int):
+    """vista_resumen_ganancias: neto cobrado vs costo presupuestado vs gasto real."""
+    c = Cotizacion.objects.filter(id=cotizacion_id).first()
+    obra = ObraEjecucion.objects.filter(cotizacion_id=cotizacion_id).first()
+    if not c or not obra:
+        return 404, {"message": "Cotización u obra no encontrada"}
+    neto = (c.costo_total / Decimal("1.19")).quantize(Decimal("1"))
+    presupuestado = c.costo_materiales + c.costo_mano_obra + c.costo_flete
+    return 200, {
+        "neto_cobrado": neto, "costo_presupuestado": presupuestado, "gasto_real": obra.gasto_real_acumulado,
+        "ganancia_estimada": neto - presupuestado, "ganancia_real": neto - obra.gasto_real_acumulado,
+        "avance_real": obra.porcentaje_avance_real,
+        "hito_avance_exigible": obra.porcentaje_avance_real >= 50,  # Hito 2 (30%) se cobra al 50% de avance
+    }
+
+
 @router.patch("/obras/{obra_id}/", response={200: ObraEjecucionSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
     try:
@@ -415,7 +432,7 @@ def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
 # ==============================================================================
 @router.get("/portafolio/", response=List[PortafolioProyectoSchema])
 def listar_portafolio(request):
-    return PortafolioProyecto.objects.filter(publicado=True).order_by("-id")
+    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").filter(publicado=True).order_by("-id")
 
 
 @router.post("/portafolio/", response={200: PortafolioProyectoSchema, 400: MessageSchema}, auth=AuthBearer())

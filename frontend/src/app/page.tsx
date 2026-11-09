@@ -11,6 +11,7 @@ interface Proyecto {
   imagen_url: string | null;
   publicado: boolean;
   cotizacion_id: number | null;
+  whatsapp_url: string | null;
 }
 
 export default function PortafolioPage() {
@@ -104,9 +105,7 @@ export default function PortafolioPage() {
                     )}
 
                     <a
-                      href={`https://wa.me/?text=${encodeURIComponent(
-                        `Hola, me interesa obtener información sobre el modelo: ${proyecto.titulo}`
-                      )}`}
+                      href={proyecto.whatsapp_url || "https://wa.me/"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md"

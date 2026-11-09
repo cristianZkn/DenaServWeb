@@ -170,3 +170,23 @@ class BomTests(TestCase):
                             content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(Cotizacion.objects.get().detalles_insumo.count(), 2)
+
+
+class GananciasWhatsappTests(TestCase):
+    def test_ganancias_y_whatsapp(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="3-5", nombre_completo="C", email="c@d.cl")
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        c = Client()
+        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 50},
+                     content_type="application/json", **h).json()
+        obra = ObraEjecucion.objects.get(cotizacion_id=cot["id"])
+        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55, "gasto_real_acumulado": 1000},
+                content_type="application/json", **h)
+        g = c.get(f"/api/cotizaciones/{cot['id']}/ganancias/", **h).json()
+        self.assertTrue(g["hito_avance_exigible"])
+        self.assertEqual(g["ganancia_real"], g["neto_cobrado"] - 1000)
+        from .models import PortafolioProyecto
+        PortafolioProyecto.objects.create(titulo="Casa Maipú", cotizacion_id=cot["id"])
+        url = c.get("/api/portafolio/").json()[0]["whatsapp_url"]
+        self.assertTrue(url.startswith("https://wa.me/") and "Casa%20Maip" in url and "50" in url)

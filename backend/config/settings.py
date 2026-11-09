@@ -142,3 +142,6 @@ MAILERS = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+# Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)
+WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '')

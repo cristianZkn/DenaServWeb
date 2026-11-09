@@ -1,6 +1,8 @@
 from ninja import Schema
 from datetime import datetime, date
 from typing import List, Optional
+from urllib.parse import quote
+from django.conf import settings
 from decimal import Decimal
 
 
@@ -185,6 +187,19 @@ class PortafolioProyectoSchema(Schema):
     imagen_url: Optional[str] = None
     publicado: bool
     cotizacion_id: Optional[int] = None
+    whatsapp_url: Optional[str] = None
+
+    @staticmethod
+    def resolve_whatsapp_url(obj):
+        # RFS-17: enlace wa.me con mensaje prellenado (modelo, m² y revestimiento si hay cotización asociada).
+        c = obj.cotizacion
+        detalle = f"{obj.titulo}"
+        if c:
+            detalle += f", {c.superficie_m2} m²"
+            if c.revestimiento:
+                detalle += f", revestimiento {c.revestimiento.nombre}"
+        texto = f"Hola, me interesa una casa como esta: {detalle}"
+        return f"https://wa.me/{settings.WHATSAPP_NUMERO}?text={quote(texto)}"
 
 class PortafolioProyectoInSchema(Schema):
     titulo: str
@@ -206,3 +221,14 @@ class CalculoInSchema(Schema):
     arido_empresa: bool = True
     separacion_cm: int = 40
     margen: Optional[float] = None
+
+
+# --- Resumen de ganancias por contrato ---
+class GananciasSchema(Schema):
+    neto_cobrado: float
+    costo_presupuestado: float
+    gasto_real: float
+    ganancia_estimada: float
+    ganancia_real: float
+    avance_real: float
+    hito_avance_exigible: bool
