@@ -310,3 +310,26 @@ class TarifasEmpresaTests(TestCase):
         self.assertEqual(r["neto"] + r["iva"], r["total"])
         self.assertEqual(sum(h["monto"] for h in r["hitos"]), r["total"])
         self.assertEqual(calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 900000)
+
+
+    def test_m2_desde_nombre(self):
+        from .precios import _m2_unidad
+        self.assertAlmostEqual(_m2_unidad("OSB SMARTSIDE PANEL R4 11.1MM 1.22 X 2.44"), 2.9768, places=3)
+        self.assertAlmostEqual(_m2_unidad("OSB LAP SIDING 9.5 MM 200X4880"), 0.976, places=3)
+        self.assertAlmostEqual(_m2_unidad("Siding metal 1.6x38x380 cm cedro"), 1.444, places=3)
+        self.assertAlmostEqual(_m2_unidad("Siding 0.19x3.66 m"), 0.6954, places=3)
+        self.assertIsNone(_m2_unidad("Revestimiento sin medidas"))
+
+    def test_revestimiento_por_m2_y_minimo(self):
+        from . import precios
+        fake = lambda term: [
+            {"name": "Siding metal A 0.20x3.00 m", "price": 6000, "url": "https://www.sodimac.cl/sodimac-cl/product/A1/x"},   # 10.000/m2
+            {"name": "Siding metal B 0.20x4.00 m", "price": 6400, "url": "https://www.sodimac.cl/sodimac-cl/product/B1/x"},   # 8.000/m2
+        ]
+        r = precios.sincronizar_catalogo(runner=fake)
+        it = CatalogoTipo.objects.get(categoria="REVESTIMIENTO", fuente_termino="metal siding")
+        self.assertEqual((it.nombre, it.unidad_medida, float(it.precio_base_unitario)), ("Siding metal B 0.20x4.00 m", "M2", 8000.0))
+        self.assertEqual(r["minimos_no_cumplidos"], [])
+        precios.actualizar_precios(runner=lambda t: [{"url": "https://www.sodimac.cl/sodimac-cl/product/B1/x", "price": 7200}])
+        it.refresh_from_db()
+        self.assertEqual(float(it.precio_base_unitario), 9000.0)

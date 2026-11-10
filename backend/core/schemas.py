@@ -67,6 +67,7 @@ class CatalogoTipoSchema(Schema):
     fuente_url: str = ''
     fuente_termino: str = ''
     precio_actualizado_en: Optional[datetime] = None
+    m2_por_unidad: float = 0
     activo: bool
 
 class CatalogoTipoInSchema(Schema):

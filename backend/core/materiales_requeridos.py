@@ -3,7 +3,13 @@
 Cada entrada define qué buscar en Sodimac y cómo filtrar los resultados: se elige el producto más barato
 del propio Sodimac (no marketplace) cuyo nombre contenga todas las palabras de `incluye` y ninguna de `excluye`.
 Editar esta lista es la forma de agregar o quitar materiales del catálogo automático.
+
+`categoria` (por defecto INSUMO). Los de categoría REVESTIMIENTO se cotizan por m²: el precio de la unidad (plancha/tira)
+se divide por los m² que cubre, leídos de las medidas del nombre del producto, y se elige el más barato por m².
 """
+# Mínimo de ítems con precio automático que debe tener cada categoría; si falta, la sincronización lo informa.
+MINIMOS = {"REVESTIMIENTO": 1}
+
 REQUERIDOS = [
     # Etapa 1: obra gruesa
     {"termino": "pino impregnado 2x3", "incluye": ["pino", "impregnado", "2x3"], "etapa": "ETAPA_1"},
@@ -24,4 +30,12 @@ REQUERIDOS = [
     {"termino": "plancha yeso carton 10 mm", "incluye": ["plancha", "yeso"], "excluye": ["40x40"], "etapa": "ETAPA_2"},
     {"termino": "guardapolvo madera", "incluye": ["guardapolvo"], "excluye": ["ceramica", "porcelanato", "vinilico"], "etapa": "ETAPA_2"},
     {"termino": "cornisa", "incluye": ["cornisa"], "etapa": "ETAPA_2"},
+]
+
+REQUERIDOS += [
+    # Revestimientos exteriores (cotizados por m²)
+    {"categoria": "REVESTIMIENTO", "termino": "https://mct.cl/categorias/22/terciado-y-osb", "incluye": ["smartside", "panel"], "excluye": ["lap"]},
+    {"categoria": "REVESTIMIENTO", "termino": "https://mct.cl/categorias/22/terciado-y-osb", "incluye": ["smartside", "lap"]},
+    {"categoria": "REVESTIMIENTO", "termino": "siding fibrocemento", "incluye": ["fibrocemento"], "excluye": ["pallet", "perfil", "pack"]},
+    {"categoria": "REVESTIMIENTO", "termino": "metal siding", "incluye": ["siding", "metal"], "excluye": ["perfil", "caja", "tablas", "union", "pallet"]},
 ]

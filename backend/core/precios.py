@@ -13,7 +13,7 @@ from django.utils import timezone
 
 import unicodedata
 
-from .materiales_requeridos import REQUERIDOS
+from .materiales_requeridos import MINIMOS, REQUERIDOS
 from .models import CatalogoTipo, Proveedor
 
 ACTOR = "scraperschile~sodimac"
@@ -171,6 +171,8 @@ def actualizar_precios(runner=ejecutar_fuente) -> dict:
             if not isinstance(precio, (int, float)) or precio <= 0:
                 res["no_encontrados"].append(it.nombre)
                 continue
+            if it.m2_por_unidad and float(it.m2_por_unidad) > 0:
+                precio = round(precio / float(it.m2_por_unidad))  # precio por m²
             if float(it.precio_base_unitario) == float(precio):
                 res["sin_cambio"] += 1
             else:
@@ -179,6 +181,18 @@ def actualizar_precios(runner=ejecutar_fuente) -> dict:
             it.precio_actualizado_en = timezone.now()
             it.save(update_fields=["precio_base_unitario", "precio_actualizado_en"])
     return res
+
+
+def _m2_unidad(nombre: str):
+    """m² que cubre una unidad según las medidas del nombre (ancho x largo; si hay 3 cifras la 1ª es el espesor)."""
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+(?:[.,]\d+)?)(?:\s*[xX]\s*(\d+(?:[.,]\d+)?))?", nombre or "")
+    if not m:
+        return None
+    nums = [float(g.replace(",", ".")) for g in m.groups() if g]
+    a, b = nums[-2], nums[-1]
+    mayor = max(a, b)
+    f = 1 if mayor <= 20 else (0.01 if mayor <= 1000 else 0.001)  # metros / centímetros / milímetros
+    return round(a * b * f * f, 4) or None
 
 
 def _norm(t: str) -> str:
@@ -207,11 +221,13 @@ def _proveedor_de(url: str) -> Proveedor:
 def sincronizar_catalogo(runner=ejecutar_fuente) -> dict:
     """Crea en el catálogo (categoría INSUMO) los materiales de REQUERIDOS que aún no existen.
     Etapa y rendimiento_m2 de los ya existentes no se tocan; los nuevos nacen con rendimiento 0 (no entran al BOM hasta definirlo)."""
-    res = {"creados": [], "sin_coincidencia": []}
+    res = {"creados": [], "sin_coincidencia": [], "minimos_no_cumplidos": []}
     for req in REQUERIDOS:
         # ya existe si hay un insumo con la misma fuente cuyo nombre cumple el filtro de esta entrada
+        cat = req.get("categoria", "INSUMO")
+        por_m2 = cat == "REVESTIMIENTO"
         if any(_coincide({"name": n, "price": 1}, req["incluye"], req.get("excluye", []))
-               for n in CatalogoTipo.objects.filter(categoria="INSUMO", fuente_termino=req["termino"]).values_list("nombre", flat=True)):
+               for n in CatalogoTipo.objects.filter(categoria=cat, fuente_termino=req["termino"]).values_list("nombre", flat=True)):
             continue
         try:
             cand = [p for p in runner(req["termino"]) if _coincide(p, req["incluye"], req.get("excluye", []))]
@@ -221,12 +237,29 @@ def sincronizar_catalogo(runner=ejecutar_fuente) -> dict:
         if not cand:
             res["sin_coincidencia"].append(req["termino"])
             continue
-        mejor = min(cand, key=lambda p: p["price"])
+        m2 = None
+        if por_m2:  # solo productos con medidas legibles; se compara por precio por m²
+            for p in cand:
+                p["m2"] = _m2_unidad(p["name"])
+            cand = [p for p in cand if p["m2"]]
+            if not cand:
+                res["sin_coincidencia"].append(f'{req["termino"]} (sin medidas legibles)')
+                continue
+            mejor = min(cand, key=lambda p: p["price"] / p["m2"])
+            m2 = mejor["m2"]
+        else:
+            mejor = min(cand, key=lambda p: p["price"])
         CatalogoTipo.objects.create(
-            categoria="INSUMO", nombre=mejor["name"][:150], unidad_medida="UN", precio_base_unitario=mejor["price"],
-            proveedor=_proveedor_de(mejor["url"]), etapa_obra=req["etapa"], rendimiento_m2=0, fuente_url=mejor["url"][:500],
-            fuente_termino=req["termino"], precio_actualizado_en=timezone.now())
+            categoria=cat, nombre=mejor["name"][:150], unidad_medida="M2" if por_m2 else "UN",
+            precio_base_unitario=round(mejor["price"] / m2) if por_m2 else mejor["price"],
+            proveedor=_proveedor_de(mejor["url"]), etapa_obra=req.get("etapa", ""), rendimiento_m2=0,
+            fuente_url=mejor["url"][:500], fuente_termino=req["termino"], precio_actualizado_en=timezone.now(),
+            m2_por_unidad=m2 or 0)
         res["creados"].append(mejor["name"])
+    # mínimos por categoría: ítems activos con precio automático (los cargados a mano no cuentan)
+    res["minimos_no_cumplidos"] = [
+        c for c, n in MINIMOS.items()
+        if CatalogoTipo.objects.filter(categoria=c, activo=True).exclude(fuente_url="").count() < n]
     return res
 
 

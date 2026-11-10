@@ -57,6 +57,8 @@ class CatalogoTipo(models.Model):
     fuente_url = models.CharField(max_length=500, blank=True, default='')
     fuente_termino = models.CharField(max_length=150, blank=True, default='')
     precio_actualizado_en = models.DateTimeField(null=True, blank=True)
+    # >0: la tienda vende por unidad (plancha/tira) y precio_base_unitario se expresa por m² = precio unidad / m2_por_unidad.
+    m2_por_unidad = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     etapa_obra = models.CharField(max_length=50, blank=True, default='')
     rendimiento_m2 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     activo = models.BooleanField(default=True)
