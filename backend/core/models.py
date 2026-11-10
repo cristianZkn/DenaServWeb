@@ -54,13 +54,22 @@ class CatalogoTipo(models.Model):
         blank=True,
         related_name='catalogos'
     )
-    # Solo categoria 'INSUMO': etapa constructiva ('ETAPA_1'/'ETAPA_2') y cantidad por m² de casa.
-    # Fuente de precio (Sodimac/Apify): URL del producto y término de búsqueda para encontrarlo.
+    # Solo insumos: etapa constructiva ('ETAPA_1'/'ETAPA_2') y cantidad por m² de casa.
+    # Fuente de precio: URL exacta de la ficha del producto en la tienda (mapeo 1 a 1, sin buscadores).
     fuente_url = models.CharField(max_length=500, blank=True, default='')
-    fuente_termino = models.CharField(max_length=150, blank=True, default='')
+    fuente_termino = models.CharField(max_length=150, blank=True, default='')  # en desuso: lo dejó la búsqueda antigua
     precio_actualizado_en = models.DateTimeField(null=True, blank=True)
     # >0: la tienda vende por unidad (plancha/tira) y precio_base_unitario se expresa por m² = precio unidad / m2_por_unidad.
     m2_por_unidad = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    # Registro de la última lectura de la ficha: precio de lista de la tienda (por unidad de venta), descuento
+    # vigente del proveedor y costo neto = precio_lista * (1 - descuento_pct / 100).
+    precio_lista = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    descuento_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    costo_neto = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    sku = models.CharField(max_length=80, blank=True, default='')            # código del producto en la tienda
+    nombre_tienda = models.CharField(max_length=250, blank=True, default='')  # nombre que muestra la ficha
+    verificado = models.BooleanField(default=False)  # alguien confirmó que la ficha es el producto que se necesita
+    ultimo_error = models.CharField(max_length=300, blank=True, default='')  # por qué falló la última lectura
     etapa_obra = models.CharField(max_length=50, blank=True, default='')
     rendimiento_m2 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     activo = models.BooleanField(default=True)

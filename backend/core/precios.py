@@ -1,186 +1,37 @@
-"""Actualización de precios del catálogo desde Sodimac vía el actor de Apify scraperschile/sodimac."""
+"""Actualización de precios de mercado del catálogo.
+
+Cada producto guarda la URL exacta de su ficha en la tienda (mapeo 1 a 1, sin buscadores). Al actualizar se lee
+el precio de lista, se aplica el descuento vigente del proveedor y se guarda:
+    costo_neto = precio_lista * (1 - descuento_pct / 100)
+"""
 import re
 import threading
 import time
-import json
-from urllib.parse import quote, urlsplit
+from decimal import Decimal
 
-import requests
-from bs4 import BeautifulSoup
-from django.conf import settings
 from django.db import connection
+from django.db.models import Max
 from django.utils import timezone
 
-import unicodedata
-
-from .materiales_requeridos import MINIMOS, REQUERIDOS
+from . import calculo, scraper
 from .models import CatalogoTipo, Proveedor
 
-ACTOR = "scraperschile~sodimac"
-MAX_ITEMS = 50
+# Categorías que deben tener, como mínimo, un producto activo y verificado con precio leído de su ficha.
+GRUPOS_OBLIGATORIOS = {
+    "TECHUMBRE": "Techumbre",
+    "REVESTIMIENTO": "Revestimiento",
+    "TABIQUERIA": "Tabiquería",
+    "BASE_RADIER": "Base / Radier",
+}
+# Categorías de insumos informativos (cubicación/BOM); las bases y revestimientos sí entran al valor de la cotización.
+CATEGORIAS_INSUMO = ["INSUMO", *[c for c in GRUPOS_OBLIGATORIOS if c != "REVESTIMIENTO"]]
+
+CAMPOS_LECTURA = ["precio_lista", "descuento_pct", "costo_neto", "precio_base_unitario", "sku", "nombre_tienda",
+                  "precio_actualizado_en", "ultimo_error"]
 
 
-def _clave(url: str):
-    """Identificador estable 'tienda:id' de un producto a partir de su URL (None si no se reconoce)."""
-    host = urlsplit(url or "").netloc.replace("www.", "")
-    path = urlsplit(url or "").path
-    if "easy.cl" in host:
-        m = re.search(r"-(\d+)/p/?$", path)
-    else:
-        m = re.search(r"(?:^|/)(?:articulo|product|ficha)/([0-9A-Za-z]+)", path)
-    return f"{host.split('.')[0]}:{m.group(1)}" if m else None
-
-
-def ejecutar_actor(term: str) -> list:
-    if not settings.APIFY_TOKEN:
-        raise RuntimeError("Falta APIFY_TOKEN en el entorno.")
-    r = requests.post(
-        f"https://api.apify.com/v2/acts/{ACTOR}/run-sync-get-dataset-items",
-        headers={"Authorization": f"Bearer {settings.APIFY_TOKEN}"},
-        json={"term": term, "maxItems": MAX_ITEMS},
-        timeout=300,
-    )
-    r.raise_for_status()
-    return r.json()
-
-
-MCT_BASE = "https://mct.cl/"
-
-
-def parsear_mct(html: str) -> list:
-    """Extrae productos de una página de categoría de mct.cl (HTML renderizado en servidor)."""
-    out = []
-    for g in BeautifulSoup(html, "html.parser").select("div.grilla"):
-        nombre, valor = g.select_one("a.nombreGrilla"), g.select_one("a.valorGrilla")
-        if not nombre or not valor:
-            continue
-        precios = [int(re.sub(r"\D", "", t)) for t in re.findall(r"\$\s*[\d.]+", valor.get_text())]
-        href = nombre.get("href", "")
-        out.append({"name": nombre.get_text(strip=True), "price": min(precios) if precios else None,
-                    "url": MCT_BASE + href.lstrip("/"), "is_marketplace": False})
-    return out
-
-
-def _ca_bundle_mct() -> str:
-    """mct.cl no envía su certificado intermedio (Thawte TLS RSA CA G1): se agrega a las CA de certifi
-    para poder verificar el TLS sin desactivar la verificación."""
-    import certifi
-    import tempfile
-    from pathlib import Path
-    extra = (Path(__file__).parent / "certs" / "thawte_tls_rsa_ca_g1.pem").read_text()
-    f = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
-    f.write(Path(certifi.where()).read_text() + "\n" + extra)
-    f.close()
-    return f.name
-
-
-def scrape_mct(url: str) -> list:
-    # robots.txt de mct.cl permite las páginas de categoría sin parámetros de consulta.
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; DenaServBot/1.0)"}, timeout=20,
-                     verify=_ca_bundle_mct())
-    r.raise_for_status()
-    return parsear_mct(r.text)
-
-
-UA = {"User-Agent": "Mozilla/5.0 (compatible; DenaServBot/1.0)"}
-
-
-def _next_data(url: str) -> dict:
-    r = requests.get(url, headers=UA, timeout=25)
-    r.raise_for_status()
-    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S)
-    if not m:
-        raise RuntimeError(f"Sin datos estructurados en {url}")
-    return json.loads(m.group(1))
-
-
-def _buscar_lista(o, clave_nombre):
-    """Primera lista de dicts (>1) cuyos elementos tienen `clave_nombre` dentro del JSON de Next."""
-    if isinstance(o, dict):
-        for v in o.values():
-            if isinstance(v, list) and len(v) > 1 and isinstance(v[0], dict) and clave_nombre in v[0]:
-                return v
-        for v in o.values():
-            if (r := _buscar_lista(v, clave_nombre)):
-                return r
-    elif isinstance(o, list):
-        for v in o:
-            if (r := _buscar_lista(v, clave_nombre)):
-                return r
-    return None
-
-
-def scrape_sodimac(term: str) -> list:
-    # robots.txt de sodimac.cl no bloquea /sodimac-cl/search?Ntt= (sí bloquea /buscar/ y /browse/).
-    data = _next_data(f"https://www.sodimac.cl/sodimac-cl/search?Ntt={quote(term)}")
-    out = []
-    for p in _buscar_lista(data, "displayName") or []:
-        precios = p.get("prices") or []
-        normal = next((x for x in precios if x.get("type") == "NORMAL"), precios[0] if precios else {})
-        out.append({"name": p["displayName"], "price": normal.get("priceWithoutFormatting"),
-                    "url": f"https://www.sodimac.cl/sodimac-cl/product/{p['productId']}/",
-                    "is_marketplace": bool(p.get("isInternational"))})
-    return out
-
-
-def scrape_easy(term: str) -> list:
-    # robots.txt de easy.cl solo bloquea bots con nombre propio; /search/<término> está permitido.
-    data = _next_data(f"https://www.easy.cl/search/{quote(term)}")
-    out = []
-    for p in _buscar_lista(data, "productName") or []:
-        pr = p.get("prices") or {}
-        out.append({"name": p["productName"], "price": pr.get("offerPrice") or pr.get("normalPrice"),
-                    "url": f"https://www.easy.cl/{p['linkText']}", "is_marketplace": bool(p.get("isMarketplace"))})
-    return out
-
-
-def ejecutar_fuente(term: str) -> list:
-    """URL de mct.cl -> MCT; 'apify:<término>' -> actor de Apify; otro término -> Sodimac + Easy (scraping directo, gratis)."""
-    if term.startswith(MCT_BASE):
-        return scrape_mct(term)
-    if term.startswith("apify:"):
-        return ejecutar_actor(term[6:])
-    items = []
-    for scraper in (scrape_sodimac, scrape_easy):
-        try:
-            items += scraper(term)
-        except Exception:  # si una tienda cae, se sigue con la otra
-            pass
-        time.sleep(1)
-    if not items:
-        raise RuntimeError("Ninguna tienda respondió")
-    return items
-
-
-def actualizar_precios(runner=ejecutar_fuente) -> dict:
-    """Actualiza precio_base_unitario de los ítems con fuente_url. Nunca pisa un precio válido con uno vacío."""
-    items = CatalogoTipo.objects.filter(activo=True).exclude(fuente_url="").exclude(fuente_termino="")
-    por_termino = {}
-    for it in items:
-        por_termino.setdefault(it.fuente_termino, []).append(it)
-
-    res = {"actualizados": 0, "sin_cambio": 0, "no_encontrados": [], "errores": []}
-    for term, lista in por_termino.items():
-        try:
-            precios = {(p.get("clave") or _clave(p.get("url"))): p.get("price") for p in runner(term)}
-        except Exception as e:  # un término caído no debe detener a los demás
-            res["errores"].append(f"{term}: {e}")
-            continue
-        for it in lista:
-            precio = precios.get(_clave(it.fuente_url))
-            if not isinstance(precio, (int, float)) or precio <= 0:
-                res["no_encontrados"].append(it.nombre)
-                continue
-            if it.m2_por_unidad and float(it.m2_por_unidad) > 0:
-                precio = round(precio / float(it.m2_por_unidad))  # precio por m²
-            if float(it.precio_base_unitario) == float(precio):
-                res["sin_cambio"] += 1
-            else:
-                it.precio_base_unitario = precio
-                res["actualizados"] += 1
-            it.precio_actualizado_en = timezone.now()
-            it.save(update_fields=["precio_base_unitario", "precio_actualizado_en"])
-    return res
+def costo_neto(precio_lista, descuento_pct) -> Decimal:
+    return calculo.costo_neto(precio_lista, descuento_pct).quantize(Decimal("0.01"))
 
 
 def _m2_unidad(nombre: str):
@@ -195,94 +46,128 @@ def _m2_unidad(nombre: str):
     return round(a * b * f * f, 4) or None
 
 
-def _norm(t: str) -> str:
-    t = unicodedata.normalize("NFD", (t or "").lower())
-    return "".join(c for c in t if unicodedata.category(c) != "Mn")
-
-
-def _coincide(p: dict, incluye, excluye) -> bool:
-    n = _norm(p.get("name"))
-    compacto = n.replace(" ", "")
-    def ok(w):
-        w = _norm(w)
-        # medidas tipo "2x3" no deben coincidir dentro de "2x2x3": no pueden ir precedidas de dígito ni "x"
-        return bool(re.search(rf"(?<![0-9x]){re.escape(w)}", compacto)) if "x" in w and w[0].isdigit() else w in n
-    return (all(ok(w) for w in incluye) and not any(ok(w) for w in excluye)
-            and not p.get("is_marketplace") and isinstance(p.get("price"), (int, float)) and p["price"] > 0)
-
-
-def _proveedor_de(url: str) -> Proveedor:
+def proveedor_de(url: str) -> Proveedor:
     """Proveedor (tienda) dueño de la URL del producto; se crea la primera vez."""
-    tiendas = {"easy.cl": ("EASY-WEB", "Easy"), "mct.cl": ("MCT-WEB", "MCT Maderas")}
-    rut, nombre = next((v for k, v in tiendas.items() if k in url), ("SODIMAC-WEB", "Sodimac"))
+    tiendas = {"easy": ("EASY-WEB", "Easy"), "mct": ("MCT-WEB", "MCT Maderas"), "sodimac": ("SODIMAC-WEB", "Sodimac")}
+    rut, nombre = tiendas[scraper.tienda_de(url)]
     return Proveedor.objects.get_or_create(rut_empresa=rut, defaults={"razon_social": nombre})[0]
 
 
-def sincronizar_catalogo(runner=ejecutar_fuente) -> dict:
-    """Crea en el catálogo (categoría INSUMO) los materiales de REQUERIDOS que aún no existen.
-    Etapa y rendimiento_m2 de los ya existentes no se tocan; los nuevos nacen con rendimiento 0 (no entran al BOM hasta definirlo)."""
-    res = {"creados": [], "sin_coincidencia": [], "minimos_no_cumplidos": []}
-    for req in REQUERIDOS:
-        # ya existe si hay un insumo con la misma fuente cuyo nombre cumple el filtro de esta entrada
-        cat = req.get("categoria", "INSUMO")
-        por_m2 = cat == "REVESTIMIENTO"
-        if any(_coincide({"name": n, "price": 1}, req["incluye"], req.get("excluye", []))
-               for n in CatalogoTipo.objects.filter(categoria=cat, fuente_termino=req["termino"]).values_list("nombre", flat=True)):
-            continue
-        try:
-            cand = [p for p in runner(req["termino"]) if _coincide(p, req["incluye"], req.get("excluye", []))]
-        except Exception as e:
-            res["sin_coincidencia"].append(f'{req["termino"]} (error: {e})')
-            continue
-        if not cand:
-            res["sin_coincidencia"].append(req["termino"])
-            continue
-        m2 = None
-        if por_m2:  # solo productos con medidas legibles; se compara por precio por m²
-            for p in cand:
-                p["m2"] = _m2_unidad(p["name"])
-            cand = [p for p in cand if p["m2"]]
-            if not cand:
-                res["sin_coincidencia"].append(f'{req["termino"]} (sin medidas legibles)')
-                continue
-            mejor = min(cand, key=lambda p: p["price"] / p["m2"])
-            m2 = mejor["m2"]
+def aplicar_lectura(item: CatalogoTipo, lectura: dict, ahora) -> None:
+    """Vuelca en el ítem lo leído de la ficha (no guarda). `precio_base_unitario` queda por unidad de cotización
+    (m² en revestimientos) y SIN descuento: el motor de cálculo aplica el descuento del proveedor."""
+    lista = lectura["precio"]
+    descuento = item.proveedor.descuento_pct if item.proveedor else Decimal(0)
+    m2 = Decimal(str(item.m2_por_unidad or 0))
+    item.precio_lista = lista
+    item.descuento_pct = descuento
+    item.costo_neto = costo_neto(lista, descuento)
+    item.precio_base_unitario = (lista / m2).quantize(Decimal("1")) if m2 > 0 else lista
+    item.sku = lectura.get("sku") or item.sku
+    item.nombre_tienda = (lectura.get("nombre") or item.nombre_tienda)[:250]
+    item.precio_actualizado_en = ahora
+    item.ultimo_error = ""
+
+
+def completar_desde_ficha(item: CatalogoTipo, extractor=None) -> None:
+    """Lee la ficha de un ítem nuevo o editado y completa proveedor, nombre, medidas y precios (no guarda).
+    Lanza ValueError con un mensaje para el usuario si la ficha no se puede leer."""
+    extractor = extractor or scraper.extraer
+    try:
+        lectura = extractor(item.fuente_url)
+    except scraper.ErrorExtraccion as e:
+        raise ValueError(str(e))
+    if not item.proveedor_id:
+        item.proveedor = proveedor_de(item.fuente_url)
+    if not item.nombre:
+        item.nombre = lectura["nombre"][:150]
+    if item.categoria == "REVESTIMIENTO" and not item.m2_por_unidad:
+        m2 = _m2_unidad(lectura["nombre"])
+        if not m2:
+            raise ValueError("No se pudieron leer las medidas del producto: indique cuántos m² cubre cada unidad.")
+        item.m2_por_unidad = m2
+    aplicar_lectura(item, lectura, timezone.now())
+
+
+def actualizar_item(item: CatalogoTipo, extractor=None, ahora=None) -> str:
+    """Actualiza un ítem desde su ficha. Devuelve 'actualizado', 'sin_cambio', 'revision' o 'error'. Nunca lanza:
+    un fallo deja el precio anterior y anota el motivo en `ultimo_error`."""
+    extractor = extractor or scraper.extraer
+    try:
+        lectura = extractor(item.fuente_url)
+    except Exception as e:  # tienda caída, ficha eliminada, bloqueo anti-bot...
+        item.ultimo_error = str(e)[:300]
+        item.save(update_fields=["ultimo_error"])
+        return "error"
+    if item.sku and lectura.get("sku") and item.sku != lectura["sku"]:
+        item.ultimo_error = "La ficha ahora muestra otro producto (cambió su código en la tienda): revíselo antes de usar el precio."
+        item.verificado = False
+        item.save(update_fields=["ultimo_error", "verificado"])
+        return "revision"
+    cambio = item.precio_lista != lectura["precio"]
+    aplicar_lectura(item, lectura, ahora or timezone.now())
+    item.save(update_fields=CAMPOS_LECTURA)
+    return "actualizado" if cambio else "sin_cambio"
+
+
+def recalcular_netos(proveedor: Proveedor) -> None:
+    """Si cambia el descuento de un proveedor, se refresca el neto guardado de sus productos."""
+    for it in CatalogoTipo.objects.filter(proveedor=proveedor, precio_lista__isnull=False):
+        it.descuento_pct = proveedor.descuento_pct
+        it.costo_neto = costo_neto(it.precio_lista, proveedor.descuento_pct)
+        it.save(update_fields=["descuento_pct", "costo_neto"])
+
+
+def grupos_sin_cobertura() -> list:
+    ok = set(CatalogoTipo.objects.filter(activo=True, verificado=True, precio_lista__gt=0).values_list("categoria", flat=True))
+    return [{"codigo": c, "nombre": n} for c, n in GRUPOS_OBLIGATORIOS.items() if c not in ok]
+
+
+def ultima_actualizacion():
+    return CatalogoTipo.objects.aggregate(m=Max("precio_actualizado_en"))["m"]
+
+
+def actualizar_precios_mercado(extractor=None, pausa=1.0) -> dict:
+    """Recorre todos los productos con URL y refresca sus precios. Un producto caído no detiene a los demás."""
+    extractor = extractor or scraper.extraer
+    items = list(CatalogoTipo.objects.select_related("proveedor").exclude(fuente_url="").order_by("id"))
+    res = {"revisados": len(items), "actualizados": 0, "sin_cambio": 0, "errores": [], "a_revisar": []}
+    leidas = {}  # una misma ficha usada por varios productos se lee una sola vez
+
+    def leer(url):
+        if url not in leidas:
+            if leidas and pausa:
+                time.sleep(pausa)  # pausa entre tiendas/fichas para no saturarlas
+            try:
+                leidas[url] = (extractor(url), None)
+            except Exception as e:
+                leidas[url] = (None, e)
+        lectura, error = leidas[url]
+        if error:
+            raise error
+        return lectura
+
+    for it in items:
+        estado = actualizar_item(it, extractor=leer)
+        if estado == "error":
+            res["errores"].append({"id": it.id, "nombre": it.nombre, "error": it.ultimo_error})
+        elif estado == "revision":
+            res["a_revisar"].append({"id": it.id, "nombre": it.nombre, "error": it.ultimo_error})
+        elif estado == "actualizado":
+            res["actualizados"] += 1
         else:
-            mejor = min(cand, key=lambda p: p["price"])
-        CatalogoTipo.objects.create(
-            categoria=cat, nombre=mejor["name"][:150], unidad_medida="M2" if por_m2 else "UN",
-            precio_base_unitario=round(mejor["price"] / m2) if por_m2 else mejor["price"],
-            proveedor=_proveedor_de(mejor["url"]), etapa_obra=req.get("etapa", ""), rendimiento_m2=0,
-            fuente_url=mejor["url"][:500], fuente_termino=req["termino"], precio_actualizado_en=timezone.now(),
-            m2_por_unidad=m2 or 0)
-        res["creados"].append(mejor["name"])
-    # mínimos por categoría: ítems activos con precio automático (los cargados a mano no cuentan)
-    res["minimos_no_cumplidos"] = [
-        c for c, n in MINIMOS.items()
-        if CatalogoTipo.objects.filter(categoria=c, activo=True).exclude(fuente_url="").count() < n]
+            res["sin_cambio"] += 1
+    res["grupos_sin_cobertura"] = grupos_sin_cobertura()
     return res
 
 
-def sincronizar_y_actualizar() -> dict:
-    """Flujo semanal: crea materiales faltantes y refresca precios, ejecutando el actor una sola vez por término."""
-    cache = {}
-
-    def runner(term):
-        if term not in cache:
-            cache[term] = ejecutar_fuente(term)
-        return cache[term]
-
-    nuevos = sincronizar_catalogo(runner)
-    return {**actualizar_precios(runner), **nuevos}
-
-
-# --- Ejecución en segundo plano (la sincronización tarda ~1-2 min; una petición HTTP larga la cortarían gunicorn/proxy) ---
+# --- Ejecución en segundo plano (tarda ~1 min; una petición HTTP larga la cortarían gunicorn/proxy) ---
 _estado = {"estado": "idle", "resultado": None}
 _lock = threading.Lock()
 
 
-def iniciar_sincronizacion(tarea=sincronizar_y_actualizar) -> bool:
-    """Lanza la sincronización en un hilo. False si ya hay una en curso."""
+def iniciar_actualizacion(tarea=actualizar_precios_mercado) -> bool:
+    """Lanza la actualización en un hilo. False si ya hay una en curso."""
     with _lock:
         if _estado["estado"] == "running":
             return False
@@ -300,5 +185,5 @@ def iniciar_sincronizacion(tarea=sincronizar_y_actualizar) -> bool:
     return True
 
 
-def estado_sincronizacion() -> dict:
+def estado_actualizacion() -> dict:
     return dict(_estado)

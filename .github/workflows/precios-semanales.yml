@@ -1,0 +1,48 @@
+# Actualización semanal de precios de mercado: todos los lunes 06:00 UTC (03:00 en horario de verano de Chile).
+# Llama al backend (POST /api/insumos/actualizar-precios) y espera el resultado; si algún producto falla o falta una
+# categoría obligatoria, el trabajo termina en rojo y GitHub avisa por correo.
+# Secretos del repositorio: API_URL (https://<tu-api>.onrender.com) y CRON_TOKEN (el mismo de Render).
+name: Precios semanales
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_URL: ${{ secrets.API_URL }}
+      CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+    steps:
+      - name: Despertar el backend y lanzar la actualización
+        # Render gratuito duerme tras 15 min sin uso: el primer intento puede tardar ~1 minuto.
+        run: |
+          curl -fsS --retry 6 --retry-delay 20 --retry-all-errors --max-time 120 \
+            -X POST "$API_URL/api/insumos/actualizar-precios" -H "X-Cron-Token: $CRON_TOKEN"
+
+      - name: Esperar el resultado
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.request
+
+          req = urllib.request.Request(os.environ["API_URL"] + "/api/insumos/actualizar-precios/estado",
+                                       headers={"X-Cron-Token": os.environ["CRON_TOKEN"]})
+          for _ in range(60):
+              time.sleep(15)
+              try:
+                  e = json.load(urllib.request.urlopen(req, timeout=60))
+              except Exception as ex:  # el backend puede reiniciarse a mitad de la corrida
+                  print("sin respuesta:", ex)
+                  continue
+              if e["estado"] != "running":
+                  break
+          else:
+              sys.exit("La actualización no terminó en 15 minutos.")
+          r = e.get("resultado") or {}
+          print(json.dumps(r, ensure_ascii=False, indent=2))
+          problemas = (r.get("errores") or []) + (r.get("a_revisar") or [])
+          if e["estado"] != "done" or problemas or e.get("grupos_sin_cobertura"):
+              sys.exit("Hay productos con problemas o categorías obligatorias sin cobertura.")
+          PY

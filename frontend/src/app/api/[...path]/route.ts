@@ -12,7 +12,7 @@ async function handleProxy(
   const queryString = request.nextUrl.search;
 
   // Rutas en Django Ninja que NO llevan trailing slash
-  const noSlashPrefixes = ["auth/google", "auth/me"];
+  const noSlashPrefixes = ["auth/google", "auth/me", "cotizaciones/calcular", "insumos/actualizar-precios"];
   const isNoSlash = noSlashPrefixes.some((p) => subPath.startsWith(p));
 
   // Para endpoints de Django Ninja que esperan trailing slash (/cotizaciones/, /proveedores/, etc.)

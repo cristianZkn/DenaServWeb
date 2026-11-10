@@ -37,3 +37,5 @@ services:
         sync: false
       - key: DB_PASSWORD
         sync: false
+      - key: CRON_TOKEN
+        sync: false            # llave del planificador semanal (mismo valor en el secreto CRON_TOKEN de GitHub)

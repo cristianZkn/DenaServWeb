@@ -1,619 +1,425 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
-interface Proveedor {
-  id: number;
-  razon_social: string;
-}
-
-interface CatalogoItem {
+interface Insumo {
   id: number;
   categoria: string;
   nombre: string;
-  descripcion: string | null;
-  unidad_medida: string;
-  precio_base_unitario: number;
   proveedor_id: number | null;
-  etapa_obra?: string;
-  rendimiento_m2?: number;
-  fuente_url?: string;
-  fuente_termino?: string;
-  precio_actualizado_en?: string | null;
-  proveedor?: Proveedor | null;
+  proveedor: string | null;
+  unidad_medida: string;
+  url: string;
+  precio_base_unitario: number;
+  precio_lista: number | null;
+  descuento_pct: number;
+  costo_neto: number | null;
+  m2_por_unidad: number;
+  neto_por_m2: number | null;
+  actualizado_en: string | null;
+  verificado: boolean;
   activo: boolean;
+  ultimo_error: string;
 }
 
-const CATEGORIAS_PREDEFINIDAS = [
-  { key: "TODAS", label: "Todas las Categorías" },
-  { key: "BASE_TERRENO", label: "Base Terreno" },
-  { key: "REVESTIMIENTO", label: "Revestimiento" },
-  { key: "INSUMO", label: "Insumos (BOM)" },
-  { key: "TABIQUERIA", label: "Tabiquería" },
-  { key: "TECHUMBRE", label: "Techumbre" },
-  { key: "TERMINACION", label: "Terminación" },
-  { key: "ESTRUCTURA", label: "Estructura" },
-  { key: "FIJACION", label: "Fijación" },
+interface Proveedor { id: number; razon_social: string }
+interface Estado {
+  estado: "idle" | "running" | "done" | "error";
+  resultado: { actualizados?: number; sin_cambio?: number; errores?: { nombre: string; error: string }[]; a_revisar?: { nombre: string; error: string }[]; message?: string } | null;
+  ultima_actualizacion: string | null;
+  grupos_sin_cobertura: { codigo: string; nombre: string }[];
+}
+
+// Las cuatro primeras son obligatorias: siempre debe haber al menos un producto verificado en cada una.
+const GRUPOS = [
+  { key: "TECHUMBRE", label: "Techumbre", obligatorio: true },
+  { key: "REVESTIMIENTO", label: "Revestimiento", obligatorio: true },
+  { key: "TABIQUERIA", label: "Tabiquería", obligatorio: true },
+  { key: "BASE_RADIER", label: "Base / Radier", obligatorio: true },
+  { key: "INSUMO", label: "Otros insumos", obligatorio: false },
+  { key: "BASE_TERRENO", label: "Bases (precio manual)", obligatorio: false },
 ];
 
+const clp = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
+
+function antiguedad(iso: string | null) {
+  if (!iso) return { texto: "Nunca", dias: Infinity };
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return { texto: dias <= 0 ? "Hoy" : dias === 1 ? "Ayer" : `Hace ${dias} días`, dias };
+}
+
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" });
+
 export default function CatalogosPage() {
-  const router = useRouter();
-  const [items, setItems] = useState<CatalogoItem[]>([]);
+  const [items, setItems] = useState<Insumo[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("TODAS");
-  const [busqueda, setBusqueda] = useState<string>("");
-  const [pagina, setPagina] = useState<number>(1);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [guardando, setGuardando] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
+  const [estado, setEstado] = useState<Estado | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [categoria, setCategoria] = useState("TODOS");
+  const [busqueda, setBusqueda] = useState("");
+  const [verInactivos, setVerInactivos] = useState(false);
+  const [modal, setModal] = useState<Insumo | "nuevo" | null>(null);
+  const sondeo = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [modalAbierto, setModalAbierto] = useState<boolean>(false);
-  const [itemEdicion, setItemEdicion] = useState<CatalogoItem | null>(null);
-
-  const [formData, setFormData] = useState({
-    categoria: "REVESTIMIENTO",
-    nombre: "",
-    descripcion: "",
-    unidad_medida: "M2",
-    precio_base_unitario: 0,
-    proveedor_id: "" as string | number,
-    etapa_obra: "",
-    rendimiento_m2: 0,
-    fuente_url: "",
-    fuente_termino: "",
-    activo: true,
-  });
-
-  const [actualizando, setActualizando] = useState(false);
-  const actualizarPrecios = async () => {
-    setActualizando(true);
-    const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+  const cargar = useCallback(async () => {
     try {
-      const inicio = await fetch("/api/catalogo-tipos/actualizar-precios", { method: "POST", headers });
-      if (!inicio.ok && inicio.status !== 409) throw new Error("No se pudo iniciar la sincronización");
-
-      // La sincronización corre en segundo plano (~1-2 min): se consulta el estado cada 3 s.
-      for (;;) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const res = await fetch("/api/catalogo-tipos/actualizar-precios/estado", { headers });
-        if (!res.ok) throw new Error("No se pudo consultar el estado");
-        const est = await res.json();
-        if (est.estado === "running") continue;
-        if (est.estado === "error") throw new Error(est.resultado?.message || "Error en la sincronización");
-        const r = est.resultado || {};
-        alert(
-          `Creados: ${(r.creados || []).length}. Precios actualizados: ${r.actualizados ?? 0}. Sin cambio: ${r.sin_cambio ?? 0}.` +
-            ((r.no_encontrados || []).length ? `
-No encontrados: ${r.no_encontrados.join(", ")}` : "") +
-            ((r.sin_coincidencia || []).length ? `
-Sin coincidencia: ${r.sin_coincidencia.join(", ")}` : "") +
-            ((r.errores || []).length ? `
-Errores: ${r.errores.join("; ")}` : "")
-        );
-        break;
-      }
-      fetchData();
-    } catch (e: any) {
-      alert(`No se pudo actualizar: ${e.message}`);
-    } finally {
-      setActualizando(false);
-    }
-  };
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      const headers = { Authorization: `Bearer ${token}` };
-      const [resCatalogos, resProveedores] = await Promise.all([
-        fetch("/api/catalogo-tipos", { headers }),
-        fetch("/api/proveedores", { headers }),
+      const [ri, rp, re] = await Promise.all([
+        fetch("/api/insumos/", { headers: authHeaders() }),
+        fetch("/api/proveedores/", { headers: authHeaders() }),
+        fetch("/api/insumos/actualizar-precios/estado", { headers: authHeaders() }),
       ]);
-
-      if (resCatalogos.ok) {
-        const data = await resCatalogos.json();
-        setItems(data);
-      }
-      if (resProveedores.ok) {
-        setProveedores(await resProveedores.json());
-      }
-    } catch (err) {
-      setError("Error al cargar la información del servidor.");
+      if (ri.ok) setItems(await ri.json());
+      if (rp.ok) setProveedores(await rp.json());
+      if (re.ok) setEstado(await re.json());
+    } catch {
+      setError("No hay conexión con el servidor. Recargue la página.");
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
-  const abrirModalCrear = () => {
-    setItemEdicion(null);
-    setFormData({
-      categoria: categoriaSeleccionada !== "TODAS" ? categoriaSeleccionada : "REVESTIMIENTO",
-      nombre: "",
-      descripcion: "",
-      unidad_medida: "M2",
-      precio_base_unitario: 0,
-      proveedor_id: "",
-      etapa_obra: "",
-      rendimiento_m2: 0,
-      fuente_url: "",
-      fuente_termino: "",
-      activo: true,
-    });
-    setModalAbierto(true);
-  };
+  useEffect(() => {
+    cargar();
+    return () => { if (sondeo.current) clearInterval(sondeo.current); };
+  }, [cargar]);
 
-  const abrirModalEditar = (item: CatalogoItem) => {
-    setItemEdicion(item);
-    setFormData({
-      categoria: item.categoria,
-      nombre: item.nombre,
-      descripcion: item.descripcion || "",
-      unidad_medida: item.unidad_medida,
-      precio_base_unitario: item.precio_base_unitario,
-      proveedor_id: item.proveedor_id || "",
-      etapa_obra: item.etapa_obra || "",
-      rendimiento_m2: Number(item.rendimiento_m2) || 0,
-      fuente_url: item.fuente_url || "",
-      fuente_termino: item.fuente_termino || "",
-      activo: item.activo,
-    });
-    setModalAbierto(true);
-  };
+  const sincronizando = estado?.estado === "running";
 
-  const handleGuardar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGuardando(true);
-    setError("");
-
-    try {
-      const token = localStorage.getItem("token");
-      const url = itemEdicion
-        ? `/api/catalogo-tipos/${itemEdicion.id}`
-        : "/api/catalogo-tipos";
-      const method = itemEdicion ? "PUT" : "POST";
-
-      const payload = {
-        ...formData,
-        precio_base_unitario: parseFloat(formData.precio_base_unitario as any) || 0,
-        proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id as any) : null,
-        rendimiento_m2: Number(formData.rendimiento_m2) || 0,
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        setModalAbierto(false);
-        fetchData();
-      } else {
-        const errData = await res.json();
-        setError(errData.message || "Error al guardar el tipo de catálogo.");
+  // Consulta el avance cada 3 s hasta que termina (la lectura de ~20 fichas tarda cerca de un minuto).
+  const vigilar = () => {
+    if (sondeo.current) clearInterval(sondeo.current);
+    sondeo.current = setInterval(async () => {
+      const r = await fetch("/api/insumos/actualizar-precios/estado", { headers: authHeaders() });
+      if (!r.ok) return;
+      const e: Estado = await r.json();
+      setEstado(e);
+      if (e.estado !== "running") {
+        clearInterval(sondeo.current!);
+        const res = e.resultado;
+        setAviso(
+          e.estado === "error"
+            ? ""
+            : `Listo: ${res?.actualizados ?? 0} precios nuevos, ${res?.sin_cambio ?? 0} sin cambio, ${res?.errores?.length ?? 0} con problemas.`
+        );
+        if (e.estado === "error") setError(res?.message || "La actualización falló.");
+        cargar();
       }
-    } catch (err) {
-      setError("Error de conexión al guardar.");
+    }, 3000);
+  };
+
+  const sincronizar = async () => {
+    setError(""); setAviso("");
+    const r = await fetch("/api/insumos/actualizar-precios", { method: "POST", headers: authHeaders() });
+    if (r.status === 202 || r.status === 409) {
+      setEstado((p) => ({ ...(p as Estado), estado: "running", resultado: null }));
+      vigilar();
+    } else {
+      setError("No se pudo iniciar la actualización.");
+    }
+  };
+
+  const q = busqueda.trim().toLowerCase();
+  const visibles = items
+    .filter((i) => (verInactivos || i.activo) && (categoria === "TODOS" || i.categoria === categoria))
+    .filter((i) => !q || `${i.nombre} ${i.proveedor ?? ""}`.toLowerCase().includes(q))
+    .sort((a, b) => GRUPOS.findIndex((g) => g.key === a.categoria) - GRUPOS.findIndex((g) => g.key === b.categoria) || a.nombre.localeCompare(b.nombre));
+  const ocultos = items.filter((i) => !i.activo).length;
+  const sinCobertura = estado?.grupos_sin_cobertura ?? [];
+  const ultima = antiguedad(estado?.ultima_actualizacion ?? null);
+  const problemas = [...(estado?.resultado?.errores ?? []), ...(estado?.resultado?.a_revisar ?? [])];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="mr-auto">
+          <h1 className="text-2xl font-extrabold text-slate-900">Materiales y precios</h1>
+          <p className="text-sm text-slate-500">
+            Precios leídos de la ficha de cada producto. Última actualización:{" "}
+            <strong className={ultima.dias > 8 ? "text-amber-700" : "text-slate-700"}>
+              {estado?.ultima_actualizacion ? `${new Date(estado.ultima_actualizacion).toLocaleDateString("es-CL")} · ${ultima.texto.toLowerCase()}` : "nunca"}
+            </strong>
+            . Se renuevan solos cada lunes.
+          </p>
+        </div>
+        <button
+          onClick={sincronizar}
+          disabled={sincronizando}
+          className="border-2 border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 h-11 rounded-lg transition disabled:opacity-60"
+        >
+          {sincronizando ? "Leyendo precios…" : "Sincronizar precios ahora"}
+        </button>
+        <button onClick={() => setModal("nuevo")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 h-11 rounded-lg shadow-sm transition">
+          + Agregar material
+        </button>
+      </div>
+
+      {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md">{error}</div>}
+      {aviso && <div className="bg-green-50 border-l-4 border-green-600 text-green-900 p-3 rounded-r-md font-semibold">{aviso}</div>}
+      {sinCobertura.length > 0 && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 text-amber-900 p-3 rounded-r-md">
+          Falta un producto verificado en: <strong>{sinCobertura.map((g) => g.nombre).join(", ")}</strong>. Agregue uno o
+          confirme el que está desactivado.
+        </div>
+      )}
+      {problemas.length > 0 && (
+        <details className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-900">
+          <summary className="font-semibold cursor-pointer">{problemas.length} productos no se pudieron actualizar (se mantiene su precio anterior)</summary>
+          <ul className="mt-2 space-y-1 text-sm">
+            {problemas.map((p, i) => <li key={i}><strong>{p.nombre}:</strong> {p.error}</li>)}
+          </ul>
+        </details>
+      )}
+
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {[{ key: "TODOS", label: "Todos", obligatorio: false }, ...GRUPOS].map((g) => {
+            const n = items.filter((i) => i.activo && (g.key === "TODOS" || i.categoria === g.key)).length;
+            const falta = g.obligatorio && sinCobertura.some((s) => s.codigo === g.key);
+            return (
+              <button
+                key={g.key}
+                onClick={() => setCategoria(g.key)}
+                className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  categoria === g.key ? "bg-blue-900 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                }`}
+              >
+                {g.label} <span className="opacity-70">{n}</span>
+                {falta && <span title="Falta un producto verificado" className="ml-1 text-amber-500">●</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <input type="search" placeholder="Buscar material o proveedor" aria-label="Buscar" value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)} className="sm:!w-80" />
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input type="checkbox" className="!w-4 !min-h-0" checked={verInactivos} onChange={(e) => setVerInactivos(e.target.checked)} />
+            Ver desactivados o por confirmar ({ocultos})
+          </label>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
+                <th className="px-4 py-3">Material</th>
+                <th className="px-4 py-3">Proveedor</th>
+                <th className="px-4 py-3 text-right">Precio de lista</th>
+                <th className="px-4 py-3 text-right">Desc.</th>
+                <th className="px-4 py-3 text-right">Costo neto</th>
+                <th className="px-4 py-3">Actualizado</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {cargando ? (
+                <tr><td colSpan={7} className="p-8 text-center text-slate-500">Cargando materiales…</td></tr>
+              ) : visibles.length === 0 ? (
+                <tr><td colSpan={7} className="p-8 text-center text-slate-500">No hay materiales que mostrar con este filtro.</td></tr>
+              ) : (
+                visibles.map((i, idx) => {
+                  const a = antiguedad(i.actualizado_en);
+                  const color = !i.url ? "bg-slate-100 text-slate-600" : a.dias <= 8 ? "bg-green-100 text-green-800" : a.dias <= 15 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800";
+                  const nuevoGrupo = categoria === "TODOS" && (idx === 0 || visibles[idx - 1].categoria !== i.categoria);
+                  return (
+                    <Fragment key={i.id}>
+                      {nuevoGrupo && (
+                        <tr key={`g-${i.categoria}`} className="bg-slate-50">
+                          <td colSpan={7} className="px-4 py-1.5 text-sm font-bold text-blue-900">
+                            {GRUPOS.find((g) => g.key === i.categoria)?.label ?? i.categoria}
+                          </td>
+                        </tr>
+                      )}
+                      <tr className={`hover:bg-slate-50 ${i.activo ? "" : "opacity-60"}`}>
+                        <td className="px-4 py-2.5 max-w-sm">
+                          <div className="font-semibold text-slate-900 truncate" title={i.nombre}>
+                            {i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre} ↗</a> : i.nombre}
+                          </div>
+                          {!i.activo && <span className="text-xs font-semibold text-amber-700">{i.verificado ? "Desactivado" : "Por confirmar"}</span>}
+                          {i.activo && !i.verificado && <span className="text-xs font-semibold text-amber-700">Sin verificar</span>}
+                          {i.ultimo_error && <div className="text-xs text-red-700" title={i.ultimo_error}>⚠ {i.ultimo_error.slice(0, 70)}</div>}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700">{i.proveedor ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          {clp(i.precio_lista)}
+                          {i.m2_por_unidad > 0 && <div className="text-xs text-slate-500">por plancha</div>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{i.descuento_pct ? `${i.descuento_pct}%` : "—"}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">
+                          {clp(i.costo_neto)}
+                          {i.neto_por_m2 != null && <div className="text-xs font-normal text-slate-500">{clp(i.neto_por_m2)} por m²</div>}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-md text-xs font-semibold ${color}`} title={i.actualizado_en ? new Date(i.actualizado_en).toLocaleString("es-CL") : "Precio ingresado a mano"}>
+                            {i.url ? a.texto : "Manual"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button onClick={() => setModal(i)} className="!min-h-0 text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    </Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {modal && (
+        <FormularioMaterial
+          item={modal === "nuevo" ? null : modal}
+          proveedores={proveedores}
+          onCerrar={() => setModal(null)}
+          onGuardado={(msg) => { setModal(null); setAviso(msg); cargar(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
+  item: Insumo | null; proveedores: Proveedor[]; onCerrar: () => void; onGuardado: (msg: string) => void;
+}) {
+  const [f, setF] = useState({
+    categoria: item?.categoria ?? "TABIQUERIA",
+    nombre: item?.nombre ?? "",
+    fuente_url: item?.url ?? "",
+    m2_por_unidad: item?.m2_por_unidad ? String(item.m2_por_unidad) : "",
+    precio_base_unitario: item ? String(item.precio_base_unitario) : "",
+    proveedor_id: item?.proveedor_id ? String(item.proveedor_id) : "",
+    activo: item?.activo ?? true,
+    verificado: item?.verificado ?? false,
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const manual = f.categoria === "BASE_TERRENO"; // las bases se cotizan a mano por m²; el resto sale de la ficha
+  const set = (k: string, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+
+  const guardar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!manual && !f.fuente_url.trim()) return setError("Pegue la dirección (URL) de la ficha del producto en Easy, Sodimac o MCT.");
+    if (manual && !f.nombre.trim()) return setError("Escriba el nombre de la base.");
+    setGuardando(true);
+    const payload: Record<string, unknown> = {
+      categoria: f.categoria, nombre: f.nombre.trim(), activo: f.activo, verificado: f.verificado,
+      fuente_url: manual ? "" : f.fuente_url.trim(),
+    };
+    if (manual) {
+      payload.unidad_medida = "M2";
+      payload.precio_base_unitario = Number(f.precio_base_unitario) || 0;
+      payload.proveedor_id = f.proveedor_id ? Number(f.proveedor_id) : null;
+    }
+    if (f.categoria === "REVESTIMIENTO" && f.m2_por_unidad) payload.m2_por_unidad = Number(f.m2_por_unidad);
+    try {
+      const r = await fetch(item ? `/api/catalogo-tipos/${item.id}` : "/api/catalogo-tipos/", {
+        method: item ? "PUT" : "POST", headers: authHeaders(), body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return setError(data.message || "No se pudo guardar.");
+      onGuardado(item ? "Cambios guardados." : "Material agregado: el precio se leyó de la ficha.");
+    } catch {
+      setError("No hay conexión con el servidor.");
     } finally {
       setGuardando(false);
     }
   };
 
-  const handleEliminar = async (id: number) => {
-    if (!confirm("¿Seguro que deseas eliminar este elemento del catálogo?")) return;
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/catalogo-tipos/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        fetchData();
-      } else {
-        const err = await res.json();
-        alert(err.message || "No se pudo eliminar.");
-      }
-    } catch (err) {
-      alert("Error al comunicarse con el servidor.");
-    }
+  const eliminar = async () => {
+    if (!item || !confirm(`¿Eliminar «${item.nombre}»? Esta acción no se puede deshacer.`)) return;
+    const r = await fetch(`/api/catalogo-tipos/${item.id}`, { method: "DELETE", headers: authHeaders() });
+    if (r.ok) onGuardado("Material eliminado.");
+    else setError((await r.json().catch(() => ({}))).message || "No se pudo eliminar (puede estar usado en una cotización). Desactívelo en su lugar.");
   };
 
-  const itemsFiltrados = items.filter((item) => {
-    const coincideCategoria =
-      categoriaSeleccionada === "TODAS" ||
-      item.categoria.toUpperCase() === categoriaSeleccionada.toUpperCase();
-    const coincideBusqueda =
-      item.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (item.descripcion && item.descripcion.toLowerCase().includes(busqueda.toLowerCase()));
-    return coincideCategoria && coincideBusqueda;
-  });
-
-  // Paginación (en el navegador: el catálogo completo ya viene cargado)
-  const POR_PAGINA = 10;
-  const totalPaginas = Math.max(1, Math.ceil(itemsFiltrados.length / POR_PAGINA));
-  const paginaActual = Math.min(pagina, totalPaginas);
-  const inicio = (paginaActual - 1) * POR_PAGINA;
-  const itemsPagina = itemsFiltrados.slice(inicio, inicio + POR_PAGINA);
-
+  const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
   return (
-    <div className="space-y-4">
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
+      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+        <h2 className="text-xl font-bold text-slate-900">{item ? "Editar material" : "Agregar material"}</h2>
+        {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm">{error}</div>}
+
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Materiales y precios</h1>
-          <p className="text-sm text-slate-500">Los precios se actualizan solos cada semana desde las tiendas.</p>
-        </div>
-        <div className="flex gap-2">
-        <button
-          onClick={actualizarPrecios}
-          disabled={actualizando}
-          className="bg-white border border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 py-2.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
-        >
-          {actualizando ? "Actualizando..." : "Sincronizar catálogo y precios"}
-        </button>
-        <button
-          onClick={abrirModalCrear}
-          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 py-2.5 rounded-lg shadow transition flex items-center gap-2 cursor-pointer"
-        >
-          <span>+</span> Nuevo Tipo
-        </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r-md text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* Tabs y Filtros */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-        {/* Tabs de Categorías */}
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIAS_PREDEFINIDAS.map((cat) => (
-            <button
-              key={cat.key}
-              onClick={() => {
-                setCategoriaSeleccionada(cat.key);
-                setPagina(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
-                categoriaSeleccionada === cat.key
-                  ? "bg-blue-900 text-white shadow-sm"
-                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+          <label className={etiqueta} htmlFor="m-cat">Categoría</label>
+          <select id="m-cat" value={f.categoria} onChange={(e) => set("categoria", e.target.value)}>
+            {GRUPOS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+          </select>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <input
-            type="search"
-            placeholder="Buscar por nombre o descripción"
-            aria-label="Buscar material"
-            value={busqueda}
-            onChange={(e) => {
-              setBusqueda(e.target.value);
-              setPagina(1);
-            }}
-            className="sm:!w-80"
-          />
-          <div className="text-sm text-slate-500">
-            <strong>{itemsFiltrados.length}</strong> de {items.length} materiales
-          </div>
-        </div>
-      </div>
-
-      {/* Tabla de Catálogos */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
-                <th className="p-4">Categoría</th>
-                <th className="p-4">Nombre y Descripción</th>
-                <th className="p-4">Unidad</th>
-                <th className="p-4">Precio Base</th>
-                <th className="p-4">Proveedor</th>
-                <th className="p-4">Estado</th>
-                <th className="p-4 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 text-sm">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    Cargando catálogo...
-                  </td>
-                </tr>
-              ) : itemsFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    No se encontraron registros para la categoría seleccionada.
-                  </td>
-                </tr>
-              ) : (
-                itemsPagina.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-semibold">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                        {item.categoria}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <p className="font-bold text-slate-800">{item.nombre}</p>
-                      {item.descripcion && (
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.descripcion}</p>
-                      )}
-                    </td>
-                    <td className="p-4 font-medium text-slate-600">{item.unidad_medida}</td>
-                    <td className="p-4 font-bold text-slate-900">
-                      ${Number(item.precio_base_unitario).toLocaleString("es-CL")}
-                      {item.precio_actualizado_en && (
-                        <div className="text-[10px] font-normal text-slate-400">
-                          act. {new Date(item.precio_actualizado_en).toLocaleDateString("es-CL")}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-4 text-slate-600">
-                      {item.proveedor?.razon_social || (
-                        <span className="text-xs text-slate-400 italic">Sin proveedor</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-bold ${
-                          item.activo
-                            ? "bg-green-100 text-green-800"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {item.activo ? "Activo" : "Inactivo"}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button
-                        onClick={() => abrirModalEditar(item)}
-                        className="text-blue-600 hover:text-blue-900 font-semibold text-xs cursor-pointer"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleEliminar(item.id)}
-                        className="text-red-600 hover:text-red-900 font-semibold text-xs cursor-pointer"
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {itemsFiltrados.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-200 bg-slate-50">
-            <span className="text-base text-slate-600">
-              Mostrando {inicio + 1} a {Math.min(inicio + POR_PAGINA, itemsFiltrados.length)} de {itemsFiltrados.length}
-            </span>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPagina(paginaActual - 1)}
-                disabled={paginaActual <= 1}
-                className="px-5 py-2 rounded-lg border-2 border-blue-900 text-blue-900 font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                ← Anterior
-              </button>
-              <span className="text-base font-semibold text-slate-700">
-                Página {paginaActual} de {totalPaginas}
-              </span>
-              <button
-                onClick={() => setPagina(paginaActual + 1)}
-                disabled={paginaActual >= totalPaginas}
-                className="px-5 py-2 rounded-lg border-2 border-blue-900 text-blue-900 font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                Siguiente →
-              </button>
+        {manual ? (
+          <>
+            <div>
+              <label className={etiqueta} htmlFor="m-nom">Nombre de la base</label>
+              <input id="m-nom" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Ej: Radier H20 10 cm" />
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={etiqueta} htmlFor="m-pre">Precio por m² (lista)</label>
+                <input id="m-pre" type="number" min="0" step="500" value={f.precio_base_unitario} onFocus={(e) => e.target.select()}
+                  onChange={(e) => set("precio_base_unitario", e.target.value)} />
+              </div>
+              <div>
+                <label className={etiqueta} htmlFor="m-prov">Proveedor</label>
+                <select id="m-prov" value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
+                  <option value="">Sin proveedor</option>
+                  {proveedores.map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="text-sm text-slate-500">Solo ponga precios reales: esta base aparece en el cotizador y cambia el valor de la casa.</p>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto</label>
+              <input id="m-url" type="url" value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
+                placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
+              <p className="text-sm text-slate-500 mt-1">De Easy, Sodimac o MCT. El nombre, el proveedor y el precio se leen solos de esa página.</p>
+            </div>
+            <div>
+              <label className={etiqueta} htmlFor="m-nom2">Nombre (opcional)</label>
+              <input id="m-nom2" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Si lo deja vacío se usa el de la tienda" />
+            </div>
+            {f.categoria === "REVESTIMIENTO" && (
+              <div>
+                <label className={etiqueta} htmlFor="m-m2">m² que cubre cada unidad (opcional)</label>
+                <input id="m-m2" type="number" min="0" step="0.01" value={f.m2_por_unidad} onFocus={(e) => e.target.select()}
+                  onChange={(e) => set("m2_por_unidad", e.target.value)} placeholder="Se calcula con las medidas del nombre" />
+              </div>
+            )}
+          </>
         )}
-      </div>
 
-      {/* Modal Crear / Editar */}
-      {modalAbierto && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-4 border-b pb-3">
-              {itemEdicion ? "Editar Elemento del Catálogo" : "Nuevo Elemento del Catálogo"}
-            </h2>
+        <div className="space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" className="!w-5 !min-h-0 mt-1" checked={f.verificado} onChange={(e) => set("verificado", e.target.checked)} />
+            <span><strong>Confirmo que es el producto correcto.</strong> <span className="text-sm text-slate-500">Al marcarlo se vuelve a leer el precio de la ficha.</span></span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="!w-5 !min-h-0" checked={f.activo} onChange={(e) => set("activo", e.target.checked)} />
+            <span>Disponible para cotizar</span>
+          </label>
+        </div>
 
-            <form onSubmit={handleGuardar} className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">Categoría *</label>
-                  <select
-                    value={formData.categoria}
-                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                    required
-                  >
-                    <option value="REVESTIMIENTO">REVESTIMIENTO</option>
-                    <option value="BASE_TERRENO">BASE_TERRENO</option>
-                    
-                    <option value="INSUMO">INSUMO</option>
-                    <option value="TABIQUERIA">TABIQUERIA</option>
-                    <option value="TECHUMBRE">TECHUMBRE</option>
-                    <option value="TERMINACION">TERMINACION</option>
-                    <option value="ESTRUCTURA">ESTRUCTURA</option>
-                    <option value="FIJACION">FIJACION</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">Unidad de Medida *</label>
-                  <input
-                    type="text"
-                    value={formData.unidad_medida}
-                    onChange={(e) => setFormData({ ...formData, unidad_medida: e.target.value })}
-                    placeholder="M2, ML, UN, KG"
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700">Nombre *</label>
-                <input
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  placeholder="Ej: Smart Panel 11.1mm"
-                  className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700">Descripción</label>
-                <textarea
-                  value={formData.descripcion}
-                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                  rows={2}
-                  placeholder="Detalles técnicos u observaciones..."
-                  className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">Precio Base Unitario ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.precio_base_unitario}
-                    onChange={(e) =>
-                      setFormData({ ...formData, precio_base_unitario: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                    required
-                  />
-                </div>
-                {formData.categoria === "INSUMO" && (
-                  <>
-                    <div>
-                      <label className="block font-semibold mb-1 text-slate-700">Etapa de obra</label>
-                      <select
-                        value={formData.etapa_obra}
-                        onChange={(e) => setFormData({ ...formData, etapa_obra: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                        required
-                      >
-                        <option value="">-- Seleccione --</option>
-                        <option value="ETAPA_1">Etapa 1 (obra gruesa)</option>
-                        <option value="ETAPA_2">Etapa 2 (terminaciones)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block font-semibold mb-1 text-slate-700">Cantidad por m² de casa</label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={formData.rendimiento_m2}
-                        onChange={(e) => setFormData({ ...formData, rendimiento_m2: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                        required
-                      />
-                    </div>
-                  </>
-                )}
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">URL del producto en Sodimac (opcional)</label>
-                  <input
-                    type="url"
-                    value={formData.fuente_url}
-                    onChange={(e) => setFormData({ ...formData, fuente_url: e.target.value })}
-                    placeholder="https://www.sodimac.cl/sodimac-cl/articulo/..."
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">Término de búsqueda (para actualizar precio)</label>
-                  <input
-                    type="text"
-                    value={formData.fuente_termino}
-                    onChange={(e) => setFormData({ ...formData, fuente_termino: e.target.value })}
-                    placeholder="ej. pino impregnado 2x3"
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700">Proveedor</label>
-                  <select
-                    value={formData.proveedor_id}
-                    onChange={(e) => setFormData({ ...formData, proveedor_id: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg border-slate-300"
-                  >
-                    <option value="">-- Sin Proveedor --</option>
-                    {proveedores.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.razon_social}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="activo"
-                  checked={formData.activo}
-                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                  className="w-4 h-4 rounded text-blue-900"
-                />
-                <label htmlFor="activo" className="font-semibold text-slate-700">
-                  Elemento Activo (Disponible para Cotizar)
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setModalAbierto(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="px-5 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 cursor-pointer font-semibold shadow-sm"
-                >
-                  {guardando ? "Guardando..." : "Guardar"}
-                </button>
-              </div>
-            </form>
+        <div className="flex items-center gap-3 pt-1">
+          {item && <button type="button" onClick={eliminar} className="text-red-700 font-semibold hover:underline !min-h-0">Eliminar</button>}
+          <div className="ml-auto flex gap-2">
+            <button type="button" onClick={onCerrar} className="px-5 h-11 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancelar</button>
+            <button type="submit" disabled={guardando} className="px-6 h-11 bg-blue-900 hover:bg-blue-800 text-white rounded-lg disabled:opacity-60">
+              {guardando ? "Leyendo la ficha…" : "Guardar"}
+            </button>
           </div>
         </div>
-      )}
+      </form>
     </div>
   );
 }

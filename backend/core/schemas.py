@@ -69,20 +69,48 @@ class CatalogoTipoSchema(Schema):
     fuente_termino: str = ''
     precio_actualizado_en: Optional[datetime] = None
     m2_por_unidad: float = 0
+    precio_lista: Optional[float] = None
+    descuento_pct: float = 0
+    costo_neto: Optional[float] = None
+    verificado: bool = False
+    ultimo_error: str = ''
     activo: bool
 
 class CatalogoTipoInSchema(Schema):
     categoria: str
-    nombre: str
+    nombre: str = ''
     descripcion: Optional[str] = None
-    unidad_medida: str
+    unidad_medida: str = 'UN'
     precio_base_unitario: float = 0.00
     proveedor_id: Optional[int] = None
     etapa_obra: str = ''
     rendimiento_m2: float = 0
     fuente_url: str = ''
-    fuente_termino: str = ''
+    m2_por_unidad: float = 0
+    verificado: bool = False
     activo: bool = True
+
+
+class InsumoSchema(Schema):
+    """Fila de la tabla 'Materiales y precios': precio de lista, descuento vigente y costo neto final (CLP)."""
+    id: int
+    categoria: str
+    nombre: str
+    proveedor_id: Optional[int] = None
+    proveedor: Optional[str] = None
+    unidad_medida: str
+    url: str = ''
+    sku: str = ''
+    precio_base_unitario: float = 0  # precio cargado a mano (bases sin ficha de tienda)
+    precio_lista: Optional[float] = None
+    descuento_pct: float = 0
+    costo_neto: Optional[float] = None
+    m2_por_unidad: float = 0
+    neto_por_m2: Optional[float] = None  # solo revestimientos: costo neto por m² (lo que usa la cotización)
+    actualizado_en: Optional[datetime] = None
+    verificado: bool = False
+    activo: bool
+    ultimo_error: str = ''
 
 
 # --- 5. Detalle Cotización Insumo ---

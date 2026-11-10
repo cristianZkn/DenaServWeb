@@ -1,3 +1,4 @@
+import hmac
 import logging
 import jwt
 from google.auth.transport import requests as google_requests
@@ -11,7 +12,7 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from ninja import Router
-from ninja.security import HttpBearer
+from ninja.security import APIKeyHeader, HttpBearer
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
@@ -20,7 +21,7 @@ from .models import (
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
     ProveedorSchema, ProveedorInSchema,
-    CatalogoTipoSchema, CatalogoTipoInSchema,
+    CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
@@ -50,7 +51,7 @@ def _calcular_desde_catalogo(data):
     """Resuelve precios e insumos desde la BD y ejecuta el motor."""
     get = lambda i: CatalogoTipo.objects.select_related('proveedor').filter(id=i).first() if i else None
     insumos_db = list(CatalogoTipo.objects.select_related('proveedor').filter(
-        categoria='INSUMO', activo=True, rendimiento_m2__gt=0))
+        categoria__in=precios.CATEGORIAS_INSUMO, activo=True, rendimiento_m2__gt=0))
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
     return calculo.calcular(
@@ -93,6 +94,15 @@ class AuthBearer(HttpBearer):
         except Exception as e:  # token vencido/inválido o fallo de BD: se rechaza, pero queda el motivo en el log
             logger.warning("Auth rechazada (%s): %s", type(e).__name__, e)
             return None
+
+
+class CronToken(APIKeyHeader):
+    """Llave del planificador semanal (GitHub Actions): cabecera X-Cron-Token = variable de entorno CRON_TOKEN."""
+    param_name = "X-Cron-Token"
+
+    def authenticate(self, request, key):
+        esperado = settings.CRON_TOKEN
+        return key if esperado and hmac.compare_digest(key.encode(), esperado.encode()) else None
 
 
 def create_jwt_token(usuario: Usuario) -> str:
@@ -176,6 +186,7 @@ def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
         for attr, value in data.dict().items():
             setattr(proveedor, attr, value)
         proveedor.save()
+        precios.recalcular_netos(proveedor)
         return 200, proveedor
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
@@ -198,6 +209,48 @@ def eliminar_proveedor(request, proveedor_id: int):
 # ==============================================================================
 # 3. CATALOGO_TIPO (Unificación de todos los "Tipos")
 # ==============================================================================
+# --- Precios de mercado (lectura 1 a 1 de las fichas de producto) ---
+@router.get("/insumos/", response=List[InsumoSchema], auth=AuthBearer())
+def listar_insumos(request, categoria: Optional[str] = None, activo: Optional[bool] = None):
+    """Materiales con precio de lista, descuento vigente y costo neto final, filtrables por categoría."""
+    qs = CatalogoTipo.objects.select_related("proveedor").all()
+    if categoria:
+        qs = qs.filter(categoria__iexact=categoria)
+    if activo is not None:
+        qs = qs.filter(activo=activo)
+    out = []
+    for it in qs.order_by("categoria", "nombre"):
+        desc = it.descuento_pct
+        lista = it.precio_lista if it.precio_lista is not None else (it.precio_base_unitario or None)
+        neto = it.costo_neto if it.costo_neto is not None else (precios.costo_neto(lista, desc) if lista else None)
+        m2 = float(it.m2_por_unidad or 0)
+        out.append({
+            "id": it.id, "categoria": it.categoria, "nombre": it.nombre, "proveedor_id": it.proveedor_id,
+            "proveedor": it.proveedor.razon_social if it.proveedor else None, "unidad_medida": it.unidad_medida,
+            "url": it.fuente_url, "sku": it.sku, "precio_base_unitario": it.precio_base_unitario, "precio_lista": lista, "descuento_pct": desc, "costo_neto": neto,
+            "m2_por_unidad": m2, "neto_por_m2": float(_neto(it)) if m2 > 0 else None,
+            "actualizado_en": it.precio_actualizado_en, "verificado": it.verificado, "activo": it.activo,
+            "ultimo_error": it.ultimo_error,
+        })
+    return out
+
+
+@router.post("/insumos/actualizar-precios", response={202: MessageSchema, 409: MessageSchema},
+             auth=[AuthBearer(), CronToken()])
+def actualizar_precios_insumos(request):
+    """Fuerza la actualización de precios (también la llama el planificador semanal con X-Cron-Token)."""
+    if not precios.iniciar_actualizacion():
+        return 409, {"message": "Ya hay una actualización en curso."}
+    return 202, {"message": "Actualización iniciada."}
+
+
+@router.get("/insumos/actualizar-precios/estado", response=dict, auth=[AuthBearer(), CronToken()])
+def estado_actualizacion_precios(request):
+    return {**precios.estado_actualizacion(),
+            "ultima_actualizacion": precios.ultima_actualizacion(),
+            "grupos_sin_cobertura": precios.grupos_sin_cobertura()}
+
+
 @router.get("/catalogo-tipos/", response=List[CatalogoTipoSchema], auth=AuthBearer())
 def listar_catalogo_tipos(request, categoria: Optional[str] = None, activo: Optional[bool] = None):
     qs = CatalogoTipo.objects.select_related("proveedor").all()
@@ -214,23 +267,16 @@ def listar_categorias_disponibles(request):
     return list(categorias)
 
 
-@router.post("/catalogo-tipos/actualizar-precios/", response={202: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
-def actualizar_precios_catalogo(request):
-    if not precios.iniciar_sincronizacion():
-        return 409, {"message": "Ya hay una sincronización en curso."}
-    return 202, {"message": "Sincronización iniciada."}
-
-
-@router.get("/catalogo-tipos/actualizar-precios/estado/", response=dict, auth=AuthBearer())
-def estado_actualizacion_precios(request):
-    return precios.estado_sincronizacion()
-
-
 @router.post("/catalogo-tipos/", response={200: CatalogoTipoSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
     try:
-        catalogo = CatalogoTipo.objects.create(**data.dict())
-        return 200, catalogo
+        item = CatalogoTipo(**data.dict())
+        if item.fuente_url:  # el precio, el proveedor y las medidas salen de la ficha de la tienda
+            precios.completar_desde_ficha(item)
+        elif not item.nombre:
+            return 400, {"message": "Indique el nombre del material."}
+        item.save()
+        return 200, item
     except Exception as e:
         return 400, {"message": str(e)}
 
@@ -238,11 +284,16 @@ def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
 @router.put("/catalogo-tipos/{catalogo_id}", response={200: CatalogoTipoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSchema):
     try:
-        catalogo = CatalogoTipo.objects.get(id=catalogo_id)
-        for attr, value in data.dict().items():
-            setattr(catalogo, attr, value)
-        catalogo.save()
-        return 200, catalogo
+        item = CatalogoTipo.objects.get(id=catalogo_id)
+        url_antes, verificado_antes = item.fuente_url, item.verificado
+        for attr, value in data.dict(exclude_unset=True).items():
+            setattr(item, attr, value)
+        # Si cambia la ficha o el usuario confirma el producto, se vuelve a leer y se acepta lo que muestre hoy.
+        if item.fuente_url and (item.fuente_url != url_antes or (item.verificado and not verificado_antes)):
+            item.sku = ""
+            precios.completar_desde_ficha(item)
+        item.save()
+        return 200, item
     except CatalogoTipo.DoesNotExist:
         return 404, {"message": "Elemento de catálogo no encontrado"}
     except Exception as e:

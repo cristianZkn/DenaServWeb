@@ -1,4 +1,6 @@
 from django.test import TestCase, Client, override_settings
+from decimal import Decimal
+from .api import create_jwt_token
 from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion
 
 
@@ -216,59 +218,220 @@ class GananciasWhatsappTests(TestCase):
         self.assertTrue(url.startswith("https://wa.me/") and "Casa%20Maip" in url and "50" in url)
 
 
+class ExtraccionTests(TestCase):
+    """Lectura del precio desde la ficha exacta de cada tienda (sin red)."""
+
+    def test_json_ld_easy_con_oferta_simple(self):
+        from . import scraper
+        html = ('<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Product",'
+                '"name":"Pino impregnado 2x3","sku":"19375","offers":{"@type":"Offer","price":4790,"priceCurrency":"CLP"}}]}</script>')
+        r = scraper.parsear_json_ld(html)
+        self.assertEqual((r["nombre"], r["sku"], r["precio"]), ("Pino impregnado 2x3", "19375", 4790))
+
+    def test_json_ld_sodimac_con_lista_de_ofertas_y_bloque_roto(self):
+        from . import scraper
+        html = ('<script type="application/ld+json">{roto</script>'
+                '<script type="application/ld+json">{"@type":"Product","description":"Plancha zinc","sku":"110269489",'
+                '"offers":[{"@type":"Offer","price":"6790"},{"@type":"Offer","price":"6790"}]}</script>')
+        r = scraper.parsear_json_ld(html)
+        self.assertEqual((r["nombre"], r["precio"]), ("Plancha zinc", 6790))
+
+    def test_ficha_sin_precio_es_error_claro(self):
+        from . import scraper
+        with self.assertRaises(scraper.ErrorExtraccion):
+            scraper.parsear_json_ld('<script type="application/ld+json">{"@type":"Product","name":"X","offers":{"price":0}}</script>')
+        with self.assertRaises(scraper.ErrorExtraccion):
+            scraper.parsear_mct("<html><h1>X</h1></html>")
+
+    def test_ficha_mct(self):
+        from . import scraper
+        html = '<h1>OSB SMARTSIDE PANEL R8 11.1MM 1.22 X 2.44</h1><span class="precioOfertaFicha">$28.907</span>'
+        r = scraper.parsear_mct(html, "https://mct.cl/ficha/25972/osb-smartside")
+        self.assertEqual((r["nombre"], r["sku"], r["precio"]), ("OSB SMARTSIDE PANEL R8 11.1MM 1.22 X 2.44", "25972", 28907))
+
+    def test_solo_tiendas_conocidas(self):
+        from . import scraper
+        self.assertEqual(scraper.tienda_de("https://www.easy.cl/x/p"), "easy")
+        self.assertEqual(scraper.tienda_de("https://mct.cl/ficha/1/x"), "mct")
+        with self.assertRaises(scraper.ErrorExtraccion):
+            scraper.tienda_de("https://tienda-falsa.com/x")
+
+    def test_reintenta_ante_caida_de_conexion(self):
+        import requests
+        from unittest import mock
+        from . import scraper
+        ok = mock.Mock(status_code=200, text="<html/>")
+        with mock.patch("core.scraper.requests.get", side_effect=[requests.ConnectionError("x"), ok]) as g:
+            self.assertEqual(scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None), "<html/>")
+        self.assertEqual(g.call_count, 2)
+        with mock.patch("core.scraper.requests.get", side_effect=requests.ConnectionError("x")):
+            with self.assertRaises(scraper.ErrorExtraccion):
+                scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None)
+
+
 class PreciosTests(TestCase):
-    def test_actualiza_por_id_de_articulo_y_no_pisa_con_vacio(self):
+    def setUp(self):
+        self.prov = Proveedor.objects.create(rut_empresa="EASY-WEB", razon_social="Easy", descuento_pct=10)
+
+    def _item(self, **kw):
+        base = dict(categoria="TABIQUERIA", nombre="Pino 2x3", unidad_medida="UN", proveedor=self.prov,
+                    fuente_url="https://www.easy.cl/pino-1/p", verificado=True)
+        return CatalogoTipo.objects.create(**{**base, **kw})
+
+    def test_costo_neto_es_lista_por_uno_menos_descuento(self):
         from . import precios
-        a = CatalogoTipo.objects.create(categoria="INSUMO", nombre="A", unidad_medida="UN", precio_base_unitario=100,
-                                        fuente_url="https://www.sodimac.cl/sodimac-cl/articulo/111/a?exp=x", fuente_termino="pino")
-        b = CatalogoTipo.objects.create(categoria="INSUMO", nombre="B", unidad_medida="UN", precio_base_unitario=200,
-                                        fuente_url="https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", fuente_termino="pino")
-        fake = lambda term: [{"url": "https://www.sodimac.cl/sodimac-cl/articulo/111/otro-slug", "price": 150},
-                             {"url": "https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", "price": None}]
-        r = precios.actualizar_precios(runner=fake)
-        a.refresh_from_db(); b.refresh_from_db()
-        self.assertEqual(float(a.precio_base_unitario), 150.0)
-        self.assertEqual(float(b.precio_base_unitario), 200.0)
-        self.assertEqual((r["actualizados"], r["no_encontrados"]), (1, ["B"]))
+        self.assertEqual(precios.costo_neto(10000, 10), Decimal("9000.00"))
+        self.assertEqual(precios.costo_neto(4790, 0), Decimal("4790.00"))
 
-
-    def test_sincronizar_crea_solo_lo_requerido_y_el_mas_barato(self):
+    def test_actualiza_lista_descuento_neto_y_fecha(self):
         from . import precios
-        fake = lambda term: [
-            {"name": "Pino Impregnado 2 x 3 x 3,2 m", "price": 5000, "url": "https://s/product/A1/x", "product_id": "A1"},
-            {"name": "Pino impregnado 2x3 económico", "price": 4000, "url": "https://s/product/A2/x", "product_id": "A2"},
-            {"name": "Pino impregnado 2x3 mkt", "price": 100, "url": "https://s/product/A3/x", "is_marketplace": True},
-            {"name": "Toldo 2x3", "price": 50, "url": "https://s/product/A4/x"},
-        ]
-        r = precios.sincronizar_catalogo(runner=fake)
-        it = CatalogoTipo.objects.get(fuente_termino="pino impregnado 2x3")
-        self.assertEqual(float(it.precio_base_unitario), 4000.0)
-        self.assertEqual(it.etapa_obra, "ETAPA_1")
-        self.assertNotIn("pino impregnado 2x3", r["sin_coincidencia"])
-        self.assertEqual(precios.sincronizar_catalogo(runner=fake)["creados"], [])  # idempotente
+        it = self._item()
+        r = precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(10000)}, pausa=0)
+        it.refresh_from_db()
+        self.assertEqual((it.precio_lista, it.descuento_pct, it.costo_neto), (Decimal("10000.00"), Decimal("10.00"), Decimal("9000.00")))
+        self.assertEqual(it.precio_base_unitario, Decimal("10000.00"))
+        self.assertIsNotNone(it.precio_actualizado_en)
+        self.assertEqual((r["actualizados"], r["errores"]), (1, []))
 
-
-    def test_parsear_mct(self):
+    def test_revestimiento_se_cotiza_por_m2(self):
         from . import precios
-        html = ('<div class="grilla"><a class="nombreGrilla" href="ficha/16936/terciado-15mm">TERCIADO 15MM</a>'
-                '<a class="valorGrilla" href="x"><span class="conDescuento">$25.526</span></a></div>'
-                '<div class="grilla"><a class="nombreGrilla" href="ficha/1/osb">OSB 11MM</a></div>')
-        r = precios.parsear_mct(html)
-        self.assertEqual(len(r), 1)  # el ítem sin precio se ignora
-        self.assertEqual((r[0]["price"], precios._clave(r[0]["url"])), (25526, "mct:16936"))
-        self.assertEqual(r[0]["url"], "https://mct.cl/ficha/16936/terciado-15mm")
+        it = self._item(categoria="REVESTIMIENTO", m2_por_unidad=2.5)
+        precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "OSB", "sku": "", "precio": Decimal(25000)}, pausa=0)
+        it.refresh_from_db()
+        self.assertEqual((it.precio_lista, it.precio_base_unitario), (Decimal("25000.00"), Decimal("10000.00")))
 
+    def test_una_tienda_caida_no_detiene_las_demas_ni_pisa_el_precio(self):
+        from . import precios, scraper
+        malo = self._item(nombre="Malo", fuente_url="https://www.easy.cl/malo/p", precio_base_unitario=500, precio_lista=500)
+        bueno = self._item(nombre="Bueno", fuente_url="https://www.easy.cl/bueno/p")
 
-    def test_clave_por_tienda(self):
+        def ext(url):
+            if "malo" in url:
+                raise scraper.ErrorExtraccion("sin conexión con la tienda")
+            return {"nombre": "Bueno", "sku": "", "precio": Decimal(1000)}
+
+        r = precios.actualizar_precios_mercado(extractor=ext, pausa=0)
+        malo.refresh_from_db(); bueno.refresh_from_db()
+        self.assertEqual((r["actualizados"], len(r["errores"])), (1, 1))
+        self.assertEqual((malo.precio_lista, malo.precio_base_unitario), (Decimal("500.00"), Decimal("500.00")))
+        self.assertIn("sin conexión", malo.ultimo_error)
+        self.assertEqual(bueno.precio_lista, Decimal("1000.00"))
+
+    def test_si_la_ficha_cambia_de_producto_no_se_usa_el_precio(self):
         from . import precios
-        self.assertEqual(precios._clave("https://www.easy.cl/pino-impregnado-micronizado-2x3-32-m-1155430/p"), "easy:1155430")
-        self.assertEqual(precios._clave("https://www.sodimac.cl/sodimac-cl/product/271485X/"), "sodimac:271485X")
+        it = self._item(sku="19375", precio_lista=4790, precio_base_unitario=4790)
+        r = precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Otra cosa", "sku": "999", "precio": Decimal(99999)}, pausa=0)
+        it.refresh_from_db()
+        self.assertEqual((len(r["a_revisar"]), it.precio_lista, it.verificado), (1, Decimal("4790.00"), False))
 
-
-    def test_medida_no_coincide_dentro_de_otra(self):
+    def test_misma_ficha_se_lee_una_sola_vez(self):
         from . import precios
-        self.assertFalse(precios._coincide({"name": "Pino 2 x 2 x 3,2 m", "price": 1}, ["2x3"], []))
-        self.assertTrue(precios._coincide({"name": "Pino 2 x 3 x 3,2 m", "price": 1}, ["2x3"], []))
+        self._item(nombre="A"); self._item(nombre="B")
+        llamadas = []
+        precios.actualizar_precios_mercado(extractor=lambda u: llamadas.append(u) or {"nombre": "X", "sku": "", "precio": Decimal(1)}, pausa=0)
+        self.assertEqual(len(llamadas), 1)
+
+    def test_categorias_obligatorias_exigen_producto_verificado_con_precio(self):
+        from . import precios
+        self.assertEqual([g["codigo"] for g in precios.grupos_sin_cobertura()], list(precios.GRUPOS_OBLIGATORIOS))
+        for cat in precios.GRUPOS_OBLIGATORIOS:
+            self._item(categoria=cat, nombre=cat, precio_lista=1000)
+        self.assertEqual(precios.grupos_sin_cobertura(), [])
+        CatalogoTipo.objects.filter(categoria="TECHUMBRE").update(verificado=False)
+        self.assertEqual([g["codigo"] for g in precios.grupos_sin_cobertura()], ["TECHUMBRE"])
+
+    def test_cambiar_descuento_del_proveedor_refresca_el_neto(self):
+        from . import precios
+        it = self._item(precio_lista=10000, costo_neto=9000)
+        self.prov.descuento_pct = 20; self.prov.save()
+        precios.recalcular_netos(self.prov)
+        it.refresh_from_db()
+        self.assertEqual((it.descuento_pct, it.costo_neto), (Decimal("20.00"), Decimal("8000.00")))
+
+    def test_actualizacion_en_segundo_plano(self):
+        import time
+        from . import precios
+        self.assertTrue(precios.iniciar_actualizacion(tarea=lambda: {"revisados": 0}))
+        for _ in range(50):
+            if precios.estado_actualizacion()["estado"] != "running":
+                break
+            time.sleep(0.1)
+        self.assertEqual(precios.estado_actualizacion(), {"estado": "done", "resultado": {"revisados": 0}})
+
+    def test_medida_desde_el_nombre(self):
+        from . import precios
+        self.assertAlmostEqual(precios._m2_unidad("OSB SMARTSIDE PANEL R4 11.1MM 1.22 X 2.44"), 2.9768, places=3)
+        self.assertAlmostEqual(precios._m2_unidad("OSB LAP SIDING 9.5 MM 200X4880"), 0.976, places=3)
+        self.assertIsNone(precios._m2_unidad("Revestimiento sin medidas"))
+
+
+class InsumosApiTests(TestCase):
+    def setUp(self):
+        from django.test import override_settings
+        self.u = Usuario.objects.create(rut="1-9", nombre_completo="T", email="t@t.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.prov = Proveedor.objects.create(rut_empresa="SODIMAC-WEB", razon_social="Sodimac", descuento_pct=5)
+        CatalogoTipo.objects.create(categoria="TECHUMBRE", nombre="Zinc", unidad_medida="UN", proveedor=self.prov,
+                                    fuente_url="https://www.sodimac.cl/sodimac-cl/product/1/", precio_lista=10000,
+                                    descuento_pct=5, costo_neto=9500, precio_base_unitario=10000)
+        CatalogoTipo.objects.create(categoria="INSUMO", nombre="Clavo", unidad_medida="UN", precio_base_unitario=1000)
+
+    def test_listado_filtrado_por_categoria(self):
+        todo = self.client.get("/api/insumos/", **self.h).json()
+        self.assertEqual(len(todo), 2)
+        z = self.client.get("/api/insumos/?categoria=TECHUMBRE", **self.h).json()
+        self.assertEqual(len(z), 1)
+        self.assertEqual((z[0]["proveedor"], z[0]["precio_lista"], z[0]["descuento_pct"], z[0]["costo_neto"]), ("Sodimac", 10000, 5, 9500))
+
+    def test_requiere_sesion(self):
+        self.assertEqual(self.client.get("/api/insumos/").status_code, 401)
+        self.assertEqual(self.client.post("/api/insumos/actualizar-precios").status_code, 401)
+
+    def test_actualizar_manual_y_con_llave_del_planificador(self):
+        from unittest import mock
+        from django.test import override_settings
+        with mock.patch("core.api.precios.iniciar_actualizacion", return_value=True) as ini:
+            self.assertEqual(self.client.post("/api/insumos/actualizar-precios", **self.h).status_code, 202)
+            with override_settings(CRON_TOKEN="secreto"):
+                self.assertEqual(self.client.post("/api/insumos/actualizar-precios", HTTP_X_CRON_TOKEN="secreto").status_code, 202)
+                self.assertEqual(self.client.post("/api/insumos/actualizar-precios", HTTP_X_CRON_TOKEN="otro").status_code, 401)
+            self.assertEqual(ini.call_count, 2)
+        with override_settings(CRON_TOKEN=""):  # sin llave configurada el planificador no entra
+            self.assertEqual(self.client.post("/api/insumos/actualizar-precios", HTTP_X_CRON_TOKEN="").status_code, 401)
+
+    def test_ya_en_curso_responde_409(self):
+        from unittest import mock
+        with mock.patch("core.api.precios.iniciar_actualizacion", return_value=False):
+            self.assertEqual(self.client.post("/api/insumos/actualizar-precios", **self.h).status_code, 409)
+
+    def test_estado_informa_categorias_sin_cobertura(self):
+        e = self.client.get("/api/insumos/actualizar-precios/estado", **self.h).json()
+        self.assertIn("estado", e)
+        self.assertEqual(len(e["grupos_sin_cobertura"]), 4)  # ninguno está verificado todavía
+
+    def test_alta_por_url_lee_la_ficha_y_la_url_mala_se_rechaza(self):
+        from decimal import Decimal as D
+        from unittest import mock
+        from . import scraper
+        ficha = {"nombre": "Cemento 25 kg", "sku": "7", "precio": D(5090)}
+        with mock.patch("core.precios.scraper.extraer", return_value=ficha):
+            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/7/"},
+                                 content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200)
+        j = r.json()
+        self.assertEqual((j["nombre"], j["precio_lista"], j["costo_neto"]), ("Cemento 25 kg", 5090, 4835.5))  # 5 % de descuento de Sodimac
+        with mock.patch("core.precios.scraper.extraer", side_effect=scraper.ErrorExtraccion("La ficha ya no existe en la tienda (404).")):
+            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/9/"},
+                                 content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("404", r.json()["message"])
+
+    def test_editar_sin_enviar_precio_no_lo_pone_en_cero(self):
+        it = CatalogoTipo.objects.get(nombre="Clavo")
+        r = self.client.put(f"/api/catalogo-tipos/{it.id}", {"categoria": "INSUMO", "nombre": "Clavo 4\"", "unidad_medida": "UN"},
+                            content_type="application/json", **self.h)
+        it.refresh_from_db()
+        self.assertEqual((r.status_code, it.nombre, float(it.precio_base_unitario)), (200, 'Clavo 4"', 1000.0))
 
 
 class TarifasEmpresaTests(TestCase):
@@ -288,17 +451,6 @@ class TarifasEmpresaTests(TestCase):
         self.assertEqual(r["total"], 1950000)  # 135k + 25k + 30k + 5k por m² x 10 m², IVA incluido
 
 
-    def test_sincronizacion_en_segundo_plano(self):
-        import time
-        from . import precios
-        self.assertTrue(precios.iniciar_sincronizacion(tarea=lambda: {"creados": []}))
-        for _ in range(50):
-            if precios.estado_sincronizacion()["estado"] != "running":
-                break
-            time.sleep(0.1)
-        self.assertEqual(precios.estado_sincronizacion(), {"estado": "done", "resultado": {"creados": []}})
-
-
     def test_solo_radier(self):
         r = calculo.calcular(20, 10, 0, 0, tipo_proyecto="SOLO_RADIER")
         self.assertEqual((r["costo_materiales"], r["costo_flete"], r["total"]), (750000, 100000, 850000))  # radier + traslado (10 km: $5.000/m²)
@@ -314,22 +466,6 @@ class TarifasEmpresaTests(TestCase):
         self.assertAlmostEqual(_m2_unidad("Siding metal 1.6x38x380 cm cedro"), 1.444, places=3)
         self.assertAlmostEqual(_m2_unidad("Siding 0.19x3.66 m"), 0.6954, places=3)
         self.assertIsNone(_m2_unidad("Revestimiento sin medidas"))
-
-    def test_revestimiento_por_m2_y_minimo(self):
-        from . import precios
-        fake = lambda term: [
-            {"name": "Siding metal A 0.20x3.00 m", "price": 6000, "url": "https://www.sodimac.cl/sodimac-cl/product/A1/x"},   # 10.000/m2
-            {"name": "Siding metal B 0.20x4.00 m", "price": 6400, "url": "https://www.sodimac.cl/sodimac-cl/product/B1/x"},   # 8.000/m2
-        ]
-        r = precios.sincronizar_catalogo(runner=fake)
-        it = CatalogoTipo.objects.get(categoria="REVESTIMIENTO", fuente_termino="metal siding")
-        self.assertEqual((it.nombre, it.unidad_medida, float(it.precio_base_unitario)), ("Siding metal B 0.20x4.00 m", "M2", 8000.0))
-        self.assertEqual(r["minimos_no_cumplidos"], [])
-        precios.actualizar_precios(runner=lambda t: [{"url": "https://www.sodimac.cl/sodimac-cl/product/B1/x", "price": 7200}])
-        it.refresh_from_db()
-        self.assertEqual(float(it.precio_base_unitario), 9000.0)
-
-
 
 class FlujoEmpresaTests(TestCase):
     def test_estabilizado_cubicado_aparte_de_la_cotizacion_inicial(self):
@@ -413,3 +549,18 @@ class EdicionCotizacionTests(TestCase):
         pub = self.c.get(f"/api/cotizaciones/public/{self.cot['token_publico']}").json()
         for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):
             self.assertNotIn(k, pub)
+
+
+class MapeoCatalogoTests(TestCase):
+    def test_desactiva_relleno_cubre_categorias_y_es_idempotente(self):
+        from .catalogo_mapeo import mapear
+        from . import precios
+        CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="Relleno", unidad_medida="M2", precio_base_unitario=28500)
+        r = mapear()
+        self.assertEqual(r["desactivados"], 1)
+        self.assertFalse(CatalogoTipo.objects.get(nombre="Relleno").activo)
+        self.assertEqual(mapear(), {"desactivados": 0, "reclasificados": 0, "creados": 0})
+        # cada categoría obligatoria queda con al menos un producto con ficha, verificado y activo
+        for cat in precios.GRUPOS_OBLIGATORIOS:
+            self.assertTrue(CatalogoTipo.objects.filter(categoria=cat, activo=True, verificado=True).exclude(fuente_url="").exists(), cat)
+        self.assertFalse(CatalogoTipo.objects.filter(nombre__icontains="naranjo", activo=True).exists())  # sin verificar -> inactivo

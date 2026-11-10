@@ -20,6 +20,7 @@ La base ya existe. Para que Render se conecte:
 | `CORS_ALLOWED_ORIGINS` | `https://<tu-app>.vercel.app` |
 | `CSRF_TRUSTED_ORIGINS` | `https://denaserv-api.onrender.com` |
 | `WHATSAPP_NUMERO` | `569XXXXXXXX` (formato internacional, sin «+») |
+| `CRON_TOKEN` | Llave del planificador semanal (ver «Actualización semanal de precios») |
 
 `DJANGO_SECRET_KEY` la genera Render. `DJANGO_DEBUG` queda en `0`.
 3. Despliega. Comprueba `https://<tu-api>.onrender.com/api/` → `{"status": "ok", ...}`.
@@ -48,9 +49,20 @@ En *APIs y servicios → Credenciales →* tu ID de cliente OAuth:
 3. Abre la URL de Vercel, inicia sesión y crea una cotización de prueba.
 
 ## Actualización semanal de precios
-Comando: `python manage.py actualizar_precios` (lee Sodimac, Easy y MCT; no usa Apify). Opciones sin costo:
-- Botón «Sincronizar catálogo y precios» en *Materiales y precios*.
-- Una acción programada de GitHub (lunes) que ejecute el comando con las variables `DB_*` como *secrets*.
+Cada producto guarda la URL exacta de su ficha en Easy, Sodimac o MCT (sin buscadores). El sistema lee el precio de
+lista, aplica el descuento del proveedor y guarda `costo neto = precio de lista × (1 − descuento / 100)`.
+
+- **Manual:** botón «Sincronizar precios ahora» en *Materiales y precios* (o `POST /api/insumos/actualizar-precios`).
+- **Automática, 1 vez por semana (lunes 03:00 de Chile):** [.github/workflows/precios-semanales.yml](.github/workflows/precios-semanales.yml).
+  Configuración única:
+  1. Genera una llave: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+  2. En Render agrega la variable `CRON_TOKEN` con esa llave.
+  3. En GitHub (*Settings → Secrets and variables → Actions*) crea dos secretos: `CRON_TOKEN` (la misma llave) y
+     `API_URL` (`https://<tu-api>.onrender.com`, sin «/» final).
+  4. Prueba una vez desde *Actions → Precios semanales → Run workflow*. Si falla un producto, GitHub avisa por correo.
+- **Por consola** (local o servidor): `python manage.py actualizar_precios_mercado`.
+- Para dejar el catálogo con las fichas mapeadas y las cuatro categorías obligatorias (Techumbre, Revestimiento,
+  Tabiquería, Base/Radier) en una base nueva: `python manage.py mapear_catalogo` y luego el comando anterior.
 
 ## Variables locales
 Plantillas sin secretos: [backend/.env.example](backend/.env.example) y [frontend/.env.example](frontend/.env.example).
