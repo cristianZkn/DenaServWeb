@@ -1,5 +1,6 @@
 "use client";
 
+import { correoValido, telefonoValido } from "@/lib/validar";
 import { useEffect, useState } from "react";
 
 interface Proveedor {
@@ -55,6 +56,14 @@ export default function ProveedoresPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
+
+    const rut = formData.rut_empresa.trim();
+    const razon = formData.razon_social.trim();
+    if (rut.length < 3 || rut.length > 12) return alert("El RUT debe tener entre 3 y 12 caracteres.");
+    if (razon.length < 2 || razon.length > 150) return alert("La razón social debe tener entre 2 y 150 caracteres.");
+    if (formData.telefono.trim() && !telefonoValido(formData.telefono)) return alert("El teléfono debe tener 9 dígitos. Ejemplo: +56 9 1234 5678");
+    if (formData.email.trim() && !correoValido(formData.email.trim())) return alert("El correo no es válido. Ejemplo: contacto@proveedor.cl");
+    if (formData.descuento_pct < 0 || formData.descuento_pct > 100) return alert("El descuento debe estar entre 0 y 100.");
 
     const url = isEditing
       ? `/api/proveedores/${formData.id}`
@@ -164,7 +173,7 @@ export default function ProveedoresPage() {
                 type="text"
                 value={formData.rut_empresa}
                 onChange={(e) => setFormData({ ...formData, rut_empresa: e.target.value })}
-                placeholder="Ej: 76.123.456-7"
+                placeholder="Ej: 76.123.456-7" maxLength={12}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
                 required
               />
@@ -175,7 +184,7 @@ export default function ProveedoresPage() {
                 type="text"
                 value={formData.razon_social}
                 onChange={(e) => setFormData({ ...formData, razon_social: e.target.value })}
-                placeholder="Ej: Maderas del Sur SpA"
+                placeholder="Ej: Maderas del Sur SpA" maxLength={150}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
                 required
               />
@@ -186,7 +195,7 @@ export default function ProveedoresPage() {
                 type="text"
                 value={formData.contacto_nombre}
                 onChange={(e) => setFormData({ ...formData, contacto_nombre: e.target.value })}
-                placeholder="Ej: Pedro Valdivia"
+                placeholder="Ej: Pedro Valdivia" maxLength={150}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
               />
             </div>
@@ -195,8 +204,8 @@ export default function ProveedoresPage() {
               <input
                 type="text"
                 value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                placeholder="+56 9 1234 5678"
+                onChange={(e) => setFormData({ ...formData, telefono: e.target.value.replace(/[^\d+\s]/g, "") })}
+                placeholder="+56 9 1234 5678" maxLength={16}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
               />
             </div>
@@ -206,7 +215,7 @@ export default function ProveedoresPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="contacto@proveedor.cl"
+                placeholder="contacto@proveedor.cl" maxLength={254}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
               />
             </div>

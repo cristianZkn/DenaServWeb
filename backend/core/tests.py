@@ -169,7 +169,7 @@ class CrearCotizacionTests(TestCase):
         base = CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="R", unidad_medida="M2", precio_base_unitario=25000)
         rev = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="S", unidad_medida="M2", precio_base_unitario=28000)
         res = Client().post("/api/cotizaciones/", {
-            "cliente_nombre": "X", "direccion_terreno": "Calle 1", "superficie_m2": 54, "distancia_flete_km": 25,
+            "cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 54, "distancia_flete_km": 25,
             "base_terreno_id": base.id, "revestimiento_id": rev.id, "costo_total": 1,
         }, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
         self.assertEqual(res.status_code, 200, res.content)
@@ -192,7 +192,7 @@ class BomTests(TestCase):
         pino = next(i for i in r["insumos"] if i["nombre"] == "Pino 2x3")
         self.assertEqual(float(pino["cantidad"]), 20.0)
         self.assertEqual(float(pino["subtotal"]), 18000.0)  # 20 x 1000 x 0.9
-        res = Client().post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10},
+        res = Client().post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 10},
                             content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {create_jwt_token(u)}")
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(Cotizacion.objects.get().detalles_insumo.count(), 2)
@@ -204,7 +204,7 @@ class GananciasWhatsappTests(TestCase):
         u = Usuario.objects.create(rut="3-5", nombre_completo="C", email="c@d.cl")
         h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
         c = Client()
-        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 50},
+        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 50},
                      content_type="application/json", **h).json()
         obra = ObraEjecucion.objects.get(cotizacion_id=cot["id"])
         c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55, "gasto_real_acumulado": 1000},
@@ -485,7 +485,7 @@ class FlujoEmpresaTests(TestCase):
         u = Usuario.objects.create(rut="5-5", nombre_completo="N", email="n@d.cl")
         h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
         c = Client()
-        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10},
+        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 10},
                      content_type="application/json", **h).json()
         antes = Cotizacion.objects.get(id=cot["id"]).costo_total
         url = f"/api/cotizaciones/{cot['id']}/nivelacion"
@@ -507,7 +507,7 @@ class EdicionCotizacionTests(TestCase):
         self.u = Usuario.objects.create(rut="6-6", nombre_completo="E", email="e@d.cl")
         self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
         self.c = Client()
-        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10,
+        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 10,
                                "distancia_flete_km": 10}, content_type="application/json", **self.h).json()
         self.url = f"/api/cotizaciones/{self.cot['id']}/"
 
@@ -564,3 +564,30 @@ class MapeoCatalogoTests(TestCase):
         for cat in precios.GRUPOS_OBLIGATORIOS:
             self.assertTrue(CatalogoTipo.objects.filter(categoria=cat, activo=True, verificado=True).exclude(fuente_url="").exists(), cat)
         self.assertFalse(CatalogoTipo.objects.filter(nombre__icontains="naranjo", activo=True).exists())  # sin verificar -> inactivo
+
+
+class ValidacionDatosTests(TestCase):
+    def setUp(self):
+        from django.test import Client
+        u = Usuario.objects.create(rut="9-9", nombre_completo="V", email="v@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def post(self, **extra):
+        d = {"cliente_nombre": "Juan Pérez", "direccion_terreno": "Calle Uno 1", "superficie_m2": 30}
+        return self.c.post("/api/cotizaciones/", {**d, **extra}, content_type="application/json", **self.h)
+
+    def test_rut_y_telefono_se_normalizan(self):
+        r = self.post(cliente_rut="12345678-5", cliente_telefono="912345678")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["cliente_rut"], r.json()["cliente_telefono"]), ("12.345.678-5", "+56 9 1234 5678"))
+
+    def test_rechaza_datos_invalidos(self):
+        for extra in ({"cliente_rut": "12345678-9"}, {"cliente_rut": "abc"}, {"cliente_telefono": "123"},
+                      {"cliente_telefono": "+56 9 1234 56789"}, {"cliente_nombre": "A"}, {"cliente_nombre": "x" * 151},
+                      {"direccion_terreno": "abc"}, {"superficie_m2": 0}, {"superficie_m2": -5}, {"distancia_flete_km": -1}):
+            r = self.post(**extra)
+            self.assertEqual(r.status_code, 422, extra)
+            self.assertIn("message", r.json())
+
+    def test_rut_y_telefono_vacios_son_opcionales(self):
+        self.assertEqual(self.post(cliente_rut="", cliente_telefono="").status_code, 200)

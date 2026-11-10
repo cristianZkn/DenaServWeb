@@ -5,6 +5,38 @@ from typing import List, Optional
 from urllib.parse import quote
 from django.conf import settings
 from decimal import Decimal
+from pydantic import Field, field_validator
+from . import validadores as v
+
+
+
+# --- Validaciones compartidas ---
+def _opcional(fn):
+    """Aplica `fn` solo si el campo trae algo (vacío = no informado)."""
+    return lambda valor: fn(valor) if valor and str(valor).strip() else None
+
+
+class _ContactoMixin:
+    """Valida teléfono/RUT/nombre/dirección de cliente; se mezcla en los schemas de cotización."""
+    @field_validator("cliente_nombre", check_fields=False)
+    @classmethod
+    def _nombre(cls, x):
+        return None if x is None else v.texto(x, "El nombre del cliente", 3, 150)
+
+    @field_validator("cliente_telefono", check_fields=False)
+    @classmethod
+    def _telefono(cls, x):
+        return _opcional(v.normalizar_telefono)(x)
+
+    @field_validator("cliente_rut", check_fields=False)
+    @classmethod
+    def _rut(cls, x):
+        return _opcional(v.normalizar_rut)(x)
+
+    @field_validator("direccion_terreno", check_fields=False)
+    @classmethod
+    def _direccion(cls, x):
+        return None if x is None else v.texto(x, "La dirección del terreno", 5, 255)
 
 
 # --- Schemas de Autenticación (Google SSO) ---
@@ -49,8 +81,33 @@ class ProveedorInSchema(Schema):
     contacto_nombre: Optional[str] = None
     telefono: Optional[str] = None
     email: Optional[str] = None
-    descuento_pct: float = 0
+    descuento_pct: float = Field(0, ge=0, le=100)
     activo: bool = True
+
+    @field_validator("rut_empresa")
+    @classmethod
+    def _rut(cls, x):
+        return v.texto(x, "El RUT de la empresa", 3, 12)
+
+    @field_validator("razon_social")
+    @classmethod
+    def _razon(cls, x):
+        return v.texto(x, "La razón social", 2, 150)
+
+    @field_validator("contacto_nombre")
+    @classmethod
+    def _contacto(cls, x):
+        return v.texto(x, "El nombre de contacto", 2, 150) if x and x.strip() else None
+
+    @field_validator("telefono")
+    @classmethod
+    def _tel(cls, x):
+        return _opcional(v.normalizar_telefono)(x)
+
+    @field_validator("email")
+    @classmethod
+    def _mail(cls, x):
+        return _opcional(v.validar_email)(x)
 
 
 # --- 3. Catalogo Tipo (Consolidado) ---
@@ -164,12 +221,13 @@ class ObraEjecucionInSchema(Schema):
 
 
 # --- 4. Cotización ---
-class CotizacionInSchema(Schema):
+class CotizacionInSchema(_ContactoMixin, Schema):
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
+    cliente_rut: Optional[str] = None
     direccion_terreno: str  # Campo crítico exigido
-    superficie_m2: float
-    distancia_flete_km: float = 0.00
+    superficie_m2: float = Field(gt=0, le=10000)
+    distancia_flete_km: float = Field(0.00, ge=0, le=3000)
     base_terreno_id: Optional[int] = None
     revestimiento_id: Optional[int] = None
     # Los costos los calcula el backend; estos campos se ignoran y se mantienen por compatibilidad.
@@ -179,7 +237,7 @@ class CotizacionInSchema(Schema):
     costo_total: float = 0.00
     estado: str = "BORRADOR"  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
     ganancia_m2: Optional[float] = None
-    m2_vigas_vista: float = 0
+    m2_vigas_vista: float = Field(0, ge=0, le=10000)
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
 
@@ -192,6 +250,7 @@ class CotizacionSchema(Schema):
     token_publico: uuid.UUID
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
+    cliente_rut: Optional[str] = None
     direccion_terreno: str
     superficie_m2: float
     distancia_flete_km: float
@@ -311,12 +370,13 @@ class CotizacionPublicaSchema(Schema):
 
 
 # --- Edición / reajuste de una cotización emitida ---
-class CotizacionEditSchema(Schema):
+class CotizacionEditSchema(_ContactoMixin, Schema):
     cliente_nombre: Optional[str] = None
     cliente_telefono: Optional[str] = None
+    cliente_rut: Optional[str] = None
     direccion_terreno: Optional[str] = None
-    superficie_m2: Optional[float] = None
-    distancia_flete_km: Optional[float] = None
+    superficie_m2: Optional[float] = Field(None, gt=0, le=10000)
+    distancia_flete_km: Optional[float] = Field(None, ge=0, le=3000)
     base_terreno_id: Optional[int] = None
     revestimiento_id: Optional[int] = None
     m2_vigas_vista: Optional[float] = None

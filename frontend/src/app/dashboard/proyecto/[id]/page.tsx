@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { errorDatosCliente, formatearRut } from "@/lib/validar";
 import type { FichaData } from "@/app/cotizacion/[uuid]/FichaPdf";
 
 interface Item {
@@ -22,6 +23,7 @@ interface Obra {
   gasto_real_acumulado: number;
 }
 interface Detalle extends FichaData {
+  cliente_rut?: string | null;
   id: number;
   estado: string;
   tipo_proyecto: string;
@@ -98,6 +100,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       setForm({
         cliente_nombre: c.cliente_nombre,
         cliente_telefono: c.cliente_telefono || "",
+        cliente_rut: c.cliente_rut || "",
         direccion_terreno: c.direccion_terreno,
         superficie_m2: c.superficie_m2,
         distancia_flete_km: c.distancia_flete_km,
@@ -131,6 +134,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     const datos = {
       cliente_nombre: form.cliente_nombre,
       cliente_telefono: form.cliente_telefono || null,
+      cliente_rut: form.cliente_rut || null,
       direccion_terreno: form.direccion_terreno,
     };
     if (soloDatos) return { ...datos, aplicar };
@@ -167,6 +171,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   };
 
   const guardarDatos = async () => {
+    const err = errorDatosCliente({ nombre: form.cliente_nombre, telefono: form.cliente_telefono, rut: form.cliente_rut, direccion: form.direccion_terreno });
+    if (err) return avisar(err, true);
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true, true)) });
     if (!res.ok) return avisar((await res.json()).message || "No se pudo guardar.", true);
     avisar("Listo: los datos del cliente quedaron guardados.");
@@ -275,15 +281,19 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <label className={campo}>Nombre del cliente</label>
-            <input value={form.cliente_nombre} onChange={set("cliente_nombre")} />
+            <input value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
+          </div>
+          <div>
+            <label className={campo}>RUT del cliente</label>
+            <input value={form.cliente_rut} onChange={(e) => setForm({ ...form, cliente_rut: formatearRut(e.target.value) })} placeholder="12.345.678-5" maxLength={12} />
           </div>
           <div>
             <label className={campo}>Teléfono</label>
-            <input value={form.cliente_telefono} onChange={set("cliente_telefono")} />
+            <input type="tel" value={form.cliente_telefono} onChange={(e) => setForm({ ...form, cliente_telefono: e.target.value.replace(/[^\d+\s]/g, "") })} placeholder="+56 9 8765 4321" maxLength={16} />
           </div>
           <div>
             <label className={campo}>Dirección del terreno</label>
-            <input value={form.direccion_terreno} onChange={set("direccion_terreno")} />
+            <input value={form.direccion_terreno} onChange={set("direccion_terreno")} maxLength={255} />
           </div>
           <p className={ayuda}>Cambiar estos datos no modifica el valor de la casa.</p>
           <button onClick={guardarDatos} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>

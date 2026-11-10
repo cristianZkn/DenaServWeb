@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { errorDatosCliente, formatearRut } from "@/lib/validar";
 
 interface CatalogoItem {
   id: number;
@@ -33,10 +34,10 @@ const helpCls = "text-sm text-slate-500 mt-1.5";
 
 // Campo numérico: guarda el texto tal cual se escribe (así "10" no queda "010") y selecciona el contenido al entrar.
 function NumberField({
-  label, help, name, value, onChange, step, suffix, required,
+  label, help, name, value, onChange, step, suffix, required, max,
 }: {
   label: string; help?: string; name: string; value: string; onChange: (name: string, v: string) => void;
-  step?: string; suffix?: string; required?: boolean;
+  step?: string; suffix?: string; required?: boolean; max?: number;
 }) {
   return (
     <div>
@@ -48,6 +49,7 @@ function NumberField({
           type="number"
           inputMode="decimal"
           min="0"
+          max={max}
           step={step}
           placeholder="0"
           value={value}
@@ -102,6 +104,7 @@ export default function CotizadorPage() {
   const [formData, setFormData] = useState({
     cliente_nombre: "",
     cliente_telefono: "",
+    cliente_rut: "",
     direccion_terreno: "",
     estado: "BORRADOR",
     superficie_m2: "54",
@@ -211,8 +214,16 @@ export default function CotizadorPage() {
     e.preventDefault();
     setError("");
 
-    if (!formData.direccion_terreno.trim()) {
-      setError("Falta la dirección del terreno.");
+    const errDatos = errorDatosCliente({
+      nombre: formData.cliente_nombre, telefono: formData.cliente_telefono,
+      rut: formData.cliente_rut, direccion: formData.direccion_terreno,
+    });
+    if (errDatos) {
+      setError(errDatos);
+      return;
+    }
+    if (!(Number(formData.superficie_m2) > 0)) {
+      setError("Los metros cuadrados de la casa deben ser mayores a 0.");
       return;
     }
     if (!presupuesto) {
@@ -282,12 +293,19 @@ export default function CotizadorPage() {
               <div>
                 <label htmlFor="cliente_nombre" className={labelCls}>Nombre del cliente</label>
                 <input id="cliente_nombre" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleChange}
-                  placeholder="Ej: Carolina Rojas" className={inputCls} required />
+                  placeholder="Ej: Carolina Rojas" className={inputCls} required minLength={3} maxLength={150} />
+              </div>
+              <div>
+                <label htmlFor="cliente_rut" className={labelCls}>RUT del cliente</label>
+                <input id="cliente_rut" name="cliente_rut" inputMode="text" value={formData.cliente_rut}
+                  onChange={(e) => setCampo("cliente_rut", formatearRut(e.target.value))}
+                  placeholder="12.345.678-5" maxLength={12} className={inputCls} />
               </div>
               <div>
                 <label htmlFor="cliente_telefono" className={labelCls}>Teléfono o WhatsApp</label>
                 <input id="cliente_telefono" name="cliente_telefono" type="tel" value={formData.cliente_telefono}
-                  onChange={handleChange} placeholder="+56 9 8765 4321" className={inputCls} />
+                  onChange={(e) => setCampo("cliente_telefono", e.target.value.replace(/[^\d+\s]/g, ""))}
+                  placeholder="+56 9 8765 4321" maxLength={16} className={inputCls} />
               </div>
             </div>
             <div className="grid sm:grid-cols-[1fr_12rem] gap-5">
@@ -295,7 +313,7 @@ export default function CotizadorPage() {
                 <label htmlFor="direccion_terreno" className={labelCls}>Dirección del terreno</label>
                 <input id="direccion_terreno" name="direccion_terreno" value={formData.direccion_terreno}
                   onChange={handleChange} placeholder="Ej: Parcela 14, Camino Los Boldos, Limache"
-                  className={inputCls} required />
+                  className={inputCls} required minLength={5} maxLength={255} />
               </div>
               <div>
                 <label htmlFor="estado" className={labelCls}>Estado</label>
@@ -335,9 +353,9 @@ export default function CotizadorPage() {
 
             <div className="grid sm:grid-cols-2 gap-5">
               <NumberField label="Metros cuadrados" name="superficie_m2" value={formData.superficie_m2}
-                onChange={setCampo} step="0.5" suffix="m²" required />
+                onChange={setCampo} step="0.5" suffix="m²" required max={10000} />
               <NumberField label="Distancia hasta el terreno" name="distancia_flete_km" value={formData.distancia_flete_km}
-                onChange={setCampo} suffix="km" required help="Define el costo del traslado." />
+                onChange={setCampo} suffix="km" required max={3000} help="Define el costo del traslado." />
             </div>
 
             {esCasa ? (

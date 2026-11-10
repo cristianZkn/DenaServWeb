@@ -27,6 +27,7 @@ interface Cotizacion {
   token_publico: string;
   cliente_nombre: string;
   cliente_telefono: string | null;
+  cliente_rut?: string | null;
   direccion_terreno: string;
   superficie_m2: number;
   costo_total: number;
@@ -213,7 +214,7 @@ export default function DashboardPage() {
   const q = busqueda.trim().toLowerCase();
   const visibles = q
     ? cotizaciones.filter((c) =>
-        `${c.codigo_cotizacion} ${c.cliente_nombre} ${c.direccion_terreno} ${c.cliente_telefono || ""}`.toLowerCase().includes(q)
+        `${c.codigo_cotizacion} ${c.cliente_nombre} ${c.direccion_terreno} ${c.cliente_telefono || ""} ${c.cliente_rut || ""}`.toLowerCase().includes(q)
       )
     : cotizaciones;
 

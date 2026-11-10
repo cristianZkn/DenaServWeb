@@ -90,6 +90,7 @@ class Cotizacion(models.Model):
     token_publico = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     cliente_nombre = models.CharField(max_length=150)
     cliente_telefono = models.CharField(max_length=20, null=True, blank=True)
+    cliente_rut = models.CharField(max_length=12, null=True, blank=True)
     direccion_terreno = models.CharField(max_length=255)
     superficie_m2 = models.DecimalField(max_digits=10, decimal_places=2)
     distancia_flete_km = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)

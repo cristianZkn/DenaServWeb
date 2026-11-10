@@ -338,6 +338,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 codigo_cotizacion=codigo,
                 cliente_nombre=data.cliente_nombre,
                 cliente_telefono=data.cliente_telefono,
+                cliente_rut=data.cliente_rut,
                 direccion_terreno=data.direccion_terreno,
                 superficie_m2=data.superficie_m2,
                 distancia_flete_km=data.distancia_flete_km,
