@@ -68,7 +68,7 @@ export default function CotizadorPage() {
           }));
         }
       } catch (err) {
-        setError("Error al cargar opciones de catálogo desde el backend.");
+        setError("Error al cargar opciones de catálogo.");
       } finally {
         setLoadingData(false);
       }
@@ -108,7 +108,7 @@ export default function CotizadorPage() {
           costo_total: Number(r.total),
         }));
       } catch {
-        setError("No se pudo calcular el presupuesto en el servidor.");
+        setError("No se pudo calcular el presupuesto.");
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -179,7 +179,7 @@ export default function CotizadorPage() {
         setError(`Error al guardar: ${errData.message || JSON.stringify(errData)}`);
       }
     } catch (err) {
-      setError("Error de comunicación con el servidor backend.");
+      setError("Error de comunicación con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -268,8 +268,8 @@ export default function CotizadorPage() {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white font-semibold"
               >
-                <option value="BORRADOR">En preparación</option>
-                <option value="ACEPTADA">Aceptada por el cliente</option>
+                <option value="BORRADOR">preparación</option>
+                <option value="ACEPTADA">Aceptada</option>
                 <option value="FINALIZADA">Obra terminada</option>
               </select>
             </div>
@@ -285,8 +285,8 @@ export default function CotizadorPage() {
             onChange={handleChange}
             className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white"
           >
-            <option value="CASA">Casa (semi terminada)</option>
-            <option value="SOLO_RADIER">Solo radier (medidas estándar)</option>
+            <option value="CASA">Casa</option>
+            <option value="SOLO_RADIER">Solo radier</option>
           </select>
           {formData.tipo_proyecto === "SOLO_RADIER" && (
             <div>
@@ -350,96 +350,96 @@ export default function CotizadorPage() {
           </div>
 
           {formData.tipo_proyecto === "CASA" && (
-          <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Tipo de base
-              </label>
-              <select
-                name="base_terreno_id"
-                value={formData.base_terreno_id}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              >
-                {basesTerreno.length === 0 ? (
-                  <option value="">No hay bases registradas en el catálogo</option>
-                ) : (
-                  basesTerreno.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.nombre} (${Number(b.precio_base_unitario).toLocaleString("es-CL")}/{b.unidad_medida})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Tipo de base
+                  </label>
+                  <select
+                    name="base_terreno_id"
+                    value={formData.base_terreno_id}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+                  >
+                    {basesTerreno.length === 0 ? (
+                      <option value="">No hay bases registradas en el catálogo</option>
+                    ) : (
+                      basesTerreno.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.nombre} (${Number(b.precio_base_unitario).toLocaleString("es-CL")}/{b.unidad_medida})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Material exterior de la casa
-              </label>
-              <select
-                name="revestimiento_id"
-                value={formData.revestimiento_id}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              >
-                {revestimientos.length === 0 ? (
-                  <option value="">No hay revestimientos registrados en el catálogo</option>
-                ) : (
-                  revestimientos.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.nombre} (${Number(r.precio_base_unitario).toLocaleString("es-CL")}/{r.unidad_medida})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-          </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Material exterior de la casa
+                  </label>
+                  <select
+                    name="revestimiento_id"
+                    value={formData.revestimiento_id}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+                  >
+                    {revestimientos.length === 0 ? (
+                      <option value="">No hay revestimientos registrados en el catálogo</option>
+                    ) : (
+                      revestimientos.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.nombre} (${Number(r.precio_base_unitario).toLocaleString("es-CL")}/{r.unidad_medida})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
 
-          <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded p-2">
-            El relleno de estabilizado no se incluye aquí: se cubica en la visita al terreno y se agrega después desde
-            el panel de cotizaciones (el cliente lo compra o la empresa lo suma al valor informado).
-          </p>
+              <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded p-2">
+                El relleno de estabilizado no se incluye aquí: se cubica en la visita al terreno y se agrega después desde
+                el panel de cotizaciones (el cliente lo compra o la empresa lo suma al valor informado).
+              </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Ganancia de la empresa por m² ($)
-              </label>
-              <input
-                type="number"
-                name="ganancia_m2"
-                min="0"
-                step="1000"
-                value={formData.ganancia_m2}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              />
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Ganancia de la empresa por m² ($)
+                  </label>
+                  <input
+                    type="number"
+                    name="ganancia_m2"
+                    min="0"
+                    step="1000"
+                    value={formData.ganancia_m2}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Metros con vigas a la vista (+$65.000 por m²)
-              </label>
-              <input
-                type="number"
-                name="m2_vigas_vista"
-                min="0"
-                value={formData.m2_vigas_vista}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              />
-            </div>
-          </div>
-          </>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Metros con vigas a la vista (+$65.000 por m²)
+                  </label>
+                  <input
+                    type="number"
+                    name="m2_vigas_vista"
+                    min="0"
+                    value={formData.m2_vigas_vista}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+                  />
+                </div>
+              </div>
+            </>
           )}
         </section>
 
         {/* SECCIÓN 3: DESGLOSE DE COSTOS Y TOTAL */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-            3. Valor de la casa (se calcula solo)
+            3. Costo de la obra
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -488,7 +488,7 @@ export default function CotizadorPage() {
 
           <div className="bg-blue-900 text-white p-6 rounded-xl shadow-inner flex flex-col sm:flex-row justify-between items-center mt-6">
             <div>
-              <h3 className="text-xl font-bold">Valor total de la casa:</h3>
+              <h3 className="text-xl font-bold">Valor total de la obra:</h3>
               <p className="text-xs text-blue-200 mt-1">
                 IVA incluido. Se generarán automáticamente los 3 hitos de pago: Anticipo (40%), Avance (30%) y Entrega (30%).
               </p>
