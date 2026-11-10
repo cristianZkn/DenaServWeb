@@ -213,9 +213,9 @@ export default function DashboardPage() {
       {/* Barra Superior */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Gestión de Cotizaciones</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Mis cotizaciones</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Control comercial, dirección de obras y seguimiento directo de hitos de pago.
+            Aquí están todas las cotizaciones. Pulse &quot;Ver y editar&quot; para abrir una.
           </p>
         </div>
         <Link
@@ -244,8 +244,8 @@ export default function DashboardPage() {
                 <th className="p-4">Superficie</th>
                 <th className="p-4">Costo Total</th>
                 <th className="p-4">Estado</th>
-                <th className="p-4">Hitos de Pago</th>
-                <th className="p-4 text-right">Ficha</th>
+                <th className="p-4">Pagos</th>
+                <th className="p-4 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-sm">
@@ -292,9 +292,9 @@ export default function DashboardPage() {
                             : "bg-yellow-50 text-yellow-800 border-yellow-300"
                         }`}
                       >
-                        <option value="BORRADOR">BORRADOR</option>
-                        <option value="ACEPTADA">ACEPTADA</option>
-                        <option value="FINALIZADA">FINALIZADA</option>
+                        <option value="BORRADOR">En preparación</option>
+                        <option value="ACEPTADA">Aceptada por el cliente</option>
+                        <option value="FINALIZADA">Obra terminada</option>
                       </select>
                     </td>
                     <td className="p-4">
@@ -302,10 +302,10 @@ export default function DashboardPage() {
                         onClick={() => abrirGestionHitos(cotizacion)}
                         className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md border border-slate-300 transition cursor-pointer"
                       >
-                        Ver Pagos
+                        Ver pagos
                       </button>
                     </td>
-                    <td className="p-4 text-right space-x-3 whitespace-nowrap">
+                    <td className="p-4 text-right flex flex-col items-end gap-2">
                       {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
                         <button
                           onClick={() => abrirVisita(cotizacion)}
@@ -314,23 +314,23 @@ export default function DashboardPage() {
                         >
                           {cotizacion.nivelacion_modalidad
                             ? cotizacion.nivelacion_modalidad === "EMPRESA"
-                              ? "Estabilizado: empresa"
-                              : "Estabilizado: cliente"
-                            : "Visita técnica"}
+                              ? "Estabilizado: lo pone la empresa"
+                              : "Estabilizado: lo compra el cliente"
+                            : "Medir estabilizado (visita)"}
                         </button>
                       )}
                       <Link
                         href={`/dashboard/proyecto/${cotizacion.id}`}
-                        className="text-blue-900 hover:underline font-bold text-xs"
+                        className="bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm px-4 py-2 rounded-lg"
                       >
-                        Gestionar
+                        Ver y editar
                       </Link>
                       <Link
                         href={`/cotizacion/${cotizacion.codigo_cotizacion}`}
                         target="_blank"
                         className="text-blue-600 hover:text-blue-900 font-bold text-xs underline"
                       >
-                        Ver Pública ↗
+                        Ficha del cliente ↗
                       </Link>
                     </td>
                   </tr>

@@ -8,7 +8,6 @@ interface Item {
   id: number;
   nombre: string;
   precio_base_unitario: number;
-  unidad_medida: string;
 }
 interface Hito {
   id: number;
@@ -16,13 +15,11 @@ interface Hito {
   porcentaje: number;
   monto_pago: number;
   estado: string;
-  fecha_pago: string | null;
 }
 interface Obra {
   id: number;
   porcentaje_avance_real: number;
   gasto_real_acumulado: number;
-  observaciones: string | null;
 }
 interface Detalle extends FichaData {
   id: number;
@@ -34,7 +31,7 @@ interface Detalle extends FichaData {
   m2_vigas_vista: number;
   radier_m2: number;
   ajuste_monto: number;
-  hitos_pago: (Hito & { cotizacion_id: number })[];
+  hitos_pago: Hito[];
   obras_ejecucion: Obra[];
 }
 interface Ganancias {
@@ -54,10 +51,20 @@ interface Cambio {
   total_nuevo: number;
   motivo: string;
 }
+type Panel = "datos" | "valor" | "avance";
 
 const clp = (n: number | string) => "$" + Math.round(Number(n)).toLocaleString("es-CL");
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 const jsonAuth = () => ({ "Content-Type": "application/json", ...auth() });
+const NOMBRE_HITO: Record<string, string> = {
+  ANTICIPO_40: "1.º pago: anticipo (40 %)",
+  AVANCE_30: "2.º pago: al llegar al 50 % de avance (30 %)",
+  ENTREGA_30: "3.º pago: al entregar las llaves (30 %)",
+};
+
+const campo = "block text-base font-semibold text-slate-800 mb-1";
+const ayuda = "text-sm text-slate-500 mt-1";
+const botonGrande = "px-6 py-3 rounded-xl text-lg font-bold shadow cursor-pointer disabled:opacity-50";
 
 export default function ProyectoInternoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -66,10 +73,10 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const [cambios, setCambios] = useState<Cambio[]>([]);
   const [bases, setBases] = useState<Item[]>([]);
   const [revest, setRevest] = useState<Item[]>([]);
+  const [panel, setPanel] = useState<Panel>("valor");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
 
-  // Formularios
   const [form, setForm] = useState<Record<string, any>>({});
   const [motivo, setMotivo] = useState("");
   const [previa, setPrevia] = useState<{ total_anterior: string; total_nuevo: string; diferencia: string } | null>(null);
@@ -120,44 +127,62 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     });
   }, [cargar]);
 
-  const payload = (aplicar: boolean) => ({
-    cliente_nombre: form.cliente_nombre,
-    cliente_telefono: form.cliente_telefono || null,
-    direccion_terreno: form.direccion_terreno,
-    superficie_m2: Number(form.superficie_m2),
-    distancia_flete_km: Number(form.distancia_flete_km),
-    base_terreno_id: form.base_terreno_id ? Number(form.base_terreno_id) : null,
-    revestimiento_id: form.revestimiento_id ? Number(form.revestimiento_id) : null,
-    m2_vigas_vista: Number(form.m2_vigas_vista) || 0,
-    ganancia_m2: Number(form.ganancia_m2) || 0,
-    radier_m2: Number(form.radier_m2) || 0,
-    ajuste_monto: Number(form.ajuste_monto) || 0,
-    motivo,
-    aplicar,
-  });
+  const payload = (aplicar: boolean, soloDatos = false) => {
+    const datos = {
+      cliente_nombre: form.cliente_nombre,
+      cliente_telefono: form.cliente_telefono || null,
+      direccion_terreno: form.direccion_terreno,
+    };
+    if (soloDatos) return { ...datos, aplicar };
+    return {
+      ...datos,
+      superficie_m2: Number(form.superficie_m2),
+      distancia_flete_km: Number(form.distancia_flete_km),
+      base_terreno_id: form.base_terreno_id ? Number(form.base_terreno_id) : null,
+      revestimiento_id: form.revestimiento_id ? Number(form.revestimiento_id) : null,
+      m2_vigas_vista: Number(form.m2_vigas_vista) || 0,
+      ganancia_m2: Number(form.ganancia_m2) || 0,
+      radier_m2: Number(form.radier_m2) || 0,
+      ajuste_monto: Number(form.ajuste_monto) || 0,
+      motivo,
+      aplicar,
+    };
+  };
 
-  // Vista previa del nuevo monto mientras se edita
+  // Vista previa del valor nuevo mientras se escribe
   useEffect(() => {
-    if (!cot || !form.superficie_m2) return;
+    if (!cot || panel !== "valor" || !form.superficie_m2) return;
     const t = setTimeout(async () => {
       const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(false)) });
       setPrevia(res.ok ? await res.json() : null);
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, cot]);
+  }, [form, cot, panel]);
 
-  const guardar = async () => {
-    setMsg("");
-    setError("");
+  const avisar = (texto: string, esError = false) => {
+    setMsg(esError ? "" : texto);
+    setError(esError ? texto : "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const guardarDatos = async () => {
+    const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true, true)) });
+    if (!res.ok) return avisar((await res.json()).message || "No se pudo guardar.", true);
+    avisar("Listo: los datos del cliente quedaron guardados.");
+    cargar();
+  };
+
+  const guardarValor = async () => {
+    const dif = previa ? Number(previa.diferencia) : 0;
+    if (dif !== 0 && !motivo.trim()) return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true);
+    const texto = dif === 0 ? "¿Guardar los cambios?" : `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
+    if (!confirm(texto)) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true)) });
     const data = await res.json();
-    if (!res.ok) {
-      setError(data.message || "No se pudo guardar.");
-      return;
-    }
+    if (!res.ok) return avisar(data.message || "No se pudo guardar.", true);
     setMotivo("");
-    setMsg(Number(data.diferencia) ? `Monto reajustado: ${clp(data.total_anterior)} → ${clp(data.total_nuevo)}` : "Datos guardados.");
+    avisar(Number(data.diferencia) ? `Listo: el valor de la casa ahora es ${clp(data.total_nuevo)}.` : "Listo: cambios guardados.");
     cargar();
   };
 
@@ -169,16 +194,14 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       headers: jsonAuth(),
       body: JSON.stringify({ porcentaje_avance_real: avance, gasto_real_acumulado: gasto }),
     });
-    setMsg(res.ok ? "Avance de obra actualizado." : "No se pudo actualizar la obra.");
+    avisar(res.ok ? "Listo: el avance de la obra quedó guardado." : "No se pudo guardar el avance.", !res.ok);
     cargar();
   };
 
-  const toggleHito = async (h: Hito) => {
-    await fetch(`/api/hitos-pago/${h.id}`, {
-      method: "PATCH",
-      headers: jsonAuth(),
-      body: JSON.stringify({ estado: h.estado === "PAGADO" ? "PENDIENTE" : "PAGADO" }),
-    });
+  const cambiarPago = async (h: Hito) => {
+    const nuevo = h.estado === "PAGADO" ? "PENDIENTE" : "PAGADO";
+    if (!confirm(nuevo === "PAGADO" ? "¿Marcar este pago como RECIBIDO?" : "¿Marcar este pago como pendiente?")) return;
+    await fetch(`/api/hitos-pago/${h.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ estado: nuevo }) });
     cargar();
   };
 
@@ -193,180 +216,251 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     URL.revokeObjectURL(a.href);
   };
 
-  if (error && !cot) return <div className="p-8 text-center text-red-700">{error}</div>;
-  if (!cot) return <div className="p-8 text-center text-slate-500 font-semibold">Cargando proyecto...</div>;
+  if (error && !cot) return <div className="p-8 text-center text-red-700 text-lg">{error}</div>;
+  if (!cot) return <div className="p-8 text-center text-slate-500 text-lg font-semibold">Cargando...</div>;
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const esCasa = cot.tipo_proyecto !== "SOLO_RADIER";
   const dif = previa ? Number(previa.diferencia) : 0;
+  const pestana = (p: Panel, texto: string) => (
+    <button
+      onClick={() => setPanel(p)}
+      className={`flex-1 px-4 py-3 rounded-xl text-lg font-bold border-2 cursor-pointer ${
+        panel === p ? "bg-blue-900 text-white border-blue-900" : "bg-white text-blue-900 border-blue-900 hover:bg-blue-50"
+      }`}
+    >
+      {texto}
+    </button>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <Link href="/dashboard" className="text-xs text-blue-900 font-semibold underline">← Volver a cotizaciones</Link>
-          <h1 className="text-2xl font-black text-slate-900 mt-1">
-            {cot.codigo_cotizacion} <span className="text-sm font-semibold text-slate-400">· ficha interna</span>
-          </h1>
-          <p className="text-sm text-slate-600">
-            {cot.cliente_nombre} · {cot.direccion_terreno} · {cot.superficie_m2} m² · {cot.estado}
-          </p>
-        </div>
-        <div className="flex gap-2 items-start">
-          <Link href={`/cotizacion/${cot.codigo_cotizacion}`} target="_blank" className="px-3 py-2 text-sm border border-slate-300 rounded-lg font-semibold">
-            Ficha del cliente ↗
-          </Link>
-          <button onClick={descargarPdf} className="px-3 py-2 text-sm bg-blue-900 text-white rounded-lg font-semibold">
-            PDF interno
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6 max-w-3xl mx-auto">
+      <Link href="/dashboard" className="inline-block text-lg font-semibold text-blue-900 underline">
+        ← Volver a mis cotizaciones
+      </Link>
 
-      {msg && <div className="bg-green-50 border-l-4 border-green-500 text-green-800 p-3 rounded-r text-sm">{msg}</div>}
-      {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-r text-sm">{error}</div>}
-
-      {/* Resumen económico */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-bold mb-3">Resumen económico</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          {[
-            ["Total (IVA incl.)", cot.costo_total],
-            ["Neto cobrado", gan?.neto_cobrado],
-            ["Costo presupuestado (neto)", gan?.costo_presupuestado],
-            ["Gasto real acumulado", gan?.gasto_real],
-            ["Ganancia estimada", gan?.ganancia_estimada],
-            ["Ganancia real", gan?.ganancia_real],
-            ["Avance real", gan ? `${gan.avance_real}%` : undefined],
-            ["Ajuste manual vigente", cot.ajuste_monto],
-          ].map(([l, v]) => (
-            <div key={l as string} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <div className="text-xs text-slate-500">{l}</div>
-              <div className="font-black text-slate-900">{v === undefined ? "-" : typeof v === "string" ? v : clp(v as number)}</div>
-            </div>
-          ))}
-        </div>
-        {gan?.hito_avance_exigible && (
-          <p className="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
-            El avance llegó al 50 %: corresponde cobrar el hito 2 (30 %).
-          </p>
-        )}
-      </section>
-
-      {/* Hitos y obra */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 className="text-lg font-bold">Hitos de pago</h2>
-          {cot.hitos_pago.map((h) => (
-            <div key={h.id} className="flex justify-between items-center border border-slate-200 rounded-lg p-3 text-sm">
-              <div>
-                <div className="font-semibold">{h.fase.replace(/_/g, " ")} ({h.porcentaje}%)</div>
-                <div className="font-black">{clp(h.monto_pago)}</div>
-              </div>
-              <button
-                onClick={() => toggleHito(h)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
-                  h.estado === "PAGADO" ? "bg-green-100 text-green-800 border-green-300" : "bg-amber-100 text-amber-800 border-amber-300"
-                }`}
-              >
-                {h.estado === "PAGADO" ? "Pagado ✓" : "Pendiente"}
-              </button>
-            </div>
-          ))}
-        </section>
-
-        <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 className="text-lg font-bold">Ejecución de obra</h2>
-          <label className="block text-sm font-semibold">Avance físico real (%)</label>
-          <input type="number" min="0" max="100" value={avance} onChange={(e) => setAvance(parseFloat(e.target.value) || 0)} />
-          <label className="block text-sm font-semibold">Gasto real acumulado ($)</label>
-          <input type="number" min="0" value={gasto} onChange={(e) => setGasto(parseFloat(e.target.value) || 0)} />
-          <button onClick={guardarObra} className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-semibold">
-            Guardar avance
-          </button>
-        </section>
-      </div>
-
-      {/* Edición y reajuste */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        <h2 className="text-lg font-bold">Editar cotización y reajustar el monto</h2>
-        <div className="grid md:grid-cols-2 gap-4 text-sm">
-          <div><label className="font-semibold">Cliente</label><input value={form.cliente_nombre} onChange={set("cliente_nombre")} /></div>
-          <div><label className="font-semibold">Teléfono</label><input value={form.cliente_telefono} onChange={set("cliente_telefono")} /></div>
-          <div className="md:col-span-2"><label className="font-semibold">Dirección del terreno</label><input value={form.direccion_terreno} onChange={set("direccion_terreno")} /></div>
-          <div><label className="font-semibold">Superficie (m²)</label><input type="number" min="1" step="0.5" value={form.superficie_m2} onChange={set("superficie_m2")} /></div>
-          <div><label className="font-semibold">Distancia de traslado (km)</label><input type="number" min="0" value={form.distancia_flete_km} onChange={set("distancia_flete_km")} /></div>
-          {esCasa ? (
-            <>
-              <div>
-                <label className="font-semibold">Base</label>
-                <select value={form.base_terreno_id} onChange={set("base_terreno_id")}>
-                  <option value="">—</option>
-                  {bases.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="font-semibold">Revestimiento</label>
-                <select value={form.revestimiento_id} onChange={set("revestimiento_id")}>
-                  <option value="">—</option>
-                  {revest.map((r) => <option key={r.id} value={r.id}>{r.nombre} ({clp(r.precio_base_unitario)}/m²)</option>)}
-                </select>
-              </div>
-              <div><label className="font-semibold">m² con vigas a la vista</label><input type="number" min="0" value={form.m2_vigas_vista} onChange={set("m2_vigas_vista")} /></div>
-              <div><label className="font-semibold">Ganancia de la empresa ($/m²)</label><input type="number" min="0" step="1000" value={form.ganancia_m2} onChange={set("ganancia_m2")} /></div>
-            </>
-          ) : (
-            <div><label className="font-semibold">Precio del radier ($/m²)</label><input type="number" min="0" step="500" value={form.radier_m2} onChange={set("radier_m2")} /></div>
-          )}
-          <div>
-            <label className="font-semibold">Ajuste manual al monto total ($, + o −)</label>
-            <input type="number" step="1000" value={form.ajuste_monto} onChange={set("ajuste_monto")} />
-          </div>
-          <div>
-            <label className="font-semibold">Motivo del reajuste {dif !== 0 && "*"}</label>
-            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: alza del precio del zinc" />
-          </div>
-        </div>
-
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm flex flex-wrap gap-x-8 gap-y-1 items-center">
-          {previa ? (
-            <>
-              <span>Total actual: <strong>{clp(previa.total_anterior)}</strong></span>
-              <span>Nuevo total: <strong>{clp(previa.total_nuevo)}</strong></span>
-              <span className={dif > 0 ? "text-red-700" : dif < 0 ? "text-green-700" : ""}>
-                Diferencia: <strong>{dif > 0 ? "+" : ""}{clp(dif)}</strong>
-              </span>
-              {dif !== 0 && <span className="text-xs text-slate-500">Se reparte entre los hitos aún pendientes.</span>}
-            </>
-          ) : (
-            <span className="text-slate-400">Calculando...</span>
-          )}
-        </div>
-        <button onClick={guardar} className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg font-semibold">
-          Guardar cambios
-        </button>
-        <p className="text-xs text-slate-500">
-          El relleno de estabilizado se ajusta desde &quot;Visita técnica&quot; en el listado de cotizaciones.
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <h1 className="text-3xl font-black text-slate-900">{cot.cliente_nombre}</h1>
+        <p className="text-lg text-slate-600">
+          {cot.direccion_terreno} · {cot.superficie_m2} m² · Cotización {cot.codigo_cotizacion}
         </p>
-      </section>
+        <div className="bg-blue-900 text-white rounded-xl p-5">
+          <div className="text-base text-blue-200">Valor total de la casa (IVA incluido)</div>
+          <div className="text-4xl font-black">{clp(cot.costo_total)}</div>
+        </div>
+        <div className="flex flex-wrap gap-3 pt-1">
+          <Link href={`/cotizacion/${cot.codigo_cotizacion}`} target="_blank" className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl">
+            Ver ficha del cliente
+          </Link>
+          <button onClick={descargarPdf} className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl cursor-pointer">
+            Descargar ficha de la empresa (PDF)
+          </button>
+        </div>
+      </div>
 
-      {/* Historial */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-bold mb-3">Historial de reajustes</h2>
+      {msg && <div className="bg-green-50 border-l-8 border-green-600 text-green-900 p-4 rounded-r-xl text-lg font-semibold">{msg}</div>}
+      {error && <div className="bg-red-50 border-l-8 border-red-600 text-red-800 p-4 rounded-r-xl text-lg font-semibold">{error}</div>}
+
+      <h2 className="text-2xl font-black text-slate-900">¿Qué desea hacer?</h2>
+      <div className="flex flex-col sm:flex-row gap-3">
+        {pestana("valor", "Cambiar el valor de la casa")}
+        {pestana("datos", "Cambiar datos del cliente")}
+        {pestana("avance", "Avance y pagos")}
+      </div>
+
+      {panel === "datos" && (
+        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div>
+            <label className={campo}>Nombre del cliente</label>
+            <input value={form.cliente_nombre} onChange={set("cliente_nombre")} />
+          </div>
+          <div>
+            <label className={campo}>Teléfono</label>
+            <input value={form.cliente_telefono} onChange={set("cliente_telefono")} />
+          </div>
+          <div>
+            <label className={campo}>Dirección del terreno</label>
+            <input value={form.direccion_terreno} onChange={set("direccion_terreno")} />
+          </div>
+          <p className={ayuda}>Cambiar estos datos no modifica el valor de la casa.</p>
+          <button onClick={guardarDatos} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
+            Guardar datos
+          </button>
+        </section>
+      )}
+
+      {panel === "valor" && (
+        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+          <p className="text-lg text-slate-700">
+            Cambie lo que haya variado. Abajo verá cuánto quedaría el valor de la casa <strong>antes de guardar</strong>.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className={campo}>Metros cuadrados de la casa</label>
+              <input type="number" min="1" step="0.5" value={form.superficie_m2} onChange={set("superficie_m2")} />
+            </div>
+            <div>
+              <label className={campo}>Kilómetros hasta el terreno</label>
+              <input type="number" min="0" value={form.distancia_flete_km} onChange={set("distancia_flete_km")} />
+            </div>
+            {esCasa ? (
+              <div className="sm:col-span-2">
+                <label className={campo}>Material exterior de la casa</label>
+                <select value={form.revestimiento_id} onChange={set("revestimiento_id")}>
+                  <option value="">Sin elegir</option>
+                  {revest.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nombre} ({clp(r.precio_base_unitario)} por m²)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="sm:col-span-2">
+                <label className={campo}>Precio del radier por m²</label>
+                <input type="number" min="0" step="500" value={form.radier_m2} onChange={set("radier_m2")} />
+              </div>
+            )}
+          </div>
+
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
+            <h3 className="text-xl font-bold text-slate-900">Sumar o restar un monto al total</h3>
+            <p className={ayuda}>
+              Úselo cuando un costo cambió (por ejemplo, subió el zinc). Escriba un número positivo para <strong>sumar</strong> o
+              negativo para <strong>descontar</strong>, por ejemplo -50000.
+            </p>
+            <div>
+              <label className={campo}>Monto a sumar o restar ($)</label>
+              <input type="number" step="1000" value={form.ajuste_monto} onChange={set("ajuste_monto")} />
+            </div>
+          </div>
+
+          <details className="border border-slate-200 rounded-xl p-4">
+            <summary className="text-lg font-semibold text-slate-700 cursor-pointer">Opciones avanzadas</summary>
+            <div className="grid sm:grid-cols-2 gap-4 pt-4">
+              {esCasa && (
+                <>
+                  <div>
+                    <label className={campo}>Metros con vigas a la vista</label>
+                    <input type="number" min="0" value={form.m2_vigas_vista} onChange={set("m2_vigas_vista")} />
+                    <p className={ayuda}>Suma $65.000 por cada m².</p>
+                  </div>
+                  <div>
+                    <label className={campo}>Ganancia de la empresa por m² ($)</label>
+                    <input type="number" min="0" step="1000" value={form.ganancia_m2} onChange={set("ganancia_m2")} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={campo}>Tipo de base</label>
+                    <select value={form.base_terreno_id} onChange={set("base_terreno_id")}>
+                      <option value="">Sin elegir</option>
+                      {bases.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
+
+          <div className="rounded-xl border-2 border-blue-900 p-4 space-y-1">
+            {previa ? (
+              <>
+                <div className="text-lg">Valor actual: <strong>{clp(previa.total_anterior)}</strong></div>
+                <div className="text-2xl font-black text-blue-900">Valor nuevo: {clp(previa.total_nuevo)}</div>
+                <div className={`text-lg font-bold ${dif > 0 ? "text-red-700" : dif < 0 ? "text-green-700" : "text-slate-500"}`}>
+                  {dif === 0 ? "Sin cambios en el valor" : dif > 0 ? `Sube ${clp(dif)}` : `Baja ${clp(-dif)}`}
+                </div>
+                {dif !== 0 && <p className={ayuda}>La diferencia se reparte entre los pagos que aún no se han recibido.</p>}
+              </>
+            ) : (
+              <div className="text-lg text-slate-400">Calculando...</div>
+            )}
+          </div>
+
+          {dif !== 0 && (
+            <div>
+              <label className={campo}>¿Por qué cambia el valor? *</label>
+              <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: subió el precio del zinc" />
+            </div>
+          )}
+
+          <button onClick={guardarValor} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
+            Guardar cambios
+          </button>
+        </section>
+      )}
+
+      {panel === "avance" && (
+        <section className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-2xl font-black">Pagos del cliente</h3>
+            {cot.hitos_pago.map((h) => (
+              <div key={h.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 border-slate-200 rounded-xl p-4">
+                <div>
+                  <div className="text-base text-slate-600">{NOMBRE_HITO[h.fase] || h.fase}</div>
+                  <div className="text-2xl font-black">{clp(h.monto_pago)}</div>
+                </div>
+                <button
+                  onClick={() => cambiarPago(h)}
+                  className={`px-5 py-3 rounded-xl text-lg font-bold border-2 cursor-pointer ${
+                    h.estado === "PAGADO" ? "bg-green-100 text-green-900 border-green-600" : "bg-amber-100 text-amber-900 border-amber-500"
+                  }`}
+                >
+                  {h.estado === "PAGADO" ? "✓ Recibido" : "Pendiente · marcar recibido"}
+                </button>
+              </div>
+            ))}
+            {gan?.hito_avance_exigible && (
+              <p className="text-lg text-amber-900 bg-amber-50 border-2 border-amber-300 rounded-xl p-3 font-semibold">
+                La obra ya va en el 50 %: corresponde cobrar el 2.º pago.
+              </p>
+            )}
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-2xl font-black">Cómo va la obra</h3>
+            <div>
+              <label className={campo}>Avance de la obra (%)</label>
+              <input type="number" min="0" max="100" value={avance} onChange={(e) => setAvance(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div>
+              <label className={campo}>Lo gastado hasta ahora ($)</label>
+              <input type="number" min="0" value={gasto} onChange={(e) => setGasto(parseFloat(e.target.value) || 0)} />
+            </div>
+            <button onClick={guardarObra} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
+              Guardar avance
+            </button>
+          </div>
+
+          {gan && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
+              <h3 className="text-2xl font-black mb-2">Resumen para la empresa</h3>
+              <div className="flex justify-between"><span>Ganancia estimada</span><strong>{clp(gan.ganancia_estimada)}</strong></div>
+              <div className="flex justify-between"><span>Ganancia con lo gastado hasta hoy</span><strong>{clp(gan.ganancia_real)}</strong></div>
+              <div className="flex justify-between text-slate-500 text-base"><span>Cobrado sin IVA</span><span>{clp(gan.neto_cobrado)}</span></div>
+            </div>
+          )}
+        </section>
+      )}
+
+      <details className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <summary className="text-xl font-bold cursor-pointer">Cambios anteriores del valor ({cambios.length})</summary>
         {cambios.length === 0 ? (
-          <p className="text-sm text-slate-400">Sin reajustes desde la emisión.</p>
+          <p className="text-base text-slate-500 pt-3">Todavía no se ha cambiado el valor de esta cotización.</p>
         ) : (
-          <ul className="divide-y divide-slate-200 text-sm">
+          <ul className="divide-y divide-slate-200 pt-3">
             {cambios.map((c) => (
-              <li key={c.id} className="py-2 flex flex-wrap justify-between gap-2">
-                <span>
-                  <strong>{clp(c.total_anterior)} → {clp(c.total_nuevo)}</strong> · {c.motivo}
-                </span>
-                <span className="text-xs text-slate-500">{c.usuario} · {new Date(c.fecha).toLocaleString("es-CL")}</span>
+              <li key={c.id} className="py-3 text-base">
+                <strong>{clp(c.total_anterior)} → {clp(c.total_nuevo)}</strong> · {c.motivo}
+                <div className="text-sm text-slate-500">{c.usuario} · {new Date(c.fecha).toLocaleDateString("es-CL")}</div>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </details>
     </div>
   );
 }

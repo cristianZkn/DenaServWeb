@@ -192,9 +192,9 @@ export default function CotizadorPage() {
   return (
     <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 max-w-4xl mx-auto">
       <div className="border-b pb-4 mb-6">
-        <h1 className="text-3xl font-extrabold text-slate-900">Nueva Cotización Paramétrica</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900">Nueva cotización</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Complete los datos del cliente, la ubicación del terreno y seleccione los tipos de materiales.
+          Complete los datos de abajo. El valor de la casa se calcula solo.
         </p>
       </div>
 
@@ -208,7 +208,7 @@ export default function CotizadorPage() {
         {/* SECCIÓN 1: DATOS DEL CLIENTE Y TERRENO */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-            1. Datos del Cliente & Ubicación del Terreno
+            1. El cliente y el terreno
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,7 +245,7 @@ export default function CotizadorPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
             <div className="md:col-span-2">
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Dirección del Terreno * (Campo Crítico)
+                Dirección del terreno *
               </label>
               <input
                 type="text"
@@ -260,7 +260,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Estado Inicial *
+                Estado de la cotización
               </label>
               <select
                 name="estado"
@@ -268,9 +268,9 @@ export default function CotizadorPage() {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white font-semibold"
               >
-                <option value="BORRADOR">BORRADOR</option>
-                <option value="ACEPTADA">ACEPTADA</option>
-                <option value="FINALIZADA">FINALIZADA</option>
+                <option value="BORRADOR">En preparación</option>
+                <option value="ACEPTADA">Aceptada por el cliente</option>
+                <option value="FINALIZADA">Obra terminada</option>
               </select>
             </div>
           </div>
@@ -313,13 +313,13 @@ export default function CotizadorPage() {
         {/* SECCIÓN 2: ESPECIFICACIONES CONSTRUCTIVAS */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-            2. Especificaciones Técnicas (Catálogo Unificado)
+            2. La casa
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Superficie Total Construida (m²) *
+                Metros cuadrados de la casa *
               </label>
               <input
                 type="number"
@@ -335,7 +335,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Distancia Flete / Traslado (Km) *
+                Kilómetros hasta el terreno *
               </label>
               <input
                 type="number"
@@ -354,7 +354,7 @@ export default function CotizadorPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Tipo de Base de Terreno (Catálogo)
+                Tipo de base
               </label>
               <select
                 name="base_terreno_id"
@@ -376,7 +376,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Tipo de Revestimiento Exterior (Catálogo)
+                Material exterior de la casa
               </label>
               <select
                 name="revestimiento_id"
@@ -405,7 +405,7 @@ export default function CotizadorPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Ganancia de la empresa ($ por m²)
+                Ganancia de la empresa por m² ($)
               </label>
               <input
                 type="number"
@@ -420,7 +420,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                m² con vigas a la vista (+$65.000/m²)
+                Metros con vigas a la vista (+$65.000 por m²)
               </label>
               <input
                 type="number"
@@ -439,13 +439,13 @@ export default function CotizadorPage() {
         {/* SECCIÓN 3: DESGLOSE DE COSTOS Y TOTAL */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-            3. Desglose de Costos de Obra (calculado automáticamente)
+            3. Valor de la casa (se calcula solo)
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Costo Materiales ($)
+                Materiales ($)
               </label>
               <input
                 type="number"
@@ -459,7 +459,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Costo Mano de Obra ($)
+                Mano de obra ($)
               </label>
               <input
                 type="number"
@@ -473,7 +473,7 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Costo Flete / Logística ($)
+                Traslado ($)
               </label>
               <input
                 type="number"
@@ -488,7 +488,7 @@ export default function CotizadorPage() {
 
           <div className="bg-blue-900 text-white p-6 rounded-xl shadow-inner flex flex-col sm:flex-row justify-between items-center mt-6">
             <div>
-              <h3 className="text-xl font-bold">Costo Total de Cotización:</h3>
+              <h3 className="text-xl font-bold">Valor total de la casa:</h3>
               <p className="text-xs text-blue-200 mt-1">
                 IVA incluido. Se generarán automáticamente los 3 hitos de pago: Anticipo (40%), Avance (30%) y Entrega (30%).
               </p>
@@ -513,7 +513,7 @@ export default function CotizadorPage() {
             disabled={loading}
             className="px-8 py-2.5 font-bold text-white bg-blue-900 hover:bg-blue-800 rounded-lg shadow-md cursor-pointer disabled:opacity-50 transition"
           >
-            {loading ? "Creando Cotización..." : "Crear y Generar Hitos de Pago"}
+            {loading ? "Guardando..." : "Guardar cotización"}
           </button>
         </div>
       </form>

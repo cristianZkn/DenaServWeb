@@ -245,9 +245,9 @@ Errores: ${r.errores.join("; ")}` : "")
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Catálogo Unificado de Tipos</h1>
+          <h1 className="text-2xl font-black text-slate-800">Materiales y precios</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Administración centralizada de materiales, revestimientos, bases y componentes constructivos.
+            Lista de materiales con su precio. Los precios se actualizan solos cada semana desde las tiendas.
           </p>
         </div>
         <div className="flex gap-2">

@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const NAV = [
-  { href: "/dashboard", label: "Cotizaciones" },
-  { href: "/dashboard/cotizador", label: "Nueva Cotización" },
-  { href: "/dashboard/catalogos", label: "Catálogo de Tipos" },
+  { href: "/dashboard", label: "Mis cotizaciones" },
+  { href: "/dashboard/cotizador", label: "+ Nueva cotización" },
+  { href: "/dashboard/catalogos", label: "Materiales y precios" },
   { href: "/dashboard/proveedores", label: "Proveedores" },
 ];
 
@@ -83,7 +83,7 @@ export default function DashboardLayout({
                 onClick={handleLogout}
                 className="bg-red-600 hover:bg-red-700 text-white text-sm px-3.5 py-1.5 rounded-md font-semibold transition shadow-sm cursor-pointer"
               >
-                Cerrar Sesión
+                Salir
               </button>
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function DashboardLayout({
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-md text-base font-semibold transition-colors ${
                     activo ? "bg-blue-700 text-white" : "text-blue-100 hover:bg-blue-800"
                   }`}
                 >
