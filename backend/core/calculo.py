@@ -12,6 +12,7 @@ DEFAULTS = {
     "traslado_m2_hasta_35km": D("5000"),   # traslado de maestros y materiales, CLP por m²
     "traslado_m2_hasta_100km": D("10000"),
     "viga_vista_m2": D("65000"),   # adicional por m² con vigas a la vista
+    "estabilizado_m3": D("32000"),  # árido puesto en obra, IVA incl. (mercado: $25.000-$38.000/m³ con despacho)
     "radier_m2": D("37500"),       # radier solo (material + mano de obra): $35.000-$40.000/m², punto medio
     "materiales_ref_m2": D("135000"),  # referencia de materiales (~$135.000/m²) mientras el BOM esté incompleto
     "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
@@ -94,7 +95,9 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     desc = D(str(descuento_pct))
     materiales = m2 * (costo_neto(D(str(precio_base_m2)), desc) + costo_neto(D(str(precio_revest_m2)), desc))
     vol = volumen_estabilizado(m2, espesor_cm)
-    nivelacion = vol * costo_neto(D(str(precio_estabilizado_m3)), desc) if arido_empresa else D(0)
+    # Precio del árido: parámetro de la empresa (no es un producto de catálogo); None = valor por defecto.
+    precio_m3 = p["estabilizado_m3"] if precio_estabilizado_m3 is None else D(str(precio_estabilizado_m3))
+    nivelacion = vol * precio_m3 if arido_empresa else D(0)
     flete = costo_flete(m2, km, p)
     mano_obra = m2 * p["mano_obra_m2"]
     bom = bom_insumos(m2, insumos)

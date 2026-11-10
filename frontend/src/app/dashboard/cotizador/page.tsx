@@ -19,7 +19,7 @@ export default function CotizadorPage() {
 
   const [basesTerreno, setBasesTerreno] = useState<CatalogoItem[]>([]);
   const [revestimientos, setRevestimientos] = useState<CatalogoItem[]>([]);
-  const [estabilizados, setEstabilizados] = useState<CatalogoItem[]>([]);
+  const [nivelacion, setNivelacion] = useState<{ m3: number; costo: number } | null>(null);
 
   const [formData, setFormData] = useState({
     cliente_nombre: "",
@@ -32,7 +32,6 @@ export default function CotizadorPage() {
     revestimiento_id: "" as string | number,
     espesor_cm: 10,
     arido_empresa: true,
-    estabilizado_id: "" as string | number,
     ganancia_m2: 30000,
     tipo_proyecto: "CASA",
     radier_m2: 37500,
@@ -53,10 +52,9 @@ export default function CotizadorPage() {
         }
 
         const authHeaders = { Authorization: `Bearer ${token}` };
-        const [resBases, resRevest, resEstab] = await Promise.all([
+        const [resBases, resRevest] = await Promise.all([
           fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO&activo=true", { headers: authHeaders }),
           fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO&activo=true", { headers: authHeaders }),
-          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO&activo=true", { headers: authHeaders }),
         ]);
 
         if (resBases.ok && resRevest.ok) {
@@ -64,15 +62,12 @@ export default function CotizadorPage() {
           const revest = await resRevest.json();
           setBasesTerreno(bases);
           setRevestimientos(revest);
-          const estab = resEstab.ok ? await resEstab.json() : [];
-          setEstabilizados(estab);
 
           // Defaults
           setFormData((prev) => ({
             ...prev,
             base_terreno_id: bases.length > 0 ? bases[0].id : "",
             revestimiento_id: revest.length > 0 ? revest[0].id : "",
-            estabilizado_id: estab.length > 0 ? estab[0].id : "",
           }));
         }
       } catch (err) {
@@ -89,7 +84,6 @@ export default function CotizadorPage() {
   useEffect(() => {
     const baseSel = basesTerreno.find((b) => b.id === Number(formData.base_terreno_id));
     const revestSel = revestimientos.find((r) => r.id === Number(formData.revestimiento_id));
-    const estabSel = estabilizados.find((e) => e.id === Number(formData.estabilizado_id));
 
     const timer = setTimeout(async () => {
       try {
@@ -101,7 +95,6 @@ export default function CotizadorPage() {
             distancia_km: Number(formData.distancia_flete_km) || 0,
             base_terreno_id: baseSel ? baseSel.id : null,
             revestimiento_id: revestSel ? revestSel.id : null,
-            estabilizado_id: estabSel ? estabSel.id : null,
             espesor_cm: Number(formData.espesor_cm) || 0,
             arido_empresa: formData.arido_empresa,
             ganancia_m2: Number(formData.ganancia_m2) || 0,
@@ -112,6 +105,7 @@ export default function CotizadorPage() {
         });
         if (!res.ok) return;
         const r = await res.json();
+        setNivelacion({ m3: Number(r.volumen_estabilizado_m3), costo: Number(r.costo_nivelacion) });
         setFormData((prev) => ({
           ...prev,
           costo_materiales: Number(r.costo_materiales_total),
@@ -131,14 +125,12 @@ export default function CotizadorPage() {
     formData.revestimiento_id,
     formData.espesor_cm,
     formData.arido_empresa,
-    formData.estabilizado_id,
     formData.ganancia_m2,
     formData.m2_vigas_vista,
     formData.tipo_proyecto,
     formData.radier_m2,
     basesTerreno,
     revestimientos,
-    estabilizados,
   ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -170,7 +162,6 @@ export default function CotizadorPage() {
         distancia_flete_km: parseFloat(formData.distancia_flete_km as any),
         base_terreno_id: formData.base_terreno_id ? parseInt(formData.base_terreno_id as any) : null,
         revestimiento_id: formData.revestimiento_id ? parseInt(formData.revestimiento_id as any) : null,
-        estabilizado_id: formData.estabilizado_id ? parseInt(formData.estabilizado_id as any) : null,
         espesor_cm: Number(formData.espesor_cm) || 0,
         ganancia_m2: Number(formData.ganancia_m2) || 0,
         radier_m2: Number(formData.radier_m2) || null,
@@ -445,35 +436,11 @@ export default function CotizadorPage() {
               </select>
             </div>
 
-            {formData.arido_empresa && estabilizados.length === 0 && (
-              <p className="md:col-span-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                No hay material ESTABILIZADO activo en el catálogo: la nivelación se cotiza en $0. Regístrelo en
-                Catálogos (categoría ESTABILIZADO, precio por m³, cotizado con su proveedor de áridos).
+            {formData.arido_empresa && nivelacion && nivelacion.m3 > 0 && (
+              <p className="text-xs text-slate-600 bg-white border border-slate-200 rounded p-2 self-end">
+                Estabilizado calculado: <strong>{nivelacion.m3.toLocaleString("es-CL")} m³</strong> (factor 1,20) ·
+                costo ${nivelacion.costo.toLocaleString("es-CL")}
               </p>
-            )}
-
-            {formData.arido_empresa && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Material de nivelación (Catálogo)
-                </label>
-                <select
-                  name="estabilizado_id"
-                  value={formData.estabilizado_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-                >
-                  {estabilizados.length === 0 ? (
-                    <option value="">Sin materiales ESTABILIZADO en el catálogo</option>
-                  ) : (
-                    estabilizados.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.nombre} (${Number(e.precio_base_unitario).toLocaleString("es-CL")}/{e.unidad_medida})
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
             )}
 
             <div>

@@ -333,3 +333,10 @@ class TarifasEmpresaTests(TestCase):
         precios.actualizar_precios(runner=lambda t: [{"url": "https://www.sodimac.cl/sodimac-cl/product/B1/x", "price": 7200}])
         it.refresh_from_db()
         self.assertEqual(float(it.precio_base_unitario), 9000.0)
+
+
+    def test_estabilizado_es_calculo_automatico(self):
+        # 10 m² x 10 cm x 1,20 = 1,2 m³ a $32.000 el m³ (parámetro de la empresa)
+        r = calculo.calcular(10, 0, 10, 0, 0, None)
+        self.assertEqual((r["volumen_estabilizado_m3"], r["costo_nivelacion"]), (D("1.20"), 38400))
+        self.assertEqual(calculo.calcular(10, 0, 10, 0, 0, None, arido_empresa=False)["costo_nivelacion"], 0)

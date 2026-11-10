@@ -48,7 +48,7 @@ def _calcular_desde_catalogo(data):
     r = calculo.calcular(
         m2=data.superficie_m2, km=data.distancia_km, espesor_cm=data.espesor_cm,
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
-        precio_estabilizado_m3=_neto(get(data.estabilizado_id)), arido_empresa=data.arido_empresa,
+        precio_estabilizado_m3=None, arido_empresa=data.arido_empresa,
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
         tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2)
     return r
