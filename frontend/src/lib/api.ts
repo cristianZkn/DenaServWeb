@@ -10,6 +10,6 @@ export function getApiUrl(endpoint: string): string {
   }
 
   // En renderizado en servidor (SSR)
-  return `http://127.0.0.1:8000${cleanEndpoint}`;
+  return `${(process.env.BACKEND_URL || "http://127.0.0.1:8000").replace(/\/+$/, "")}${cleanEndpoint}`;
 }
 

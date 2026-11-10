@@ -1,5 +1,6 @@
 from ninja import Schema
 from datetime import datetime, date
+import uuid
 from typing import List, Optional
 from urllib.parse import quote
 from django.conf import settings
@@ -160,6 +161,7 @@ class CotizacionEstadoUpdateSchema(Schema):
 class CotizacionSchema(Schema):
     id: int
     codigo_cotizacion: str
+    token_publico: uuid.UUID
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     direccion_terreno: str

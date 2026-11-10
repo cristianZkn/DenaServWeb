@@ -24,6 +24,7 @@ interface HitoPago {
 interface Cotizacion {
   id: number;
   codigo_cotizacion: string;
+  token_publico: string;
   cliente_nombre: string;
   cliente_telefono: string | null;
   direccion_terreno: string;
@@ -326,7 +327,7 @@ export default function DashboardPage() {
                         Ver y editar
                       </Link>
                       <Link
-                        href={`/cotizacion/${cotizacion.codigo_cotizacion}`}
+                        href={`/cotizacion/${cotizacion.token_publico}`}
                         target="_blank"
                         className="text-blue-600 hover:text-blue-900 font-bold text-xs underline"
                       >

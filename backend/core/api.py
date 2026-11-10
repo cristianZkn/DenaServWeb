@@ -437,14 +437,14 @@ def historial_cambios(request, cotizacion_id: int):
             for c in CambioCotizacion.objects.select_related("usuario").filter(cotizacion_id=cotizacion_id)]
 
 
-@router.get("/cotizaciones/public/{codigo}", response={200: CotizacionPublicaSchema, 404: MessageSchema})
-def obtener_cotizacion_publica(request, codigo: str):
+@router.get("/cotizaciones/public/{token}", response={200: CotizacionPublicaSchema, 404: MessageSchema})
+def obtener_cotizacion_publica(request, token: uuid.UUID):
     try:
         cotizacion = Cotizacion.objects.select_related(
             "base_terreno", "revestimiento", "usuario"
         ).prefetch_related(
             "hitos_pago", "detalles_insumo__catalogo_tipo", "obras_ejecucion"
-        ).get(codigo_cotizacion=codigo)
+        ).get(token_publico=token)
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}

@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils import timezone
 
@@ -75,6 +77,8 @@ class CatalogoTipo(models.Model):
 # 4. cotizacion
 class Cotizacion(models.Model):
     codigo_cotizacion = models.CharField(max_length=50, unique=True)
+    # Llave aleatoria de la ficha pública del cliente (el folio es visible y adivinable, esta no).
+    token_publico = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     cliente_nombre = models.CharField(max_length=150)
     cliente_telefono = models.CharField(max_length=20, null=True, blank=True)
     direccion_terreno = models.CharField(max_length=255)

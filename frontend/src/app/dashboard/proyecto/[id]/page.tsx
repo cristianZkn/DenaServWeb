@@ -249,7 +249,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           <div className="text-4xl font-black">{clp(cot.costo_total)}</div>
         </div>
         <div className="flex flex-wrap gap-3 pt-1">
-          <Link href={`/cotizacion/${cot.codigo_cotizacion}`} target="_blank" className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl">
+          <Link href={`/cotizacion/${(cot as any).token_publico}`} target="_blank" className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl">
             Ver ficha del cliente
           </Link>
           <button onClick={descargarPdf} className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl cursor-pointer">

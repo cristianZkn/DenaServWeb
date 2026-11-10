@@ -409,6 +409,7 @@ class EdicionCotizacionTests(TestCase):
         self.assertEqual((r.status_code, r.json()["codigo_cotizacion"]), (200, self.cot["codigo_cotizacion"]))
 
     def test_vista_publica_no_expone_datos_internos(self):
-        pub = self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").json()
+        self.assertEqual(self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").status_code, 422)  # el folio ya no abre la ficha
+        pub = self.c.get(f"/api/cotizaciones/public/{self.cot['token_publico']}").json()
         for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):
             self.assertNotIn(k, pub)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = "http://127.0.0.1:8000";
+// En Vercel se define BACKEND_URL con la URL pública del backend en Render (sin "/" final).
+const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 async function handleProxy(
   request: NextRequest,
