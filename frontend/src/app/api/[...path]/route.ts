@@ -51,7 +51,7 @@ async function handleProxy(
     // 404 con HTML = ruta inexistente (un 404 de la API responde JSON)
     if (backendResponse.status === 404 && !(backendResponse.headers.get("content-type") || "").includes("json")) {
       const retry = await send(altUrl);
-      if (retry.status !== 404) backendResponse = retry;
+      if (retry.status !== 404 || (retry.headers.get("content-type") || "").includes("json")) backendResponse = retry;
     }
 
     const responseHeaders = new Headers();
