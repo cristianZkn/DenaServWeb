@@ -34,6 +34,8 @@ export default function CotizadorPage() {
     arido_empresa: true,
     estabilizado_id: "" as string | number,
     ganancia_m2: 30000,
+    tipo_proyecto: "CASA",
+    radier_m2: 37500,
     m2_vigas_vista: 0,
     costo_materiales: 0,
     costo_mano_obra: 0,
@@ -52,9 +54,9 @@ export default function CotizadorPage() {
 
         const authHeaders = { Authorization: `Bearer ${token}` };
         const [resBases, resRevest, resEstab] = await Promise.all([
-          fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO", { headers: authHeaders }),
-          fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO", { headers: authHeaders }),
-          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO", { headers: authHeaders }),
+          fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO&activo=true", { headers: authHeaders }),
+          fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO&activo=true", { headers: authHeaders }),
+          fetch("/api/catalogo-tipos/?categoria=ESTABILIZADO&activo=true", { headers: authHeaders }),
         ]);
 
         if (resBases.ok && resRevest.ok) {
@@ -104,6 +106,8 @@ export default function CotizadorPage() {
             espesor_cm: Number(formData.espesor_cm) || 0,
             arido_empresa: formData.arido_empresa,
             ganancia_m2: Number(formData.ganancia_m2) || 0,
+            tipo_proyecto: formData.tipo_proyecto,
+            radier_m2: Number(formData.radier_m2) || undefined,
             m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
           }),
         });
@@ -131,6 +135,8 @@ export default function CotizadorPage() {
     formData.estabilizado_id,
     formData.ganancia_m2,
     formData.m2_vigas_vista,
+    formData.tipo_proyecto,
+    formData.radier_m2,
     basesTerreno,
     revestimientos,
     estabilizados,
@@ -168,6 +174,7 @@ export default function CotizadorPage() {
         estabilizado_id: formData.estabilizado_id ? parseInt(formData.estabilizado_id as any) : null,
         espesor_cm: Number(formData.espesor_cm) || 0,
         ganancia_m2: Number(formData.ganancia_m2) || 0,
+        radier_m2: Number(formData.radier_m2) || null,
         m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
         costo_materiales: parseFloat(formData.costo_materiales as any),
         costo_mano_obra: parseFloat(formData.costo_mano_obra as any),
@@ -289,6 +296,40 @@ export default function CotizadorPage() {
           </div>
         </section>
 
+        {/* TIPO DE PROYECTO */}
+        <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">
+          <label className="block text-sm font-semibold text-slate-700">Tipo de proyecto</label>
+          <select
+            name="tipo_proyecto"
+            value={formData.tipo_proyecto}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white"
+          >
+            <option value="CASA">Casa (semi terminada)</option>
+            <option value="SOLO_RADIER">Solo radier (medidas estándar)</option>
+          </select>
+          {formData.tipo_proyecto === "SOLO_RADIER" && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Precio del radier por m² (material + mano de obra, IVA incl.; normal $35.000–$40.000)
+              </label>
+              <input
+                type="number"
+                name="radier_m2"
+                min="0"
+                step="500"
+                value={formData.radier_m2}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Radier especial (p. ej. estacionamiento: mínimo 10 cm y malla ACMA en toda la superficie) se calcula
+                aparte: ingrese aquí el valor por m² que resulte.
+              </p>
+            </div>
+          )}
+        </section>
+
         {/* SECCIÓN 2: ESPECIFICACIONES CONSTRUCTIVAS */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
@@ -403,6 +444,13 @@ export default function CotizadorPage() {
                 <option value="false">Comprado por el cliente</option>
               </select>
             </div>
+
+            {formData.arido_empresa && estabilizados.length === 0 && (
+              <p className="md:col-span-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                No hay material ESTABILIZADO activo en el catálogo: la nivelación se cotiza en $0. Regístrelo en
+                Catálogos (categoría ESTABILIZADO, precio por m³, cotizado con su proveedor de áridos).
+              </p>
+            )}
 
             {formData.arido_empresa && (
               <div>

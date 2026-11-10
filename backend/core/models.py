@@ -97,6 +97,7 @@ class Cotizacion(models.Model):
     costo_flete = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
     costo_total = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
     estado = models.CharField(max_length=50, default='BORRADOR')  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
+    tipo_proyecto = models.CharField(max_length=20, default='CASA')  # 'CASA' | 'SOLO_RADIER'
     fecha_creacion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(
         Usuario,

@@ -153,6 +153,8 @@ class CotizacionInSchema(Schema):
     estabilizado_id: Optional[int] = None
     ganancia_m2: Optional[float] = None
     m2_vigas_vista: float = 0
+    tipo_proyecto: str = "CASA"
+    radier_m2: Optional[float] = None
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -174,6 +176,7 @@ class CotizacionSchema(Schema):
     costo_flete: float
     costo_total: float
     estado: str
+    tipo_proyecto: str = "CASA"
     fecha_creacion: datetime
     usuario_id: int
     usuario: Optional[UsuarioSchema] = None
@@ -228,6 +231,8 @@ class CalculoInSchema(Schema):
     separacion_cm: int = 40
     ganancia_m2: Optional[float] = None
     m2_vigas_vista: float = 0
+    tipo_proyecto: str = "CASA"
+    radier_m2: Optional[float] = None
 
 
 # --- Resumen de ganancias por contrato ---

@@ -12,6 +12,7 @@ DEFAULTS = {
     "traslado_m2_hasta_35km": D("5000"),   # traslado de maestros y materiales, CLP por m²
     "traslado_m2_hasta_100km": D("10000"),
     "viga_vista_m2": D("65000"),   # adicional por m² con vigas a la vista
+    "radier_m2": D("37500"),       # radier solo (material + mano de obra): $35.000-$40.000/m², punto medio
     "materiales_ref_m2": D("135000"),  # referencia de materiales (~$135.000/m²) mientras el BOM esté incompleto
     "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
 }
@@ -68,10 +69,27 @@ def bom_insumos(m2: D, insumos) -> list:
     return out
 
 
+def _solo_radier(m2: D, p) -> dict:
+    """Radier estándar vendido por separado: tarifa única por m² (material y mano de obra, IVA incluido)."""
+    total = m2 * p["radier_m2"]
+    pv = precio_venta(total)
+    return {
+        "tipo_proyecto": "SOLO_RADIER", "volumen_estabilizado_m3": D(0), "costo_materiales": pv["total"],
+        "costo_materiales_total": pv["total"], "materiales_referencia": False, "costo_nivelacion": D(0), "costo_flete": D(0),
+        "costo_mano_obra": D(0), "costo_insumos": D(0), "costo_vigas_vista": D(0), "ganancia": D(0), "insumos": [],
+        "costos_directos": pv["total"], **pv, "tabiqueria": {},
+        "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
+    }
+
+
 def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabilizado_m3,
-             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), m2_vigas_vista=0, **over) -> dict:
+             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", **over) -> dict:
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
+    if tipo_proyecto == "SOLO_RADIER":
+        return _solo_radier(m2, p)
+    if tipo_proyecto != "CASA":
+        raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")
     desc = D(str(descuento_pct))
     materiales = m2 * (costo_neto(D(str(precio_base_m2)), desc) + costo_neto(D(str(precio_revest_m2)), desc))
     vol = volumen_estabilizado(m2, espesor_cm)

@@ -10,7 +10,6 @@ REQUERIDOS = [
     {"termino": "pino impregnado 2x4", "incluye": ["pino", "impregnado", "2x4"], "etapa": "ETAPA_1"},
     {"termino": "pino seco cepillado 1x4", "incluye": ["pino", "1x4"], "excluye": ["impregnado"], "etapa": "ETAPA_1"},
     {"termino": "clavo corriente 4 pulgadas", "incluye": ["clavo", "corriente", "4"], "etapa": "ETAPA_1"},
-    {"termino": "clavo corriente 2 1/2 pulgadas", "incluye": ["clavo", "corriente", "2 1/2"], "etapa": "ETAPA_1"},
     {"termino": "pino impregnado 2x8", "incluye": ["pino", "impregnado", "2x8"], "etapa": "ETAPA_1"},
     {"termino": "https://mct.cl/categorias/22/terciado-y-osb", "incluye": ["terciado", "estructural"], "etapa": "ETAPA_1"},
     {"termino": "malla acma c92", "incluye": ["malla", "c92"], "excluye": ["mini"], "etapa": "ETAPA_1"},

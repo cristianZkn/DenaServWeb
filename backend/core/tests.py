@@ -302,3 +302,11 @@ class TarifasEmpresaTests(TestCase):
                 break
             time.sleep(0.1)
         self.assertEqual(precios.estado_sincronizacion(), {"estado": "done", "resultado": {"creados": []}})
+
+
+    def test_solo_radier(self):
+        r = calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER")
+        self.assertEqual(r["total"], 750000)  # 20 m² x $37.500, IVA incluido
+        self.assertEqual(r["neto"] + r["iva"], r["total"])
+        self.assertEqual(sum(h["monto"] for h in r["hitos"]), r["total"])
+        self.assertEqual(calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 800000)
