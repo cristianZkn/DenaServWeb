@@ -43,6 +43,7 @@ export default function CatalogosPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("TODAS");
   const [busqueda, setBusqueda] = useState<string>("");
+  const [pagina, setPagina] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [guardando, setGuardando] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -240,6 +241,13 @@ Errores: ${r.errores.join("; ")}` : "")
     return coincideCategoria && coincideBusqueda;
   });
 
+  // Paginación (en el navegador: el catálogo completo ya viene cargado)
+  const POR_PAGINA = 10;
+  const totalPaginas = Math.max(1, Math.ceil(itemsFiltrados.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaActual - 1) * POR_PAGINA;
+  const itemsPagina = itemsFiltrados.slice(inicio, inicio + POR_PAGINA);
+
   return (
     <div className="space-y-6">
       {/* Encabezado */}
@@ -280,7 +288,10 @@ Errores: ${r.errores.join("; ")}` : "")
           {CATEGORIAS_PREDEFINIDAS.map((cat) => (
             <button
               key={cat.key}
-              onClick={() => setCategoriaSeleccionada(cat.key)}
+              onClick={() => {
+                setCategoriaSeleccionada(cat.key);
+                setPagina(1);
+              }}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
                 categoriaSeleccionada === cat.key
                   ? "bg-blue-900 text-white shadow-sm"
@@ -299,7 +310,10 @@ Errores: ${r.errores.join("; ")}` : "")
               type="text"
               placeholder="Buscar por nombre o descripción..."
               value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              onChange={(e) => {
+                setBusqueda(e.target.value);
+                setPagina(1);
+              }}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-blue-500"
             />
           </div>
@@ -338,7 +352,7 @@ Errores: ${r.errores.join("; ")}` : "")
                   </td>
                 </tr>
               ) : (
-                itemsFiltrados.map((item) => (
+                itemsPagina.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-semibold">
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
@@ -396,6 +410,33 @@ Errores: ${r.errores.join("; ")}` : "")
             </tbody>
           </table>
         </div>
+
+        {itemsFiltrados.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-slate-200 bg-slate-50">
+            <span className="text-base text-slate-600">
+              Mostrando {inicio + 1} a {Math.min(inicio + POR_PAGINA, itemsFiltrados.length)} de {itemsFiltrados.length}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPagina(paginaActual - 1)}
+                disabled={paginaActual <= 1}
+                className="px-5 py-2 rounded-lg border-2 border-blue-900 text-blue-900 font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                ← Anterior
+              </button>
+              <span className="text-base font-semibold text-slate-700">
+                Página {paginaActual} de {totalPaginas}
+              </span>
+              <button
+                onClick={() => setPagina(paginaActual + 1)}
+                disabled={paginaActual >= totalPaginas}
+                className="px-5 py-2 rounded-lg border-2 border-blue-900 text-blue-900 font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Crear / Editar */}
