@@ -187,12 +187,16 @@ def listar_categorias_disponibles(request):
     return list(categorias)
 
 
-@router.post("/catalogo-tipos/actualizar-precios/", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/catalogo-tipos/actualizar-precios/", response={202: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_precios_catalogo(request):
-    try:
-        return 200, precios.sincronizar_y_actualizar()
-    except Exception as e:
-        return 400, {"message": str(e)}
+    if not precios.iniciar_sincronizacion():
+        return 409, {"message": "Ya hay una sincronización en curso."}
+    return 202, {"message": "Sincronización iniciada."}
+
+
+@router.get("/catalogo-tipos/actualizar-precios/estado/", response=dict, auth=AuthBearer())
+def estado_actualizacion_precios(request):
+    return precios.estado_sincronizacion()
 
 
 @router.post("/catalogo-tipos/", response={200: CatalogoTipoSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -261,7 +265,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 distancia_flete_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id,
                 revestimiento_id=data.revestimiento_id,
-                costo_materiales=r["costo_materiales"] + r["costo_nivelacion"] + r["costo_insumos"],
+                costo_materiales=r["costo_materiales_total"],
                 costo_mano_obra=r["costo_mano_obra"],
                 costo_flete=r["costo_flete"],
                 costo_total=r["total"],
@@ -409,7 +413,7 @@ def resumen_ganancias(request, cotizacion_id: int):
     if not c or not obra:
         return 404, {"message": "Cotización u obra no encontrada"}
     neto = (c.costo_total / Decimal("1.19")).quantize(Decimal("1"))
-    presupuestado = c.costo_materiales + c.costo_mano_obra + c.costo_flete
+    presupuestado = ((c.costo_materiales + c.costo_mano_obra + c.costo_flete) / Decimal("1.19")).quantize(Decimal("1"))
     return 200, {
         "neto_cobrado": neto, "costo_presupuestado": presupuestado, "gasto_real": obra.gasto_real_acumulado,
         "ganancia_estimada": neto - presupuestado, "ganancia_real": neto - obra.gasto_real_acumulado,

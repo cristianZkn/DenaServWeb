@@ -1,5 +1,6 @@
 """Actualización de precios del catálogo desde Sodimac vía el actor de Apify scraperschile/sodimac."""
 import re
+import threading
 import time
 import json
 from urllib.parse import quote, urlsplit
@@ -7,6 +8,7 @@ from urllib.parse import quote, urlsplit
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.db import connection
 from django.utils import timezone
 
 import unicodedata
@@ -195,14 +197,21 @@ def _coincide(p: dict, incluye, excluye) -> bool:
             and not p.get("is_marketplace") and isinstance(p.get("price"), (int, float)) and p["price"] > 0)
 
 
+def _proveedor_de(url: str) -> Proveedor:
+    """Proveedor (tienda) dueño de la URL del producto; se crea la primera vez."""
+    tiendas = {"easy.cl": ("EASY-WEB", "Easy"), "mct.cl": ("MCT-WEB", "MCT Maderas")}
+    rut, nombre = next((v for k, v in tiendas.items() if k in url), ("SODIMAC-WEB", "Sodimac"))
+    return Proveedor.objects.get_or_create(rut_empresa=rut, defaults={"razon_social": nombre})[0]
+
+
 def sincronizar_catalogo(runner=ejecutar_fuente) -> dict:
     """Crea en el catálogo (categoría INSUMO) los materiales de REQUERIDOS que aún no existen.
     Etapa y rendimiento_m2 de los ya existentes no se tocan; los nuevos nacen con rendimiento 0 (no entran al BOM hasta definirlo)."""
-    prov, _ = Proveedor.objects.get_or_create(rut_empresa="SODIMAC-WEB", defaults={"razon_social": "Sodimac"})
-    prov_mct, _ = Proveedor.objects.get_or_create(rut_empresa="MCT-WEB", defaults={"razon_social": "MCT Maderas"})
     res = {"creados": [], "sin_coincidencia": []}
     for req in REQUERIDOS:
-        if CatalogoTipo.objects.filter(categoria="INSUMO", fuente_termino=req["termino"]).exists():
+        # ya existe si hay un insumo con la misma fuente cuyo nombre cumple el filtro de esta entrada
+        if any(_coincide({"name": n, "price": 1}, req["incluye"], req.get("excluye", []))
+               for n in CatalogoTipo.objects.filter(categoria="INSUMO", fuente_termino=req["termino"]).values_list("nombre", flat=True)):
             continue
         try:
             cand = [p for p in runner(req["termino"]) if _coincide(p, req["incluye"], req.get("excluye", []))]
@@ -215,7 +224,7 @@ def sincronizar_catalogo(runner=ejecutar_fuente) -> dict:
         mejor = min(cand, key=lambda p: p["price"])
         CatalogoTipo.objects.create(
             categoria="INSUMO", nombre=mejor["name"][:150], unidad_medida="UN", precio_base_unitario=mejor["price"],
-            proveedor=(prov_mct if req["termino"].startswith(MCT_BASE) else prov), etapa_obra=req["etapa"], rendimiento_m2=0, fuente_url=mejor["url"][:500],
+            proveedor=_proveedor_de(mejor["url"]), etapa_obra=req["etapa"], rendimiento_m2=0, fuente_url=mejor["url"][:500],
             fuente_termino=req["termino"], precio_actualizado_en=timezone.now())
         res["creados"].append(mejor["name"])
     return res
@@ -232,3 +241,31 @@ def sincronizar_y_actualizar() -> dict:
 
     nuevos = sincronizar_catalogo(runner)
     return {**actualizar_precios(runner), **nuevos}
+
+
+# --- Ejecución en segundo plano (la sincronización tarda ~1-2 min; una petición HTTP larga la cortarían gunicorn/proxy) ---
+_estado = {"estado": "idle", "resultado": None}
+_lock = threading.Lock()
+
+
+def iniciar_sincronizacion(tarea=sincronizar_y_actualizar) -> bool:
+    """Lanza la sincronización en un hilo. False si ya hay una en curso."""
+    with _lock:
+        if _estado["estado"] == "running":
+            return False
+        _estado.update(estado="running", resultado=None)
+
+    def correr():
+        try:
+            _estado.update(estado="done", resultado=tarea())
+        except Exception as e:
+            _estado.update(estado="error", resultado={"message": str(e)})
+        finally:
+            connection.close()  # cierra la conexión a BD propia del hilo
+
+    threading.Thread(target=correr, daemon=True).start()
+    return True
+
+
+def estado_sincronizacion() -> dict:
+    return dict(_estado)

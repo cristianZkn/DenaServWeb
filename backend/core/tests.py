@@ -147,7 +147,8 @@ class CalculoTests(TestCase):
     def test_formulas(self):
         self.assertEqual(calculo.volumen_estabilizado(D(60), D(10)), D("7.2"))
         self.assertEqual(calculo.costo_neto(D(1000), D(15)), D("850"))
-        self.assertEqual(calculo.precio_venta(D(1300))["total"], D("1547"))
+        p = calculo.precio_venta(D(1547))
+        self.assertEqual((p["neto"], p["iva"], p["total"]), (D(1300), D(247), D(1547)))
         self.assertEqual(sum(h[2] for h in calculo.hitos(D("1547"))), D("1547"))
 
     def test_arido_cliente_cuesta_cero(self):
@@ -284,3 +285,20 @@ class TarifasEmpresaTests(TestCase):
 
     def test_vigas_a_la_vista(self):
         self.assertEqual(calculo.calcular(10, 0, 10, 0, 0, 0, m2_vigas_vista=2)["costo_vigas_vista"], 130000)
+
+
+    def test_precio_195k_incluye_iva_y_referencia_de_materiales(self):
+        r = calculo.calcular(10, 20, 10, 0, 0, 0)  # sin catálogo: materiales = referencia $135.000/m²
+        self.assertTrue(r["materiales_referencia"])
+        self.assertEqual(r["total"], 1950000)  # 135k + 25k + 30k + 5k por m² x 10 m², IVA incluido
+
+
+    def test_sincronizacion_en_segundo_plano(self):
+        import time
+        from . import precios
+        self.assertTrue(precios.iniciar_sincronizacion(tarea=lambda: {"creados": []}))
+        for _ in range(50):
+            if precios.estado_sincronizacion()["estado"] != "running":
+                break
+            time.sleep(0.1)
+        self.assertEqual(precios.estado_sincronizacion(), {"estado": "done", "resultado": {"creados": []}})

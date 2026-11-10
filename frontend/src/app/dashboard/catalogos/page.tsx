@@ -68,20 +68,31 @@ export default function CatalogosPage() {
   const [actualizando, setActualizando] = useState(false);
   const actualizarPrecios = async () => {
     setActualizando(true);
+    const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
     try {
-      const res = await fetch("/api/catalogo-tipos/actualizar-precios", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      const r = await res.json();
-      if (!res.ok) throw new Error(r.message);
-      alert(
-        `Precios actualizados: ${r.actualizados}. Sin cambio: ${r.sin_cambio}.` +
-          (r.no_encontrados.length ? `
+      const inicio = await fetch("/api/catalogo-tipos/actualizar-precios", { method: "POST", headers });
+      if (!inicio.ok && inicio.status !== 409) throw new Error("No se pudo iniciar la sincronización");
+
+      // La sincronización corre en segundo plano (~1-2 min): se consulta el estado cada 3 s.
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const res = await fetch("/api/catalogo-tipos/actualizar-precios/estado", { headers });
+        if (!res.ok) throw new Error("No se pudo consultar el estado");
+        const est = await res.json();
+        if (est.estado === "running") continue;
+        if (est.estado === "error") throw new Error(est.resultado?.message || "Error en la sincronización");
+        const r = est.resultado || {};
+        alert(
+          `Creados: ${(r.creados || []).length}. Precios actualizados: ${r.actualizados ?? 0}. Sin cambio: ${r.sin_cambio ?? 0}.` +
+            ((r.no_encontrados || []).length ? `
 No encontrados: ${r.no_encontrados.join(", ")}` : "") +
-          (r.errores.length ? `
+            ((r.sin_coincidencia || []).length ? `
+Sin coincidencia: ${r.sin_coincidencia.join(", ")}` : "") +
+            ((r.errores || []).length ? `
 Errores: ${r.errores.join("; ")}` : "")
-      );
+        );
+        break;
+      }
       fetchData();
     } catch (e: any) {
       alert(`No se pudo actualizar: ${e.message}`);

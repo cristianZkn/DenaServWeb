@@ -111,7 +111,7 @@ export default function CotizadorPage() {
         const r = await res.json();
         setFormData((prev) => ({
           ...prev,
-          costo_materiales: Number(r.costo_materiales) + Number(r.costo_nivelacion) + Number(r.costo_insumos),
+          costo_materiales: Number(r.costo_materiales_total),
           costo_mano_obra: Number(r.costo_mano_obra),
           costo_flete: Number(r.costo_flete),
           costo_total: Number(r.total),

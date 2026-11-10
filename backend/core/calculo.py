@@ -12,6 +12,7 @@ DEFAULTS = {
     "traslado_m2_hasta_35km": D("5000"),   # traslado de maestros y materiales, CLP por m²
     "traslado_m2_hasta_100km": D("10000"),
     "viga_vista_m2": D("65000"),   # adicional por m² con vigas a la vista
+    "materiales_ref_m2": D("135000"),  # referencia de materiales (~$135.000/m²) mientras el BOM esté incompleto
     "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
 }
 
@@ -46,9 +47,11 @@ def tabiqueria(m2: D, separacion_cm: int = 40, p=DEFAULTS) -> dict:
     return {"pies_derechos_2x3": pies, "soleras_2x3_ml": _clp(largo_ml * 2), "cerchas_1x4_ml": _clp(m2 * D("2.5"))}
 
 
-def precio_venta(neto: D) -> dict:
-    iva = neto * IVA
-    return {"neto": _clp(neto), "iva": _clp(iva), "total": _clp(neto + iva)}
+def precio_venta(total_bruto: D) -> dict:
+    """Los precios de la empresa ($195.000/m²) y los del retail ya incluyen IVA: se desglosa, no se suma."""
+    total = _clp(total_bruto)
+    neto = _clp(total / (1 + IVA))
+    return {"neto": neto, "iva": total - neto, "total": total}
 
 
 def hitos(total: D) -> list:
@@ -78,12 +81,15 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     bom = bom_insumos(m2, insumos)
     costo_insumos = sum((i["subtotal"] for i in bom), D(0))
     vigas = D(str(m2_vigas_vista)) * p["viga_vista_m2"]
-    directos = materiales + nivelacion + flete + mano_obra + costo_insumos + vigas
+    calculado = materiales + nivelacion + costo_insumos
+    materiales_total = max(calculado, m2 * p["materiales_ref_m2"])
+    directos = materiales_total + flete + mano_obra + vigas
     ganancia = m2 * p["ganancia_m2"]
     pv = precio_venta(directos + ganancia)
     return {
         "volumen_estabilizado_m3": vol.quantize(D("0.01")),
         "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
+        "costo_materiales_total": _clp(materiales_total), "materiales_referencia": materiales_total > calculado,
         "costo_insumos": _clp(costo_insumos), "costo_vigas_vista": _clp(vigas), "ganancia": _clp(ganancia), "insumos": bom,
         "costos_directos": _clp(directos), **pv,
         "tabiqueria": tabiqueria(m2, separacion_cm, p),
