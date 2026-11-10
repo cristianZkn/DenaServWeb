@@ -249,3 +249,14 @@ class PreciosTests(TestCase):
         self.assertEqual(it.etapa_obra, "ETAPA_1")
         self.assertNotIn("pino impregnado 2x3", r["sin_coincidencia"])
         self.assertEqual(precios.sincronizar_catalogo(runner=fake)["creados"], [])  # idempotente
+
+
+    def test_parsear_mct(self):
+        from . import precios
+        html = ('<div class="grilla"><a class="nombreGrilla" href="ficha/16936/terciado-15mm">TERCIADO 15MM</a>'
+                '<a class="valorGrilla" href="x"><span class="conDescuento">$25.526</span></a></div>'
+                '<div class="grilla"><a class="nombreGrilla" href="ficha/1/osb">OSB 11MM</a></div>')
+        r = precios.parsear_mct(html)
+        self.assertEqual(len(r), 1)  # el ítem sin precio se ignora
+        self.assertEqual((r[0]["price"], r[0]["product_id"]), (25526, "16936"))
+        self.assertEqual(r[0]["url"], "https://mct.cl/ficha/16936/terciado-15mm")

@@ -14,7 +14,8 @@ REQUERIDOS = [
     {"termino": "polietileno 0.2 mm", "incluye": ["polietileno"], "etapa": "ETAPA_1"},
     {"termino": "barrera de humedad hidrofuga", "incluye": ["humedad"], "etapa": "ETAPA_1"},
     {"termino": "plancha zinc acanalada 5v", "incluye": ["zinc"], "etapa": "ETAPA_1"},
-    {"termino": "osb estructural", "incluye": ["osb"], "etapa": "ETAPA_1"},
+    # MCT: el termino es la URL de la categoria (scraping directo, sin creditos de Apify)
+    {"termino": "https://mct.cl/categorias/22/terciado-y-osb", "incluye": ["osb", "panel"], "excluye": ["siding", "lap"], "etapa": "ETAPA_1"},
     # Etapa 2: terminaciones
     {"termino": "lana de vidrio", "incluye": ["lana", "vidrio"], "etapa": "ETAPA_2"},
     {"termino": "poliestireno expandido plancha", "incluye": ["poliestireno"], "etapa": "ETAPA_2"},
