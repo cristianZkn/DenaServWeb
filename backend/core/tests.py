@@ -363,3 +363,48 @@ class FlujoEmpresaTests(TestCase):
         c.post(url, {"espesor_cm": 10, "arido_empresa": False, "aplicar": True}, content_type="application/json", **h)
         cobj.refresh_from_db()
         self.assertEqual((cobj.costo_total, cobj.nivelacion_modalidad), (antes, "CLIENTE"))
+
+
+class EdicionCotizacionTests(TestCase):
+    def setUp(self):
+        from .api import create_jwt_token
+        self.u = Usuario.objects.create(rut="6-6", nombre_completo="E", email="e@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.c = Client()
+        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10,
+                               "distancia_flete_km": 10}, content_type="application/json", **self.h).json()
+        self.url = f"/api/cotizaciones/{self.cot['id']}/"
+
+    def patch(self, body):
+        return self.c.patch(self.url, body, content_type="application/json", **self.h)
+
+    def test_reajuste_manual_reparte_en_hitos_y_queda_en_historial(self):
+        antes = Cotizacion.objects.get(id=self.cot["id"]).costo_total
+        prev = self.patch({"ajuste_monto": 100000}).json()
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).costo_total, antes)  # solo vista previa
+        self.assertEqual(float(prev["diferencia"]), 100000.0)
+        self.assertEqual(self.patch({"ajuste_monto": 100000, "aplicar": True}).status_code, 400)  # sin motivo
+        self.assertEqual(self.patch({"ajuste_monto": 100000, "aplicar": True, "motivo": "alza del zinc"}).status_code, 200)
+        cot = Cotizacion.objects.get(id=self.cot["id"])
+        self.assertEqual(cot.costo_total, antes + 100000)
+        self.assertEqual(sum(h.monto_pago for h in cot.hitos_pago.all()), cot.costo_total)
+        hist = self.c.get(self.url + "cambios/", **self.h).json()
+        self.assertEqual((len(hist), hist[0]["motivo"]), (1, "alza del zinc"))
+
+    def test_cambiar_superficie_recalcula_y_solo_datos_no_reprecia(self):
+        antes = Cotizacion.objects.get(id=self.cot["id"]).costo_total
+        self.patch({"cliente_nombre": "Otro", "aplicar": True})  # solo datos: no cambia el monto
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).costo_total, antes)
+        self.patch({"superficie_m2": 20, "aplicar": True, "motivo": "ampliación"})
+        self.assertGreater(Cotizacion.objects.get(id=self.cot["id"]).costo_total, antes)
+
+    def test_hitos_pagados_no_se_tocan(self):
+        h = HitoPago.objects.filter(cotizacion_id=self.cot["id"])
+        h.update(estado="PAGADO")
+        r = self.patch({"ajuste_monto": 5000, "aplicar": True, "motivo": "x"})
+        self.assertEqual(r.status_code, 409)
+
+    def test_vista_publica_no_expone_datos_internos(self):
+        pub = self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").json()
+        for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):
+            self.assertNotIn(k, pub)

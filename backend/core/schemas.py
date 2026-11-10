@@ -178,6 +178,10 @@ class CotizacionSchema(Schema):
     nivelacion_modalidad: str = ""
     nivelacion_m3: float = 0
     costo_nivelacion: float = 0
+    ganancia_m2: float = 0
+    m2_vigas_vista: float = 0
+    radier_m2: float = 0
+    ajuste_monto: float = 0
     fecha_creacion: datetime
     usuario_id: int
     usuario: Optional[UsuarioSchema] = None
@@ -249,3 +253,54 @@ class GananciasSchema(Schema):
     ganancia_real: float
     avance_real: float
     hito_avance_exigible: bool
+
+
+# --- Vista pública (sin datos internos: usuario, ganancia, ajustes, observaciones de obra) ---
+class CotizacionPublicaSchema(Schema):
+    id: int
+    codigo_cotizacion: str
+    cliente_nombre: str
+    cliente_telefono: Optional[str] = None
+    direccion_terreno: str
+    superficie_m2: float
+    distancia_flete_km: float
+    base_terreno: Optional[CatalogoTipoSchema] = None
+    revestimiento: Optional[CatalogoTipoSchema] = None
+    costo_materiales: float
+    costo_mano_obra: float
+    costo_flete: float
+    costo_total: float
+    estado: str
+    tipo_proyecto: str = "CASA"
+    nivelacion_modalidad: str = ""
+    nivelacion_m3: float = 0
+    costo_nivelacion: float = 0
+    fecha_creacion: datetime
+    hitos_pago: List[HitoPagoSchema] = []
+    detalles_insumo: List[DetalleCotizacionInsumoSchema] = []
+
+
+# --- Edición / reajuste de una cotización emitida ---
+class CotizacionEditSchema(Schema):
+    cliente_nombre: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    direccion_terreno: Optional[str] = None
+    superficie_m2: Optional[float] = None
+    distancia_flete_km: Optional[float] = None
+    base_terreno_id: Optional[int] = None
+    revestimiento_id: Optional[int] = None
+    m2_vigas_vista: Optional[float] = None
+    ganancia_m2: Optional[float] = None
+    radier_m2: Optional[float] = None
+    ajuste_monto: Optional[float] = None  # ajuste manual al total (+/-), se suma al cálculo
+    motivo: Optional[str] = None
+    aplicar: bool = False  # False = solo vista previa
+
+
+class CambioCotizacionSchema(Schema):
+    id: int
+    fecha: datetime
+    usuario: str
+    total_anterior: float
+    total_nuevo: float
+    motivo: str

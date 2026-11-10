@@ -47,7 +47,16 @@ const Row = ({ a, b, strong }: { a: string; b: string; strong?: boolean }) => (
   </View>
 );
 
-export default function FichaPdf({ c }: { c: FichaData }) {
+export interface Interno {
+  neto_cobrado: number;
+  costo_presupuestado: number;
+  gasto_real: number;
+  ganancia_estimada: number;
+  ganancia_real: number;
+  avance_real: number;
+}
+
+export default function FichaPdf({ c, interno }: { c: FichaData; interno?: Interno }) {
   const emision = new Date(c.fecha_creacion);
   const vence = new Date(emision.getTime() + VIGENCIA_DIAS * 86400000);
   // El total guardado ya incluye IVA 19% (precios de la empresa y retail son con IVA).
@@ -59,7 +68,7 @@ export default function FichaPdf({ c }: { c: FichaData }) {
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <Text style={s.title}>DENASERV</Text>
-          <Text>Ficha informativa del proyecto — Folio {c.codigo_cotizacion}</Text>
+          <Text>{interno ? "Ficha interna (uso exclusivo de la empresa)" : "Ficha informativa del proyecto"} — Folio {c.codigo_cotizacion}</Text>
         </View>
 
         <Row a="Cliente" b={c.cliente_nombre} />
@@ -101,6 +110,18 @@ export default function FichaPdf({ c }: { c: FichaData }) {
         <Row a="Neto" b={clp(neto)} />
         <Row a="IVA 19%" b={clp(iva)} />
         <Row a="TOTAL (IVA incluido)" b={clp(c.costo_total)} strong />
+
+        {interno ? (
+          <View>
+            <Text style={s.h2}>Control interno</Text>
+            <Row a="Neto cobrado" b={clp(interno.neto_cobrado)} />
+            <Row a="Costo presupuestado (neto)" b={clp(interno.costo_presupuestado)} />
+            <Row a="Gasto real acumulado" b={clp(interno.gasto_real)} />
+            <Row a="Ganancia estimada" b={clp(interno.ganancia_estimada)} />
+            <Row a="Ganancia real" b={clp(interno.ganancia_real)} strong />
+            <Row a="Avance físico real" b={`${interno.avance_real}%`} />
+          </View>
+        ) : null}
 
         <Text style={s.h2}>Cronograma de pagos (40-30-30)</Text>
         {c.hitos_pago.map((h) => (

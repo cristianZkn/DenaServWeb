@@ -320,6 +320,12 @@ export default function DashboardPage() {
                         </button>
                       )}
                       <Link
+                        href={`/dashboard/proyecto/${cotizacion.id}`}
+                        className="text-blue-900 hover:underline font-bold text-xs"
+                      >
+                        Gestionar
+                      </Link>
+                      <Link
                         href={`/cotizacion/${cotizacion.codigo_cotizacion}`}
                         target="_blank"
                         className="text-blue-600 hover:text-blue-900 font-bold text-xs underline"

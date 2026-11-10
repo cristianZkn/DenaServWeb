@@ -15,7 +15,7 @@ from ninja.security import HttpBearer
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
-    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto
+    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, CambioCotizacion
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
@@ -25,7 +25,8 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema
+    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema
 )
 from . import calculo, precios
 
@@ -58,6 +59,24 @@ def _calcular_desde_catalogo(data):
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
         tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2)
+
+
+def _repartir_en_hitos(cot, delta) -> bool:
+    """Reparte `delta` entre los hitos aún PENDIENTES en proporción a su porcentaje (el último absorbe el redondeo).
+    False si hay diferencia pero no queda ningún hito pendiente."""
+    if not delta:
+        return True
+    pendientes = list(cot.hitos_pago.filter(estado="PENDIENTE").order_by("id"))
+    if not pendientes:
+        return False
+    pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
+    asignado = Decimal(0)
+    for i, h in enumerate(pendientes):
+        parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
+        h.monto_pago += parte
+        asignado += parte
+        h.save(update_fields=["monto_pago"])
+    return True
 
 
 router = Router()
@@ -278,6 +297,9 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 costo_total=r["total"],
                 estado=data.estado or "BORRADOR",
                 tipo_proyecto=data.tipo_proyecto,
+                ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.DEFAULTS["ganancia_m2"],
+                m2_vigas_vista=data.m2_vigas_vista,
+                radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.DEFAULTS["radier_m2"],
                 usuario=request.auth
             )
 
@@ -352,24 +374,70 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
     if not data.aplicar:
         return 200, resultado
     with transaction.atomic():
-        pendientes = list(cot.hitos_pago.filter(estado="PENDIENTE").order_by("id"))
-        if delta and not pendientes:
+        if not _repartir_en_hitos(cot, delta):
             return 409, {"message": "Todos los hitos están pagados: no se puede ajustar el valor."}
-        # La diferencia se reparte entre los hitos aún no pagados, en proporción a su porcentaje.
-        pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
-        asignado = Decimal(0)
-        for i, h in enumerate(pendientes):
-            parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
-            h.monto_pago += parte
-            asignado += parte
-            h.save(update_fields=["monto_pago"])
         cot.nivelacion_modalidad, cot.nivelacion_m3, cot.costo_nivelacion = n["modalidad"], n["m3"], n["costo"]
         cot.costo_total += delta
         cot.save(update_fields=["nivelacion_modalidad", "nivelacion_m3", "costo_nivelacion", "costo_total"])
     return 200, resultado
 
 
-@router.get("/cotizaciones/public/{codigo}", response={200: CotizacionDetalladaSchema, 404: MessageSchema})
+_CAMPOS_PRECIO = {"superficie_m2", "distancia_flete_km", "base_terreno_id", "revestimiento_id",
+                  "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
+_CAMPOS_DECIMAL = {"superficie_m2", "distancia_flete_km", "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
+
+
+@router.patch("/cotizaciones/{cotizacion_id}/", response={200: dict, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
+    """Edita una cotización ya emitida y reajusta el monto total. La diferencia se reparte entre los hitos pendientes
+    y queda registrada (con motivo) en el historial de cambios."""
+    cot = Cotizacion.objects.filter(id=cotizacion_id).first()
+    if not cot:
+        return 404, {"message": "Cotización no encontrada"}
+    cambios = data.dict(exclude_unset=True)
+    aplicar, motivo = cambios.pop("aplicar", False), (cambios.pop("motivo", None) or "").strip()
+    for k, v in cambios.items():
+        setattr(cot, k, Decimal(str(v)) if k in _CAMPOS_DECIMAL and v is not None else v)
+
+    total_anterior = Cotizacion.objects.get(id=cotizacion_id).costo_total
+    nuevo_total = cot.costo_total
+    if _CAMPOS_PRECIO & cambios.keys():
+        try:
+            r = _calcular_desde_catalogo(CalculoInSchema(
+                superficie_m2=float(cot.superficie_m2), distancia_km=float(cot.distancia_flete_km),
+                base_terreno_id=cot.base_terreno_id, revestimiento_id=cot.revestimiento_id,
+                ganancia_m2=float(cot.ganancia_m2), m2_vigas_vista=float(cot.m2_vigas_vista),
+                tipo_proyecto=cot.tipo_proyecto, radier_m2=float(cot.radier_m2)))
+        except ValueError as e:
+            return 400, {"message": str(e)}
+        cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (
+            r["costo_materiales_total"], r["costo_mano_obra"], r["costo_flete"])
+        nuevo_total = r["total"] + cot.costo_nivelacion + cot.ajuste_monto
+    delta = nuevo_total - total_anterior
+    resultado = {"total_anterior": total_anterior, "total_nuevo": nuevo_total, "diferencia": delta}
+    if not aplicar:
+        return 200, resultado
+    if delta and not motivo:
+        return 400, {"message": "Indique el motivo del reajuste del monto."}
+    with transaction.atomic():
+        if not _repartir_en_hitos(cot, delta):
+            return 409, {"message": "Todos los hitos están pagados: no se puede reajustar el monto."}
+        cot.costo_total = nuevo_total
+        cot.save()
+        if delta:
+            CambioCotizacion.objects.create(cotizacion=cot, usuario=request.auth, total_anterior=total_anterior,
+                                            total_nuevo=nuevo_total, motivo=motivo[:255])
+    return 200, resultado
+
+
+@router.get("/cotizaciones/{cotizacion_id}/cambios/", response=List[CambioCotizacionSchema], auth=AuthBearer())
+def historial_cambios(request, cotizacion_id: int):
+    return [{"id": c.id, "fecha": c.fecha, "usuario": c.usuario.nombre_completo, "total_anterior": c.total_anterior,
+             "total_nuevo": c.total_nuevo, "motivo": c.motivo}
+            for c in CambioCotizacion.objects.select_related("usuario").filter(cotizacion_id=cotizacion_id)]
+
+
+@router.get("/cotizaciones/public/{codigo}", response={200: CotizacionPublicaSchema, 404: MessageSchema})
 def obtener_cotizacion_publica(request, codigo: str):
     try:
         cotizacion = Cotizacion.objects.select_related(

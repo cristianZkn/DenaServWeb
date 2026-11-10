@@ -101,6 +101,11 @@ class Cotizacion(models.Model):
     estado = models.CharField(max_length=50, default='BORRADOR')  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
     tipo_proyecto = models.CharField(max_length=20, default='CASA')  # 'CASA' | 'SOLO_RADIER'
     # Relleno de estabilizado: se define tras la visita al terreno ('' = aún sin visita).
+    # Parámetros con los que se calculó el precio (permiten reajustarlo después de emitida la cotización).
+    ganancia_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=30000)
+    m2_vigas_vista = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    radier_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=37500)
+    ajuste_monto = models.DecimalField(max_digits=18, decimal_places=2, default=0)  # ajuste manual al total (+/-)
     nivelacion_modalidad = models.CharField(max_length=10, blank=True, default='')  # 'CLIENTE' | 'EMPRESA'
     nivelacion_m3 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     costo_nivelacion = models.DecimalField(max_digits=18, decimal_places=2, default=0)
@@ -211,3 +216,17 @@ class PortafolioProyecto(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+# 9. cambio_cotizacion: historial de reajustes del monto total
+class CambioCotizacion(models.Model):
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='cambios')
+    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name='cambios_cotizacion')
+    fecha = models.DateTimeField(default=timezone.now)
+    total_anterior = models.DecimalField(max_digits=18, decimal_places=2)
+    total_nuevo = models.DecimalField(max_digits=18, decimal_places=2)
+    motivo = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        db_table = 'cambio_cotizacion'
+        ordering = ['-fecha']
