@@ -306,7 +306,7 @@ class TarifasEmpresaTests(TestCase):
 
     def test_solo_radier(self):
         r = calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER")
-        self.assertEqual(r["total"], 750000)  # 20 m² x $37.500, IVA incluido
+        self.assertEqual((r["costo_materiales"], r["costo_flete"], r["total"]), (750000, 100000, 850000))  # radier + traslado (10 km: $5.000/m²)
         self.assertEqual(r["neto"] + r["iva"], r["total"])
         self.assertEqual(sum(h["monto"] for h in r["hitos"]), r["total"])
-        self.assertEqual(calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 800000)
+        self.assertEqual(calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 900000)

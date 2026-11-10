@@ -69,13 +69,14 @@ def bom_insumos(m2: D, insumos) -> list:
     return out
 
 
-def _solo_radier(m2: D, p) -> dict:
-    """Radier estándar vendido por separado: tarifa única por m² (material y mano de obra, IVA incluido)."""
-    total = m2 * p["radier_m2"]
-    pv = precio_venta(total)
+def _solo_radier(m2: D, km: D, p) -> dict:
+    """Radier estándar: tarifa por m² que ya incluye material y mano de obra, más el traslado por tramo. IVA incluido."""
+    radier = m2 * p["radier_m2"]
+    flete = costo_flete(m2, km, p)
+    pv = precio_venta(radier + flete)
     return {
-        "tipo_proyecto": "SOLO_RADIER", "volumen_estabilizado_m3": D(0), "costo_materiales": pv["total"],
-        "costo_materiales_total": pv["total"], "materiales_referencia": False, "costo_nivelacion": D(0), "costo_flete": D(0),
+        "tipo_proyecto": "SOLO_RADIER", "volumen_estabilizado_m3": D(0), "costo_materiales": _clp(radier),
+        "costo_materiales_total": _clp(radier), "materiales_referencia": False, "costo_nivelacion": D(0), "costo_flete": _clp(flete),
         "costo_mano_obra": D(0), "costo_insumos": D(0), "costo_vigas_vista": D(0), "ganancia": D(0), "insumos": [],
         "costos_directos": pv["total"], **pv, "tabiqueria": {},
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
@@ -87,7 +88,7 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
     if tipo_proyecto == "SOLO_RADIER":
-        return _solo_radier(m2, p)
+        return _solo_radier(m2, km, p)
     if tipo_proyecto != "CASA":
         raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")
     desc = D(str(descuento_pct))

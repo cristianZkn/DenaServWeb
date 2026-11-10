@@ -311,7 +311,7 @@ export default function CotizadorPage() {
           {formData.tipo_proyecto === "SOLO_RADIER" && (
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Precio del radier por m² (material + mano de obra, IVA incl.; normal $35.000–$40.000)
+                Precio del radier por m² (incluye material y mano de obra, IVA incl.; normal $35.000–$40.000). El traslado se suma aparte.
               </label>
               <input
                 type="number"
