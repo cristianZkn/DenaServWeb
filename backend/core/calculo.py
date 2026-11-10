@@ -1,4 +1,4 @@
-"""Motor de cálculo DenaServ (fórmulas del informe, sección 2.8). Todo en Decimal."""
+"""Motor de cálculo DenaServ (fórmulas del informe, sección 2.8 + tarifas reales de la empresa). Todo en Decimal."""
 import math
 from decimal import Decimal as D, ROUND_HALF_UP
 
@@ -6,14 +6,12 @@ K_COMPACTACION = D("1.20")
 IVA = D("0.19")
 # shortcut: parámetros de negocio fijos por defecto, mover a tabla de configuración cuando el jefe los quiera editar.
 DEFAULTS = {
-    "flete_base": D("45000"),
-    "tarifa_combustible_km": D("900"),
-    "f_peso": D("350"),            # CLP por m² de casa
-    "viatico_dia": D("25000"),
-    "dias_estimados": None,        # None -> se estima desde los m²
-    "margen": D("1.30"),
-    "mano_obra_m2": D("28000"),    # CLP por m² (valor que usaba el cotizador previo)
-    "m2_por_dia": D("4"),          # avance de la cuadrilla, para estimar días
+    # Tarifas indicadas por la empresa (casa semi terminada económica ≈ $195.000/m²).
+    "mano_obra_m2": D("25000"),    # maestros, CLP por m²
+    "ganancia_m2": D("30000"),     # ganancia de la empresa, CLP por m²
+    "traslado_m2_hasta_35km": D("5000"),   # traslado de maestros y materiales, CLP por m²
+    "traslado_m2_hasta_100km": D("10000"),
+    "viga_vista_m2": D("65000"),   # adicional por m² con vigas a la vista
     "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
 }
 
@@ -31,9 +29,12 @@ def volumen_estabilizado(m2: D, espesor_cm: D) -> D:
 
 
 def costo_flete(m2, km, p) -> D:
-    dias = p["dias_estimados"] or D(max(1, math.ceil(m2 / p["m2_por_dia"])))
-    return (p["flete_base"] + 2 * km * p["tarifa_combustible_km"]
-            + m2 * p["f_peso"] + p["viatico_dia"] * dias)
+    """Traslado por tramo de distancia; la empresa no realiza proyectos a más de 100 km."""
+    if km <= 35:
+        return m2 * p["traslado_m2_hasta_35km"]
+    if km <= 100:
+        return m2 * p["traslado_m2_hasta_100km"]
+    raise ValueError("Fuera del radio de servicio: máximo 100 km")
 
 
 def tabiqueria(m2: D, separacion_cm: int = 40, p=DEFAULTS) -> dict:
@@ -45,8 +46,7 @@ def tabiqueria(m2: D, separacion_cm: int = 40, p=DEFAULTS) -> dict:
     return {"pies_derechos_2x3": pies, "soleras_2x3_ml": _clp(largo_ml * 2), "cerchas_1x4_ml": _clp(m2 * D("2.5"))}
 
 
-def precio_venta(costos_directos: D, margen: D) -> dict:
-    neto = costos_directos * margen
+def precio_venta(neto: D) -> dict:
     iva = neto * IVA
     return {"neto": _clp(neto), "iva": _clp(iva), "total": _clp(neto + iva)}
 
@@ -66,7 +66,7 @@ def bom_insumos(m2: D, insumos) -> list:
 
 
 def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabilizado_m3,
-             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), **over) -> dict:
+             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), m2_vigas_vista=0, **over) -> dict:
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
     desc = D(str(descuento_pct))
@@ -77,12 +77,14 @@ def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabi
     mano_obra = m2 * p["mano_obra_m2"]
     bom = bom_insumos(m2, insumos)
     costo_insumos = sum((i["subtotal"] for i in bom), D(0))
-    directos = materiales + nivelacion + flete + mano_obra + costo_insumos
-    pv = precio_venta(directos, p["margen"])
+    vigas = D(str(m2_vigas_vista)) * p["viga_vista_m2"]
+    directos = materiales + nivelacion + flete + mano_obra + costo_insumos + vigas
+    ganancia = m2 * p["ganancia_m2"]
+    pv = precio_venta(directos + ganancia)
     return {
         "volumen_estabilizado_m3": vol.quantize(D("0.01")),
         "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
-        "costo_insumos": _clp(costo_insumos), "insumos": bom,
+        "costo_insumos": _clp(costo_insumos), "costo_vigas_vista": _clp(vigas), "ganancia": _clp(ganancia), "insumos": bom,
         "costos_directos": _clp(directos), **pv,
         "tabiqueria": tabiqueria(m2, separacion_cm, p),
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],

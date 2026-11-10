@@ -1,5 +1,8 @@
 """Actualización de precios del catálogo desde Sodimac vía el actor de Apify scraperschile/sodimac."""
 import re
+import time
+import json
+from urllib.parse import quote, urlsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -15,9 +18,15 @@ ACTOR = "scraperschile~sodimac"
 MAX_ITEMS = 50
 
 
-def _articulo_id(url: str):
-    m = re.search(r"(?:^|/)(?:articulo|product|ficha)/([0-9A-Za-z]+)", url or "")
-    return m.group(1) if m else None
+def _clave(url: str):
+    """Identificador estable 'tienda:id' de un producto a partir de su URL (None si no se reconoce)."""
+    host = urlsplit(url or "").netloc.replace("www.", "")
+    path = urlsplit(url or "").path
+    if "easy.cl" in host:
+        m = re.search(r"-(\d+)/p/?$", path)
+    else:
+        m = re.search(r"(?:^|/)(?:articulo|product|ficha)/([0-9A-Za-z]+)", path)
+    return f"{host.split('.')[0]}:{m.group(1)}" if m else None
 
 
 def ejecutar_actor(term: str) -> list:
@@ -46,7 +55,7 @@ def parsear_mct(html: str) -> list:
         precios = [int(re.sub(r"\D", "", t)) for t in re.findall(r"\$\s*[\d.]+", valor.get_text())]
         href = nombre.get("href", "")
         out.append({"name": nombre.get_text(strip=True), "price": min(precios) if precios else None,
-                    "url": MCT_BASE + href.lstrip("/"), "product_id": _articulo_id(href), "is_marketplace": False})
+                    "url": MCT_BASE + href.lstrip("/"), "is_marketplace": False})
     return out
 
 
@@ -71,9 +80,74 @@ def scrape_mct(url: str) -> list:
     return parsear_mct(r.text)
 
 
+UA = {"User-Agent": "Mozilla/5.0 (compatible; DenaServBot/1.0)"}
+
+
+def _next_data(url: str) -> dict:
+    r = requests.get(url, headers=UA, timeout=25)
+    r.raise_for_status()
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S)
+    if not m:
+        raise RuntimeError(f"Sin datos estructurados en {url}")
+    return json.loads(m.group(1))
+
+
+def _buscar_lista(o, clave_nombre):
+    """Primera lista de dicts (>1) cuyos elementos tienen `clave_nombre` dentro del JSON de Next."""
+    if isinstance(o, dict):
+        for v in o.values():
+            if isinstance(v, list) and len(v) > 1 and isinstance(v[0], dict) and clave_nombre in v[0]:
+                return v
+        for v in o.values():
+            if (r := _buscar_lista(v, clave_nombre)):
+                return r
+    elif isinstance(o, list):
+        for v in o:
+            if (r := _buscar_lista(v, clave_nombre)):
+                return r
+    return None
+
+
+def scrape_sodimac(term: str) -> list:
+    # robots.txt de sodimac.cl no bloquea /sodimac-cl/search?Ntt= (sí bloquea /buscar/ y /browse/).
+    data = _next_data(f"https://www.sodimac.cl/sodimac-cl/search?Ntt={quote(term)}")
+    out = []
+    for p in _buscar_lista(data, "displayName") or []:
+        precios = p.get("prices") or []
+        normal = next((x for x in precios if x.get("type") == "NORMAL"), precios[0] if precios else {})
+        out.append({"name": p["displayName"], "price": normal.get("priceWithoutFormatting"),
+                    "url": f"https://www.sodimac.cl/sodimac-cl/product/{p['productId']}/",
+                    "is_marketplace": bool(p.get("isInternational"))})
+    return out
+
+
+def scrape_easy(term: str) -> list:
+    # robots.txt de easy.cl solo bloquea bots con nombre propio; /search/<término> está permitido.
+    data = _next_data(f"https://www.easy.cl/search/{quote(term)}")
+    out = []
+    for p in _buscar_lista(data, "productName") or []:
+        pr = p.get("prices") or {}
+        out.append({"name": p["productName"], "price": pr.get("offerPrice") or pr.get("normalPrice"),
+                    "url": f"https://www.easy.cl/{p['linkText']}", "is_marketplace": bool(p.get("isMarketplace"))})
+    return out
+
+
 def ejecutar_fuente(term: str) -> list:
-    """Si el término es una URL de mct.cl se hace scraping directo (gratis); si no, Apify/Sodimac."""
-    return scrape_mct(term) if term.startswith(MCT_BASE) else ejecutar_actor(term)
+    """URL de mct.cl -> MCT; 'apify:<término>' -> actor de Apify; otro término -> Sodimac + Easy (scraping directo, gratis)."""
+    if term.startswith(MCT_BASE):
+        return scrape_mct(term)
+    if term.startswith("apify:"):
+        return ejecutar_actor(term[6:])
+    items = []
+    for scraper in (scrape_sodimac, scrape_easy):
+        try:
+            items += scraper(term)
+        except Exception:  # si una tienda cae, se sigue con la otra
+            pass
+        time.sleep(1)
+    if not items:
+        raise RuntimeError("Ninguna tienda respondió")
+    return items
 
 
 def actualizar_precios(runner=ejecutar_fuente) -> dict:
@@ -86,12 +160,12 @@ def actualizar_precios(runner=ejecutar_fuente) -> dict:
     res = {"actualizados": 0, "sin_cambio": 0, "no_encontrados": [], "errores": []}
     for term, lista in por_termino.items():
         try:
-            precios = {str(p.get("product_id") or _articulo_id(p.get("url"))): p.get("price") for p in runner(term)}
+            precios = {(p.get("clave") or _clave(p.get("url"))): p.get("price") for p in runner(term)}
         except Exception as e:  # un término caído no debe detener a los demás
             res["errores"].append(f"{term}: {e}")
             continue
         for it in lista:
-            precio = precios.get(_articulo_id(it.fuente_url))
+            precio = precios.get(_clave(it.fuente_url))
             if not isinstance(precio, (int, float)) or precio <= 0:
                 res["no_encontrados"].append(it.nombre)
                 continue
@@ -113,7 +187,10 @@ def _norm(t: str) -> str:
 def _coincide(p: dict, incluye, excluye) -> bool:
     n = _norm(p.get("name"))
     compacto = n.replace(" ", "")
-    ok = lambda w: _norm(w) in n or _norm(w) in compacto
+    def ok(w):
+        w = _norm(w)
+        # medidas tipo "2x3" no deben coincidir dentro de "2x2x3": no pueden ir precedidas de dígito ni "x"
+        return bool(re.search(rf"(?<![0-9x]){re.escape(w)}", compacto)) if "x" in w and w[0].isdigit() else w in n
     return (all(ok(w) for w in incluye) and not any(ok(w) for w in excluye)
             and not p.get("is_marketplace") and isinstance(p.get("price"), (int, float)) and p["price"] > 0)
 

@@ -151,7 +151,8 @@ class CotizacionInSchema(Schema):
     espesor_cm: float = 10
     arido_empresa: bool = True
     estabilizado_id: Optional[int] = None
-    margen: Optional[float] = None
+    ganancia_m2: Optional[float] = None
+    m2_vigas_vista: float = 0
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -225,7 +226,8 @@ class CalculoInSchema(Schema):
     estabilizado_id: Optional[int] = None
     arido_empresa: bool = True
     separacion_cm: int = 40
-    margen: Optional[float] = None
+    ganancia_m2: Optional[float] = None
+    m2_vigas_vista: float = 0
 
 
 # --- Resumen de ganancias por contrato ---

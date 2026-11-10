@@ -49,7 +49,7 @@ def _calcular_desde_catalogo(data):
         m2=data.superficie_m2, km=data.distancia_km, espesor_cm=data.espesor_cm,
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
         precio_estabilizado_m3=_neto(get(data.estabilizado_id)), arido_empresa=data.arido_empresa,
-        separacion_cm=data.separacion_cm, margen=data.margen, insumos=insumos)
+        separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos)
     return r
 
 
@@ -249,7 +249,8 @@ def crear_cotizacion(request, data: CotizacionInSchema):
             r = _calcular_desde_catalogo(CalculoInSchema(
                 superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km, espesor_cm=data.espesor_cm,
                 base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
-                estabilizado_id=data.estabilizado_id, arido_empresa=data.arido_empresa, margen=data.margen))
+                estabilizado_id=data.estabilizado_id, arido_empresa=data.arido_empresa,
+                ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,

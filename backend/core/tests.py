@@ -147,7 +147,7 @@ class CalculoTests(TestCase):
     def test_formulas(self):
         self.assertEqual(calculo.volumen_estabilizado(D(60), D(10)), D("7.2"))
         self.assertEqual(calculo.costo_neto(D(1000), D(15)), D("850"))
-        self.assertEqual(calculo.precio_venta(D(1000), D("1.3"))["total"], D("1547"))
+        self.assertEqual(calculo.precio_venta(D(1300))["total"], D("1547"))
         self.assertEqual(sum(h[2] for h in calculo.hitos(D("1547"))), D("1547"))
 
     def test_arido_cliente_cuesta_cero(self):
@@ -227,7 +227,7 @@ class PreciosTests(TestCase):
         b = CatalogoTipo.objects.create(categoria="INSUMO", nombre="B", unidad_medida="UN", precio_base_unitario=200,
                                         fuente_url="https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", fuente_termino="pino")
         fake = lambda term: [{"url": "https://www.sodimac.cl/sodimac-cl/articulo/111/otro-slug", "price": 150},
-                             {"product_id": "222X", "url": "https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", "price": None}]
+                             {"url": "https://www.sodimac.cl/sodimac-cl/product/222X/b/222X/", "price": None}]
         r = precios.actualizar_precios(runner=fake)
         a.refresh_from_db(); b.refresh_from_db()
         self.assertEqual(float(a.precio_base_unitario), 150.0)
@@ -258,5 +258,29 @@ class PreciosTests(TestCase):
                 '<div class="grilla"><a class="nombreGrilla" href="ficha/1/osb">OSB 11MM</a></div>')
         r = precios.parsear_mct(html)
         self.assertEqual(len(r), 1)  # el ítem sin precio se ignora
-        self.assertEqual((r[0]["price"], r[0]["product_id"]), (25526, "16936"))
+        self.assertEqual((r[0]["price"], precios._clave(r[0]["url"])), (25526, "mct:16936"))
         self.assertEqual(r[0]["url"], "https://mct.cl/ficha/16936/terciado-15mm")
+
+
+    def test_clave_por_tienda(self):
+        from . import precios
+        self.assertEqual(precios._clave("https://www.easy.cl/pino-impregnado-micronizado-2x3-32-m-1155430/p"), "easy:1155430")
+        self.assertEqual(precios._clave("https://www.sodimac.cl/sodimac-cl/product/271485X/"), "sodimac:271485X")
+
+
+    def test_medida_no_coincide_dentro_de_otra(self):
+        from . import precios
+        self.assertFalse(precios._coincide({"name": "Pino 2 x 2 x 3,2 m", "price": 1}, ["2x3"], []))
+        self.assertTrue(precios._coincide({"name": "Pino 2 x 3 x 3,2 m", "price": 1}, ["2x3"], []))
+
+
+class TarifasEmpresaTests(TestCase):
+    def test_tramos_de_traslado_y_ganancia_fija(self):
+        r = calculo.calcular(10, 20, 10, 0, 0, 0)
+        self.assertEqual((r["costo_flete"], r["costo_mano_obra"], r["ganancia"]), (50000, 250000, 300000))
+        self.assertEqual(calculo.calcular(10, 80, 10, 0, 0, 0)["costo_flete"], 100000)
+        with self.assertRaises(ValueError):
+            calculo.calcular(10, 101, 10, 0, 0, 0)
+
+    def test_vigas_a_la_vista(self):
+        self.assertEqual(calculo.calcular(10, 0, 10, 0, 0, 0, m2_vigas_vista=2)["costo_vigas_vista"], 130000)

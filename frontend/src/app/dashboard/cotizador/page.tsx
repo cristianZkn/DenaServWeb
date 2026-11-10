@@ -33,7 +33,8 @@ export default function CotizadorPage() {
     espesor_cm: 10,
     arido_empresa: true,
     estabilizado_id: "" as string | number,
-    margen: 1.3,
+    ganancia_m2: 30000,
+    m2_vigas_vista: 0,
     costo_materiales: 0,
     costo_mano_obra: 0,
     costo_flete: 0,
@@ -102,7 +103,8 @@ export default function CotizadorPage() {
             estabilizado_id: estabSel ? estabSel.id : null,
             espesor_cm: Number(formData.espesor_cm) || 0,
             arido_empresa: formData.arido_empresa,
-            margen: Number(formData.margen) || undefined,
+            ganancia_m2: Number(formData.ganancia_m2) || 0,
+            m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
           }),
         });
         if (!res.ok) return;
@@ -127,7 +129,8 @@ export default function CotizadorPage() {
     formData.espesor_cm,
     formData.arido_empresa,
     formData.estabilizado_id,
-    formData.margen,
+    formData.ganancia_m2,
+    formData.m2_vigas_vista,
     basesTerreno,
     revestimientos,
     estabilizados,
@@ -164,7 +167,8 @@ export default function CotizadorPage() {
         revestimiento_id: formData.revestimiento_id ? parseInt(formData.revestimiento_id as any) : null,
         estabilizado_id: formData.estabilizado_id ? parseInt(formData.estabilizado_id as any) : null,
         espesor_cm: Number(formData.espesor_cm) || 0,
-        margen: Number(formData.margen) || null,
+        ganancia_m2: Number(formData.ganancia_m2) || 0,
+        m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
         costo_materiales: parseFloat(formData.costo_materiales as any),
         costo_mano_obra: parseFloat(formData.costo_mano_obra as any),
         costo_flete: parseFloat(formData.costo_flete as any),
@@ -426,14 +430,28 @@ export default function CotizadorPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Margen de utilidad (multiplicador)
+                Ganancia de la empresa ($ por m²)
               </label>
               <input
                 type="number"
-                name="margen"
-                min="1"
-                step="0.01"
-                value={formData.margen}
+                name="ganancia_m2"
+                min="0"
+                step="1000"
+                value={formData.ganancia_m2}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">
+                m² con vigas a la vista (+$65.000/m²)
+              </label>
+              <input
+                type="number"
+                name="m2_vigas_vista"
+                min="0"
+                value={formData.m2_vigas_vista}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
               />
