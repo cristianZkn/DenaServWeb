@@ -404,6 +404,10 @@ class EdicionCotizacionTests(TestCase):
         r = self.patch({"ajuste_monto": 5000, "aplicar": True, "motivo": "x"})
         self.assertEqual(r.status_code, 409)
 
+    def test_detalle_interno_accesible(self):
+        r = self.c.get(self.url, **self.h)
+        self.assertEqual((r.status_code, r.json()["codigo_cotizacion"]), (200, self.cot["codigo_cotizacion"]))
+
     def test_vista_publica_no_expone_datos_internos(self):
         pub = self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").json()
         for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):

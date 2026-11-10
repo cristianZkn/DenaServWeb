@@ -336,7 +336,7 @@ def calcular_cotizacion(request, data: CalculoInSchema):
         return 400, {"message": str(e)}
 
 
-@router.get("/cotizaciones/{cotizacion_id}", response={200: CotizacionDetalladaSchema, 404: MessageSchema}, auth=AuthBearer())
+@router.get("/cotizaciones/{cotizacion_id}/", response={200: CotizacionDetalladaSchema, 404: MessageSchema}, auth=AuthBearer())
 def obtener_cotizacion_detalle(request, cotizacion_id: int):
     try:
         cotizacion = Cotizacion.objects.select_related(
