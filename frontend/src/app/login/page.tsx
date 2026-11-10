@@ -70,14 +70,13 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-100">
-      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-200 text-center">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-blue-900">
+      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
         <div className="mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-900 text-white font-black text-2xl mb-4 shadow-md">
-            D
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">DENASERV WEB</h1>
-          <p className="text-slate-500 mt-2 text-sm">Plataforma de Casas Prefabricadas</p>
+          <h1 className="text-3xl font-extrabold text-blue-900 tracking-tight">
+            DENA<span className="text-accent">SERV</span>
+          </h1>
+          <p className="text-slate-500 mt-2">Cotizaciones de casas prefabricadas</p>
         </div>
 
         {error && (
@@ -93,14 +92,10 @@ export default function LoginPage() {
           </div>
         )}
 
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">
-          Acceso administrativo con Google
-        </p>
+        <p className="font-semibold text-slate-700 mb-4">Ingrese con su cuenta de Google</p>
         <div ref={btnRef} className="flex justify-center" />
 
-        <p className="mt-8 text-xs text-slate-400">
-          Solo ingresan correos previamente autorizados. Autenticación vía OAuth 2.0 / Google Identity.
-        </p>
+        <p className="mt-8 text-sm text-slate-500">Solo pueden entrar los correos autorizados por la empresa.</p>
       </div>
     </div>
   );

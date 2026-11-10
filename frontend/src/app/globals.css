@@ -1,13 +1,44 @@
 @import "tailwindcss";
 
+/*
+  Paleta DENASERV: verde pino (marca) + grises neutros con un toque verdoso + ámbar para lo importante.
+  Se redefinen las escalas "blue" y "slate" de Tailwind, así todo el panel toma estos colores desde un solo lugar.
+*/
 @theme {
-  --color-primary: #1e3a8a; /* Blue-900 for high contrast and serious tone */
-  --color-primary-hover: #1e40af; /* Blue-800 */
-  --color-background: #f8fafc; /* Slate-50 */
+  --color-blue-50: #eef6f5;
+  --color-blue-100: #d6eae7;
+  --color-blue-200: #aed4cf;
+  --color-blue-300: #7ab7b0;
+  --color-blue-400: #46958d;
+  --color-blue-500: #2a7a72;
+  --color-blue-600: #1f6159;
+  --color-blue-700: #1a4e48;
+  --color-blue-800: #163f3b;
+  --color-blue-900: #12332f;
+  --color-blue-950: #0b201e;
+
+  --color-slate-50: #f6f8f8;
+  --color-slate-100: #eceff0;
+  --color-slate-200: #dde2e4;
+  --color-slate-300: #c4cccf;
+  --color-slate-400: #98a3a8;
+  --color-slate-500: #66737a;
+  --color-slate-600: #4f5b61;
+  --color-slate-700: #3c474c;
+  --color-slate-800: #283135;
+  --color-slate-900: #182024;
+  --color-slate-950: #0e1417;
+
+  --color-accent: #b7791f;
+  --color-primary: #12332f;
+  --color-primary-hover: #1a4e48;
+  --color-background: #f1f4f4;
   --color-surface: #ffffff;
-  --color-text: #0f172a; /* Slate-900 */
-  --color-text-muted: #475569; /* Slate-600 */
-  --color-border: #cbd5e1; /* Slate-300 */
+  --color-text: #182024;
+  --color-text-muted: #4f5b61;
+  --color-border: #c4cccf;
+
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
 html {
@@ -17,9 +48,10 @@ html {
 body {
   background-color: var(--color-background);
   color: var(--color-text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 @layer base {
@@ -28,13 +60,14 @@ body {
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--color-border);
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     width: 100%;
+    background-color: #fff;
   }
 
   input:focus, select:focus, textarea:focus {
-    outline: 2px solid var(--color-primary);
-    border-color: var(--color-primary);
+    outline: 2px solid var(--color-blue-600);
+    border-color: var(--color-blue-600);
   }
 
   button {
@@ -48,7 +81,7 @@ body {
   }
 
   :focus-visible {
-    outline: 3px solid #f59e0b; /* foco bien visible al navegar con teclado */
+    outline: 3px solid #d99a2b; /* foco bien visible al navegar con teclado */
     outline-offset: 2px;
   }
 

@@ -249,14 +249,12 @@ Errores: ${r.errores.join("; ")}` : "")
   const itemsPagina = itemsFiltrados.slice(inicio, inicio + POR_PAGINA);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Materiales y precios</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Lista de materiales con su precio. Los precios se actualizan solos cada semana desde las tiendas.
-          </p>
+          <h1 className="text-2xl font-extrabold text-slate-900">Materiales y precios</h1>
+          <p className="text-sm text-slate-500">Los precios se actualizan solos cada semana desde las tiendas.</p>
         </div>
         <div className="flex gap-2">
         <button
@@ -282,9 +280,9 @@ Errores: ${r.errores.join("; ")}` : "")
       )}
 
       {/* Tabs y Filtros */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
         {/* Tabs de Categorías */}
-        <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap gap-2">
           {CATEGORIAS_PREDEFINIDAS.map((cat) => (
             <button
               key={cat.key}
@@ -303,22 +301,20 @@ Errores: ${r.errores.join("; ")}` : "")
           ))}
         </div>
 
-        {/* Buscador y Selector Móvil */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="w-full sm:w-72">
-            <input
-              type="text"
-              placeholder="Buscar por nombre o descripción..."
-              value={busqueda}
-              onChange={(e) => {
-                setBusqueda(e.target.value);
-                setPagina(1);
-              }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-blue-500"
-            />
-          </div>
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+          <input
+            type="search"
+            placeholder="Buscar por nombre o descripción"
+            aria-label="Buscar material"
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setPagina(1);
+            }}
+            className="sm:!w-80"
+          />
           <div className="text-sm text-slate-500">
-            Mostrando <strong>{itemsFiltrados.length}</strong> de {items.length} tipos registrados
+            <strong>{itemsFiltrados.length}</strong> de {items.length} materiales
           </div>
         </div>
       </div>

@@ -225,8 +225,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const pestana = (p: Panel, texto: string) => (
     <button
       onClick={() => setPanel(p)}
-      className={`flex-1 px-4 py-3 rounded-xl text-lg font-bold border-2 cursor-pointer ${
-        panel === p ? "bg-blue-900 text-white border-blue-900" : "bg-white text-blue-900 border-blue-900 hover:bg-blue-50"
+      className={`flex-1 px-4 py-2.5 rounded-xl text-base font-bold border-2 cursor-pointer transition ${
+        panel === p ? "bg-blue-900 text-white border-blue-900" : "bg-white text-blue-900 border-slate-300 hover:border-blue-700"
       }`}
     >
       {texto}
@@ -234,37 +234,40 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   );
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <Link href="/dashboard" className="inline-block text-lg font-semibold text-blue-900 underline">
-        ← Volver a mis cotizaciones
-      </Link>
-
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-        <h1 className="text-3xl font-black text-slate-900">{cot.cliente_nombre}</h1>
-        <p className="text-lg text-slate-600">
-          {cot.direccion_terreno} · {cot.superficie_m2} m² · Cotización {cot.codigo_cotizacion}
-        </p>
-        <div className="bg-blue-900 text-white rounded-xl p-5">
-          <div className="text-base text-blue-200">Valor total de la casa (IVA incluido)</div>
-          <div className="text-4xl font-black">{clp(cot.costo_total)}</div>
+    <div className="max-w-6xl mx-auto grid lg:grid-cols-[19rem_1fr] gap-5 items-start">
+      {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
+      <aside className="lg:sticky lg:top-20 space-y-3">
+        <Link href="/dashboard" className="inline-block text-base font-semibold text-blue-800 hover:underline">
+          ← Mis cotizaciones
+        </Link>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 leading-tight">{cot.cliente_nombre}</h1>
+            <p className="text-base text-slate-600 mt-1">{cot.direccion_terreno}</p>
+            <p className="text-sm text-slate-500">{cot.superficie_m2} m² · {cot.codigo_cotizacion}</p>
+          </div>
+          <div className="bg-blue-900 text-white rounded-xl p-4">
+            <div className="text-sm text-blue-200">Valor total, IVA incluido</div>
+            <div className="text-3xl font-black tabular-nums">{clp(cot.costo_total)}</div>
+          </div>
+          <div className="grid gap-2">
+            <Link href={`/cotizacion/${(cot as any).token_publico}`} target="_blank" className="px-4 py-2.5 text-center text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50">
+              Ver ficha del cliente
+            </Link>
+            <button onClick={descargarPdf} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">
+              Descargar ficha de la empresa (PDF)
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-3 pt-1">
-          <Link href={`/cotizacion/${(cot as any).token_publico}`} target="_blank" className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl">
-            Ver ficha del cliente
-          </Link>
-          <button onClick={descargarPdf} className="px-5 py-3 text-lg font-bold border-2 border-slate-300 rounded-xl cursor-pointer">
-            Descargar ficha de la empresa (PDF)
-          </button>
-        </div>
-      </div>
+      </aside>
 
+      <div className="space-y-5 min-w-0">
       {msg && <div className="bg-green-50 border-l-8 border-green-600 text-green-900 p-4 rounded-r-xl text-lg font-semibold">{msg}</div>}
       {error && <div className="bg-red-50 border-l-8 border-red-600 text-red-800 p-4 rounded-r-xl text-lg font-semibold">{error}</div>}
 
-      <h2 className="text-2xl font-black text-slate-900">¿Qué desea hacer?</h2>
-      <div className="flex flex-col sm:flex-row gap-3">
-        {pestana("valor", "Cambiar el valor de la casa")}
-        {pestana("datos", "Cambiar datos del cliente")}
+      <div className="flex flex-col sm:flex-row gap-2">
+        {pestana("valor", "Cambiar el valor")}
+        {pestana("datos", "Datos del cliente")}
         {pestana("avance", "Avance y pagos")}
       </div>
 
@@ -461,6 +464,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </ul>
         )}
       </details>
+      </div>
     </div>
   );
 }

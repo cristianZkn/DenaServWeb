@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 
 const NAV = [
   { href: "/dashboard", label: "Mis cotizaciones" },
-  { href: "/dashboard/cotizador", label: "+ Nueva cotización" },
   { href: "/dashboard/catalogos", label: "Materiales y precios" },
   { href: "/dashboard/proveedores", label: "Proveedores" },
+  { href: "/dashboard/cotizador", label: "+ Nueva cotización" },
 ];
 
 export default function DashboardLayout({
@@ -63,54 +63,51 @@ export default function DashboardLayout({
   if (!autorizado) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Navbar Minimalista */}
-      <nav className="bg-blue-900 text-white shadow-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex space-x-8 items-center">
-              <Link href="/dashboard" className="text-xl font-bold tracking-tight">
-                DenaServ
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              {userEmail && (
-                <span className="text-xs text-blue-200 hidden sm:inline-block">
-                  {userEmail}
-                </span>
-              )}
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white text-sm px-3.5 py-1.5 rounded-md font-semibold transition shadow-sm cursor-pointer"
-              >
-                Salir
-              </button>
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      {/* Una sola barra: marca, secciones y sesión (ocupa poca altura y siempre queda a la vista) */}
+      <nav className="bg-blue-900 text-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-4 h-14">
+          <Link href="/dashboard" className="text-lg font-extrabold tracking-tight shrink-0">
+            DENA<span className="text-amber-400">SERV</span>
+          </Link>
+          <div className="flex-1 overflow-x-auto">
+            <div className="flex gap-1 whitespace-nowrap">
+              {NAV.map((n) => {
+                const activo = n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href);
+                const principal = n.href === "/dashboard/cotizador";
+                return (
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    aria-current={activo ? "page" : undefined}
+                    className={`px-3.5 py-1.5 rounded-lg text-base font-semibold transition-colors ${
+                      principal
+                        ? "bg-amber-500 text-blue-950 hover:bg-amber-400 ml-2"
+                        : activo
+                        ? "bg-white/15 text-white"
+                        : "text-blue-100 hover:bg-white/10"
+                    }`}
+                  >
+                    {n.label}
+                  </Link>
+                );
+              })}
             </div>
           </div>
-        </div>
-        {/* Menú de navegación (visible también en móvil, con scroll horizontal) */}
-        <div className="border-t border-blue-800 overflow-x-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-1 py-1.5 whitespace-nowrap">
-            {NAV.map((n) => {
-              const activo = n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href);
-              return (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className={`px-4 py-2 rounded-md text-base font-semibold transition-colors ${
-                    activo ? "bg-blue-700 text-white" : "text-blue-100 hover:bg-blue-800"
-                  }`}
-                >
-                  {n.label}
-                </Link>
-              );
-            })}
+          <div className="flex items-center gap-3 shrink-0">
+            {userEmail && <span className="text-xs text-blue-200 hidden xl:inline-block">{userEmail}</span>}
+            <button
+              onClick={handleLogout}
+              className="!min-h-0 border border-white/30 hover:bg-white/10 text-white text-sm px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer"
+            >
+              Salir
+            </button>
           </div>
         </div>
       </nav>
 
       {/* Contenido Principal */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
         {children}
       </main>
     </div>

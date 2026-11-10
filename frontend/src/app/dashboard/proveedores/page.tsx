@@ -141,10 +141,10 @@ export default function ProveedoresPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Directorio de Proveedores</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">Directorio de Proveedores</h1>
           <p className="text-sm text-slate-500 mt-1">
             Gestión de empresas aliadas y distribuidores de insumos constructivos.
           </p>

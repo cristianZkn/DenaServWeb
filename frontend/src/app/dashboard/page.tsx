@@ -98,6 +98,7 @@ export default function DashboardPage() {
     }
   };
   const router = useRouter();
+  const [busqueda, setBusqueda] = useState("");
 
   const fetchCotizaciones = async () => {
     const token = localStorage.getItem("token");
@@ -209,21 +210,33 @@ export default function DashboardPage() {
     );
   }
 
+  const q = busqueda.trim().toLowerCase();
+  const visibles = q
+    ? cotizaciones.filter((c) =>
+        `${c.codigo_cotizacion} ${c.cliente_nombre} ${c.direccion_terreno} ${c.cliente_telefono || ""}`.toLowerCase().includes(q)
+      )
+    : cotizaciones;
+
   return (
-    <div className="space-y-6">
-      {/* Barra Superior */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Mis cotizaciones</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Aquí están todas las cotizaciones. Pulse &quot;Ver y editar&quot; para abrir una.
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-extrabold text-slate-900 mr-auto">
+          Mis cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
+        </h1>
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar cliente, código o dirección"
+          aria-label="Buscar cotización"
+          className="sm:!w-80"
+        />
         <Link
           href="/dashboard/cotizador"
-          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 py-2.5 rounded-lg shadow transition cursor-pointer flex items-center gap-2"
+          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 inline-flex items-center rounded-lg shadow-sm transition"
         >
-          <span>+</span> Nueva Cotización
+          + Nueva cotización
         </Link>
       </div>
 
@@ -233,106 +246,102 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Tabla de Cotizaciones */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
-                <th className="p-4">Código</th>
-                <th className="p-4">Cliente y Teléfono</th>
-                <th className="p-4">Dirección Terreno</th>
-                <th className="p-4">Superficie</th>
-                <th className="p-4">Costo Total</th>
-                <th className="p-4">Estado</th>
-                <th className="p-4">Pagos</th>
-                <th className="p-4 text-right">Acciones</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
+                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3">Terreno</th>
+                <th className="px-4 py-3 text-right">Valor total</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-sm">
-              {cotizaciones.length === 0 ? (
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {visibles.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
-                    No se registran cotizaciones aún. Crea la primera.
+                  <td colSpan={5} className="p-8 text-center text-slate-500">
+                    {cotizaciones.length === 0
+                      ? "Aún no hay cotizaciones. Cree la primera con «Nueva cotización»."
+                      : "Ninguna cotización coincide con la búsqueda."}
                   </td>
                 </tr>
               ) : (
-                cotizaciones.map((cotizacion) => (
+                visibles.map((cotizacion) => (
                   <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-mono font-bold text-blue-900">
-                      {cotizacion.codigo_cotizacion}
-                      <div className="text-[10px] font-sans font-semibold uppercase text-slate-400">
-                        {cotizacion.tipo_proyecto === "SOLO_RADIER" ? "Solo radier" : "Casa"} ·{" "}
-                        {new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
+                    <td className="px-4 py-3">
+                      <div className="font-bold text-slate-900">{cotizacion.cliente_nombre}</div>
+                      <div className="text-xs text-slate-500">
+                        <span className="font-mono font-semibold text-blue-800">{cotizacion.codigo_cotizacion}</span>
+                        {" · "}{cotizacion.tipo_proyecto === "SOLO_RADIER" ? "Solo radier" : "Casa"}
+                        {" · "}{new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
+                        {cotizacion.cliente_telefono ? ` · ${cotizacion.cliente_telefono}` : ""}
                       </div>
                     </td>
-                    <td className="p-4">
-                      <div className="font-bold text-slate-800">{cotizacion.cliente_nombre}</div>
-                      <div className="text-xs text-slate-500">{cotizacion.cliente_telefono || "Sin teléfono"}</div>
-                    </td>
-                    <td className="p-4 max-w-xs">
-                      <div className="text-slate-700 font-medium truncate" title={cotizacion.direccion_terreno}>
+                    <td className="px-4 py-3 max-w-xs">
+                      <div className="text-slate-800 truncate" title={cotizacion.direccion_terreno}>
                         {cotizacion.direccion_terreno}
                       </div>
+                      <div className="text-xs text-slate-500">{cotizacion.superficie_m2} m²</div>
                     </td>
-                    <td className="p-4 font-semibold text-slate-700">
-                      {cotizacion.superficie_m2} m²
-                    </td>
-                    <td className="p-4 font-bold text-slate-900">
+                    <td className="px-4 py-3 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">
                       ${Number(cotizacion.costo_total).toLocaleString("es-CL")}
                     </td>
-                    <td className="p-4">
+                    <td className="px-4 py-3">
                       <select
                         value={cotizacion.estado}
                         onChange={(e) => handleCambiarEstadoCotizacion(cotizacion.id, e.target.value)}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-md border cursor-pointer ${
+                        aria-label="Estado de la cotización"
+                        className={`!min-h-0 !w-auto text-sm font-semibold !px-2 !py-1 rounded-md border cursor-pointer ${
                           cotizacion.estado === "ACEPTADA"
                             ? "bg-green-50 text-green-800 border-green-300"
                             : cotizacion.estado === "FINALIZADA"
                             ? "bg-blue-50 text-blue-800 border-blue-300"
-                            : "bg-yellow-50 text-yellow-800 border-yellow-300"
+                            : "bg-amber-50 text-amber-800 border-amber-300"
                         }`}
                       >
                         <option value="BORRADOR">En preparación</option>
-                        <option value="ACEPTADA">Aceptada por el cliente</option>
+                        <option value="ACEPTADA">Aceptada</option>
                         <option value="FINALIZADA">Obra terminada</option>
                       </select>
-                    </td>
-                    <td className="p-4">
-                      <button
-                        onClick={() => abrirGestionHitos(cotizacion)}
-                        className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md border border-slate-300 transition cursor-pointer"
-                      >
-                        Ver pagos
-                      </button>
-                    </td>
-                    <td className="p-4 text-right flex flex-col items-end gap-2">
                       {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
                         <button
                           onClick={() => abrirVisita(cotizacion)}
-                          className="text-xs font-semibold text-slate-700 underline cursor-pointer"
-                          title="Cubicar el relleno de estabilizado tras visitar el terreno"
+                          className="!min-h-0 block mt-1 text-xs font-semibold text-blue-700 hover:underline"
+                          title="Medir el relleno de estabilizado tras visitar el terreno"
                         >
                           {cotizacion.nivelacion_modalidad
                             ? cotizacion.nivelacion_modalidad === "EMPRESA"
                               ? "Estabilizado: lo pone la empresa"
                               : "Estabilizado: lo compra el cliente"
-                            : "Medir estabilizado (visita)"}
+                            : "Medir estabilizado"}
                         </button>
                       )}
-                      <Link
-                        href={`/dashboard/proyecto/${cotizacion.id}`}
-                        className="bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm px-4 py-2 rounded-lg"
-                      >
-                        Ver y editar
-                      </Link>
-                      <Link
-                        href={`/cotizacion/${cotizacion.token_publico}`}
-                        target="_blank"
-                        className="text-blue-600 hover:text-blue-900 font-bold text-xs underline"
-                      >
-                        Ficha del cliente ↗
-                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        <button
+                          onClick={() => abrirGestionHitos(cotizacion)}
+                          className="!min-h-0 text-sm font-semibold bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 transition"
+                        >
+                          Pagos
+                        </button>
+                        <Link
+                          href={`/cotizacion/${cotizacion.token_publico}`}
+                          target="_blank"
+                          className="text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition"
+                          title="Abrir la ficha que ve el cliente"
+                        >
+                          Ficha ↗
+                        </Link>
+                        <Link
+                          href={`/dashboard/proyecto/${cotizacion.id}`}
+                          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold text-sm px-4 py-1.5 rounded-lg transition"
+                        >
+                          Abrir
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
