@@ -15,8 +15,17 @@ export interface FichaData {
   costo_total: number;
   fecha_creacion: string;
   detalles_insumo?: { id: number; etapa_obra: string; cantidad_calculada: number; subtotal_costo: number; catalogo_tipo?: { nombre: string; unidad_medida: string } | null }[];
+  nivelacion_modalidad?: string;
+  nivelacion_m3?: number;
+  costo_nivelacion?: number;
   hitos_pago: { id: number; fase: string; porcentaje: number; monto_pago: number }[];
 }
+
+const DESTINO_HITO: Record<string, string> = {
+  ANTICIPO_40: "Al firmar el contrato o antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
+  AVANCE_30: "Al alcanzar el 50 % de avance: adelantos por trabajos de maestros y proveedores.",
+  ENTREGA_30: "Al terminar el proyecto, con la revisión y entrega de llaves: pago final a maestros y utilidad de la empresa.",
+};
 
 const VIGENCIA_DIAS = 15;
 const clp = (n: number) => "$" + Math.round(Number(n)).toLocaleString("es-CL");
@@ -82,7 +91,8 @@ export default function FichaPdf({ c }: { c: FichaData }) {
           ["Materiales", c.costo_materiales],
           ["Mano de obra", c.costo_mano_obra],
           ["Flete y logística", c.costo_flete],
-          ["Gestión y utilidad", Math.max(0, Math.round(Number(c.costo_total) - c.costo_materiales - c.costo_mano_obra - c.costo_flete))],
+          ["Relleno de estabilizado", c.costo_nivelacion ?? 0],
+          ["Gestión y utilidad", Math.max(0, Math.round(Number(c.costo_total) - c.costo_materiales - c.costo_mano_obra - c.costo_flete - (c.costo_nivelacion ?? 0)))],
         ]
           .filter(([, v]) => Number(v) > 0)
           .map(([l, v]) => (
@@ -94,9 +104,17 @@ export default function FichaPdf({ c }: { c: FichaData }) {
 
         <Text style={s.h2}>Cronograma de pagos (40-30-30)</Text>
         {c.hitos_pago.map((h) => (
-          <Row key={h.id} a={`${h.fase.replace(/_/g, " ")} (${h.porcentaje}%)`} b={clp(h.monto_pago)} />
+          <View key={h.id}>
+            <Row a={`${h.fase.replace(/_/g, " ")} (${h.porcentaje}%)`} b={clp(h.monto_pago)} />
+            {DESTINO_HITO[h.fase] ? <Text style={{ fontSize: 8, color: "#64748b", marginBottom: 3 }}>{DESTINO_HITO[h.fase]}</Text> : null}
+          </View>
         ))}
 
+        {c.nivelacion_modalidad === "CLIENTE" ? (
+          <Text style={s.note}>
+            El relleno de estabilizado ({c.nivelacion_m3} m³) para la base del radier lo adquiere el cliente directamente.
+          </Text>
+        ) : null}
         <Text style={s.note}>
           Documento generado por DENASERV WEB. Valores en pesos chilenos (CLP). Oferta válida por {VIGENCIA_DIAS} días corridos desde la emisión.
         </Text>

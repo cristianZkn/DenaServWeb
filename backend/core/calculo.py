@@ -76,42 +76,48 @@ def _solo_radier(m2: D, km: D, p) -> dict:
     flete = costo_flete(m2, km, p)
     pv = precio_venta(radier + flete)
     return {
-        "tipo_proyecto": "SOLO_RADIER", "volumen_estabilizado_m3": D(0), "costo_materiales": _clp(radier),
-        "costo_materiales_total": _clp(radier), "materiales_referencia": False, "costo_nivelacion": D(0), "costo_flete": _clp(flete),
+        "tipo_proyecto": "SOLO_RADIER", "costo_materiales": _clp(radier), "sobre_economico": D(0),
+        "costo_materiales_total": _clp(radier), "costo_flete": _clp(flete),
         "costo_mano_obra": D(0), "costo_insumos": D(0), "costo_vigas_vista": D(0), "ganancia": D(0), "insumos": [],
         "costos_directos": pv["total"], **pv, "tabiqueria": {},
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
     }
 
 
-def calcular(m2, km, espesor_cm, precio_base_m2, precio_revest_m2, precio_estabilizado_m3,
-             arido_empresa=True, descuento_pct=0, separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", **over) -> dict:
+def nivelacion(m2, espesor_cm, arido_empresa=True, p=DEFAULTS) -> dict:
+    """Relleno de estabilizado. NO va en la cotización inicial: se cubica en la visita al terreno y el cliente
+    lo compra directamente o la empresa lo suma al valor ya informado."""
+    m3 = volumen_estabilizado(D(str(m2)), D(str(espesor_cm)))
+    costo = m3 * p["estabilizado_m3"] if arido_empresa else D(0)
+    return {"m3": m3.quantize(D("0.01")), "costo": _clp(costo), "modalidad": "EMPRESA" if arido_empresa else "CLIENTE"}
+
+
+def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, revest_min_m2=None,
+             separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", **over) -> dict:
+    """Cotización inicial por m² (modo de trabajo de la empresa).
+
+    Materiales = referencia ($135.000/m², casa económica) + diferencia de la base y el revestimiento elegidos respecto de los
+    más económicos del catálogo. La lista de insumos (BOM) no se suma: desglosa esos materiales para las compras."""
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
-    m2, km, espesor_cm = D(str(m2)), D(str(km)), D(str(espesor_cm))
+    m2, km = D(str(m2)), D(str(km))
     if tipo_proyecto == "SOLO_RADIER":
         return _solo_radier(m2, km, p)
     if tipo_proyecto != "CASA":
         raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")
-    desc = D(str(descuento_pct))
-    materiales = m2 * (costo_neto(D(str(precio_base_m2)), desc) + costo_neto(D(str(precio_revest_m2)), desc))
-    vol = volumen_estabilizado(m2, espesor_cm)
-    # Precio del árido: parámetro de la empresa (no es un producto de catálogo); None = valor por defecto.
-    precio_m3 = p["estabilizado_m3"] if precio_estabilizado_m3 is None else D(str(precio_estabilizado_m3))
-    nivelacion = vol * precio_m3 if arido_empresa else D(0)
+    extra = lambda precio, minimo: max(D(0), D(str(precio)) - D(str(minimo))) if minimo is not None else D(0)
+    sobre_economico = m2 * (extra(precio_base_m2, base_min_m2) + extra(precio_revest_m2, revest_min_m2))
+    materiales_total = m2 * p["materiales_ref_m2"] + sobre_economico
     flete = costo_flete(m2, km, p)
     mano_obra = m2 * p["mano_obra_m2"]
     bom = bom_insumos(m2, insumos)
     costo_insumos = sum((i["subtotal"] for i in bom), D(0))
     vigas = D(str(m2_vigas_vista)) * p["viga_vista_m2"]
-    calculado = materiales + nivelacion + costo_insumos
-    materiales_total = max(calculado, m2 * p["materiales_ref_m2"])
     directos = materiales_total + flete + mano_obra + vigas
     ganancia = m2 * p["ganancia_m2"]
     pv = precio_venta(directos + ganancia)
     return {
-        "volumen_estabilizado_m3": vol.quantize(D("0.01")),
-        "costo_materiales": _clp(materiales), "costo_nivelacion": _clp(nivelacion), "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
-        "costo_materiales_total": _clp(materiales_total), "materiales_referencia": materiales_total > calculado,
+        "costo_materiales_total": _clp(materiales_total), "sobre_economico": _clp(sobre_economico),
+        "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
         "costo_insumos": _clp(costo_insumos), "costo_vigas_vista": _clp(vigas), "ganancia": _clp(ganancia), "insumos": bom,
         "costos_directos": _clp(directos), **pv,
         "tabiqueria": tabiqueria(m2, separacion_cm, p),

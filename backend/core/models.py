@@ -100,6 +100,10 @@ class Cotizacion(models.Model):
     costo_total = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
     estado = models.CharField(max_length=50, default='BORRADOR')  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
     tipo_proyecto = models.CharField(max_length=20, default='CASA')  # 'CASA' | 'SOLO_RADIER'
+    # Relleno de estabilizado: se define tras la visita al terreno ('' = aún sin visita).
+    nivelacion_modalidad = models.CharField(max_length=10, blank=True, default='')  # 'CLIENTE' | 'EMPRESA'
+    nivelacion_m3 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    costo_nivelacion = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     fecha_creacion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(
         Usuario,

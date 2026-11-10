@@ -151,10 +151,6 @@ class CalculoTests(TestCase):
         self.assertEqual((p["neto"], p["iva"], p["total"]), (D(1300), D(247), D(1547)))
         self.assertEqual(sum(h[2] for h in calculo.hitos(D("1547"))), D("1547"))
 
-    def test_arido_cliente_cuesta_cero(self):
-        r = calculo.calcular(60, 10, 10, 1000, 1000, 5000, arido_empresa=False)
-        self.assertEqual(r["costo_nivelacion"], 0)
-
     def test_endpoint(self):
         from .api import create_jwt_token
         u = Usuario.objects.create(rut="8-8", nombre_completo="T", email="t@d.cl")
@@ -277,19 +273,18 @@ class PreciosTests(TestCase):
 
 class TarifasEmpresaTests(TestCase):
     def test_tramos_de_traslado_y_ganancia_fija(self):
-        r = calculo.calcular(10, 20, 10, 0, 0, 0)
+        r = calculo.calcular(10, 20, 0, 0)
         self.assertEqual((r["costo_flete"], r["costo_mano_obra"], r["ganancia"]), (50000, 250000, 300000))
-        self.assertEqual(calculo.calcular(10, 80, 10, 0, 0, 0)["costo_flete"], 100000)
+        self.assertEqual(calculo.calcular(10, 80, 0, 0)["costo_flete"], 100000)
         with self.assertRaises(ValueError):
-            calculo.calcular(10, 101, 10, 0, 0, 0)
+            calculo.calcular(10, 101, 0, 0)
 
     def test_vigas_a_la_vista(self):
-        self.assertEqual(calculo.calcular(10, 0, 10, 0, 0, 0, m2_vigas_vista=2)["costo_vigas_vista"], 130000)
+        self.assertEqual(calculo.calcular(10, 0, 0, 0, m2_vigas_vista=2)["costo_vigas_vista"], 130000)
 
 
     def test_precio_195k_incluye_iva_y_referencia_de_materiales(self):
-        r = calculo.calcular(10, 20, 10, 0, 0, 0)  # sin catálogo: materiales = referencia $135.000/m²
-        self.assertTrue(r["materiales_referencia"])
+        r = calculo.calcular(10, 20, 0, 0)  # sin catálogo: materiales = referencia $135.000/m²
         self.assertEqual(r["total"], 1950000)  # 135k + 25k + 30k + 5k por m² x 10 m², IVA incluido
 
 
@@ -305,11 +300,11 @@ class TarifasEmpresaTests(TestCase):
 
 
     def test_solo_radier(self):
-        r = calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER")
+        r = calculo.calcular(20, 10, 0, 0, tipo_proyecto="SOLO_RADIER")
         self.assertEqual((r["costo_materiales"], r["costo_flete"], r["total"]), (750000, 100000, 850000))  # radier + traslado (10 km: $5.000/m²)
         self.assertEqual(r["neto"] + r["iva"], r["total"])
         self.assertEqual(sum(h["monto"] for h in r["hitos"]), r["total"])
-        self.assertEqual(calculo.calcular(20, 10, 10, 0, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 900000)
+        self.assertEqual(calculo.calcular(20, 10, 0, 0, tipo_proyecto="SOLO_RADIER", radier_m2=40000)["total"], 900000)
 
 
     def test_m2_desde_nombre(self):
@@ -335,8 +330,36 @@ class TarifasEmpresaTests(TestCase):
         self.assertEqual(float(it.precio_base_unitario), 9000.0)
 
 
-    def test_estabilizado_es_calculo_automatico(self):
-        # 10 m² x 10 cm x 1,20 = 1,2 m³ a $32.000 el m³ (parámetro de la empresa)
-        r = calculo.calcular(10, 0, 10, 0, 0, None)
-        self.assertEqual((r["volumen_estabilizado_m3"], r["costo_nivelacion"]), (D("1.20"), 38400))
-        self.assertEqual(calculo.calcular(10, 0, 10, 0, 0, None, arido_empresa=False)["costo_nivelacion"], 0)
+
+class FlujoEmpresaTests(TestCase):
+    def test_estabilizado_cubicado_aparte_de_la_cotizacion_inicial(self):
+        n = calculo.nivelacion(10, 10)  # 10 m² x 10 cm x 1,20 = 1,2 m³ a $32.000
+        self.assertEqual((n["m3"], n["costo"], n["modalidad"]), (D("1.20"), 38400, "EMPRESA"))
+        self.assertEqual(calculo.nivelacion(10, 10, arido_empresa=False)["costo"], 0)
+        self.assertNotIn("costo_nivelacion", calculo.calcular(10, 0))
+
+    def test_revestimiento_mas_caro_suma_solo_la_diferencia(self):
+        base = calculo.calcular(10, 0, precio_revest_m2=10000, revest_min_m2=10000)["costo_materiales_total"]
+        caro = calculo.calcular(10, 0, precio_revest_m2=12000, revest_min_m2=10000)
+        self.assertEqual(base, 1350000)  # referencia $135.000/m²
+        self.assertEqual(caro["costo_materiales_total"] - base, 20000)  # 2.000/m² x 10 m²
+
+    def test_visita_tecnica_suma_al_valor_y_reparte_en_hitos_pendientes(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="5-5", nombre_completo="N", email="n@d.cl")
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        c = Client()
+        cot = c.post("/api/cotizaciones/", {"cliente_nombre": "X", "direccion_terreno": "d", "superficie_m2": 10},
+                     content_type="application/json", **h).json()
+        antes = Cotizacion.objects.get(id=cot["id"]).costo_total
+        url = f"/api/cotizaciones/{cot['id']}/nivelacion"
+        prev = c.post(url, {"espesor_cm": 10}, content_type="application/json", **h).json()
+        self.assertEqual(Cotizacion.objects.get(id=cot["id"]).costo_total, antes)  # vista previa: no guarda
+        c.post(url, {"espesor_cm": 10, "aplicar": True}, content_type="application/json", **h)
+        cobj = Cotizacion.objects.get(id=cot["id"])
+        self.assertEqual(cobj.costo_total, antes + D(str(prev["costo"])))
+        self.assertEqual(sum(x.monto_pago for x in cobj.hitos_pago.all()), cobj.costo_total)
+        # el cliente compra el árido: se resta lo sumado
+        c.post(url, {"espesor_cm": 10, "arido_empresa": False, "aplicar": True}, content_type="application/json", **h)
+        cobj.refresh_from_db()
+        self.assertEqual((cobj.costo_total, cobj.nivelacion_modalidad), (antes, "CLIENTE"))

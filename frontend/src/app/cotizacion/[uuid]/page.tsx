@@ -10,6 +10,12 @@ interface CatalogoItem {
   categoria: string;
 }
 
+const DESTINO_HITO: Record<string, string> = {
+  ANTICIPO_40: "Al firmar el contrato o antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
+  AVANCE_30: "Al alcanzar el 50 % de avance: adelantos por trabajos de maestros y proveedores.",
+  ENTREGA_30: "Al terminar el proyecto, con la revisión y entrega de llaves: pago final a maestros y utilidad de la empresa.",
+};
+
 interface HitoPago {
   id: number;
   fase: string;
@@ -36,6 +42,9 @@ interface Cotizacion {
   costo_total: number;
   estado: string;
   fecha_creacion: string;
+  nivelacion_modalidad?: string;
+  nivelacion_m3?: number;
+  costo_nivelacion?: number;
   hitos_pago: HitoPago[];
   detalles_insumo?: FichaData["detalles_insumo"];
 }
@@ -99,7 +108,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
     );
   }
 
-  const subtotal = Number(cotizacion.costo_materiales) + Number(cotizacion.costo_mano_obra) + Number(cotizacion.costo_flete);
+  const subtotal = Number(cotizacion.costo_materiales) + Number(cotizacion.costo_mano_obra) + Number(cotizacion.costo_flete) + Number(cotizacion.costo_nivelacion ?? 0);
   const gestion = Math.max(0, Math.round(Number(cotizacion.costo_total) - subtotal)); // ganancia de la empresa
   const neto = Math.round(Number(cotizacion.costo_total) / 1.19);
 
@@ -208,6 +217,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                 ["Suministro de Materiales", cotizacion.costo_materiales],
                 ["Mano de Obra Especializada", cotizacion.costo_mano_obra],
                 ["Transporte y Logística de Flete", cotizacion.costo_flete],
+                ["Relleno de estabilizado", cotizacion.costo_nivelacion ?? 0],
                 ["Gestión y utilidad", gestion],
               ]
                 .filter(([, v]) => Number(v) > 0)
@@ -217,6 +227,11 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                     <span className="font-semibold">${Number(v).toLocaleString("es-CL")}</span>
                   </div>
                 ))}
+              {cotizacion.nivelacion_modalidad === "CLIENTE" && (
+                <div className="py-1 border-b border-slate-200 text-xs text-slate-500">
+                  Relleno de estabilizado ({Number(cotizacion.nivelacion_m3 ?? 0).toLocaleString("es-CL")} m³): lo adquiere el cliente directamente.
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-slate-200 text-slate-500">
                 <span>Neto:</span>
                 <span>${neto.toLocaleString("es-CL")}</span>
@@ -258,6 +273,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                       <p className="text-2xl font-black text-slate-900 mt-1">
                         ${Number(hito.monto_pago).toLocaleString("es-CL")}
                       </p>
+                      {DESTINO_HITO[hito.fase] && <p className="text-xs text-slate-500 mt-1 max-w-md">{DESTINO_HITO[hito.fase]}</p>}
                       {hito.fecha_pago && (
                         <p className="text-xs text-slate-500 mt-1">Fecha de pago: {hito.fecha_pago}</p>
                       )}

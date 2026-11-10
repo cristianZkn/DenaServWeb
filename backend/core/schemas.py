@@ -149,9 +149,6 @@ class CotizacionInSchema(Schema):
     costo_flete: float = 0.00
     costo_total: float = 0.00
     estado: str = "BORRADOR"  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
-    espesor_cm: float = 10
-    arido_empresa: bool = True
-    estabilizado_id: Optional[int] = None
     ganancia_m2: Optional[float] = None
     m2_vigas_vista: float = 0
     tipo_proyecto: str = "CASA"
@@ -178,6 +175,9 @@ class CotizacionSchema(Schema):
     costo_total: float
     estado: str
     tipo_proyecto: str = "CASA"
+    nivelacion_modalidad: str = ""
+    nivelacion_m3: float = 0
+    costo_nivelacion: float = 0
     fecha_creacion: datetime
     usuario_id: int
     usuario: Optional[UsuarioSchema] = None
@@ -224,16 +224,20 @@ class PortafolioProyectoInSchema(Schema):
 class CalculoInSchema(Schema):
     superficie_m2: float
     distancia_km: float = 0
-    espesor_cm: float = 10
     base_terreno_id: Optional[int] = None
     revestimiento_id: Optional[int] = None
-    estabilizado_id: Optional[int] = None
-    arido_empresa: bool = True
     separacion_cm: int = 40
     ganancia_m2: Optional[float] = None
     m2_vigas_vista: float = 0
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
+
+
+class NivelacionInSchema(Schema):
+    espesor_cm: float
+    superficie_m2: Optional[float] = None  # por defecto, la superficie de la cotización
+    arido_empresa: bool = True
+    aplicar: bool = False  # False = solo calcular (vista previa)
 
 
 # --- Resumen de ganancias por contrato ---

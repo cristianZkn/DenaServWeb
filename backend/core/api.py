@@ -25,7 +25,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema
+    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema
 )
 from . import calculo, precios
 
@@ -38,20 +38,26 @@ def _neto(item):
     return calculo.costo_neto(item.precio_base_unitario, d)
 
 
+def _precio_minimo(categoria):
+    """Precio neto por m² del ítem activo más económico de la categoría (referencia 'casa económica')."""
+    precios_ = [_neto(i) for i in CatalogoTipo.objects.select_related('proveedor').filter(categoria=categoria, activo=True)]
+    precios_ = [x for x in precios_ if x > 0]
+    return min(precios_) if precios_ else None
+
+
 def _calcular_desde_catalogo(data):
-    """Resuelve precios e insumos desde la BD y ejecuta el motor. Devuelve (resultado, insumos_db)."""
+    """Resuelve precios e insumos desde la BD y ejecuta el motor."""
     get = lambda i: CatalogoTipo.objects.select_related('proveedor').filter(id=i).first() if i else None
     insumos_db = list(CatalogoTipo.objects.select_related('proveedor').filter(
         categoria='INSUMO', activo=True, rendimiento_m2__gt=0))
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
-    r = calculo.calcular(
-        m2=data.superficie_m2, km=data.distancia_km, espesor_cm=data.espesor_cm,
+    return calculo.calcular(
+        m2=data.superficie_m2, km=data.distancia_km,
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
-        precio_estabilizado_m3=None, arido_empresa=data.arido_empresa,
+        base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
         tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2)
-    return r
 
 
 router = Router()
@@ -252,9 +258,8 @@ def crear_cotizacion(request, data: CotizacionInSchema):
 
             # El backend recalcula todo: no se confía en los montos enviados por el cliente.
             r = _calcular_desde_catalogo(CalculoInSchema(
-                superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km, espesor_cm=data.espesor_cm,
+                superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
-                estabilizado_id=data.estabilizado_id, arido_empresa=data.arido_empresa,
                 ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista,
                 tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2))
 
@@ -333,6 +338,35 @@ def actualizar_estado_cotizacion(request, cotizacion_id: int, data: CotizacionEs
         return 404, {"message": "Cotización no encontrada"}
     except Exception as e:
         return 400, {"message": str(e)}
+
+
+@router.post("/cotizaciones/{cotizacion_id}/nivelacion", response={200: dict, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
+    """Tras la visita al terreno: cubica el estabilizado y, si lo pone la empresa, lo suma al valor ya informado."""
+    cot = Cotizacion.objects.filter(id=cotizacion_id).first()
+    if not cot:
+        return 404, {"message": "Cotización no encontrada"}
+    n = calculo.nivelacion(data.superficie_m2 or cot.superficie_m2, data.espesor_cm, data.arido_empresa)
+    delta = n["costo"] - cot.costo_nivelacion
+    resultado = {"m3": n["m3"], "costo": n["costo"], "modalidad": n["modalidad"], "total_nuevo": cot.costo_total + delta}
+    if not data.aplicar:
+        return 200, resultado
+    with transaction.atomic():
+        pendientes = list(cot.hitos_pago.filter(estado="PENDIENTE").order_by("id"))
+        if delta and not pendientes:
+            return 409, {"message": "Todos los hitos están pagados: no se puede ajustar el valor."}
+        # La diferencia se reparte entre los hitos aún no pagados, en proporción a su porcentaje.
+        pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
+        asignado = Decimal(0)
+        for i, h in enumerate(pendientes):
+            parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
+            h.monto_pago += parte
+            asignado += parte
+            h.save(update_fields=["monto_pago"])
+        cot.nivelacion_modalidad, cot.nivelacion_m3, cot.costo_nivelacion = n["modalidad"], n["m3"], n["costo"]
+        cot.costo_total += delta
+        cot.save(update_fields=["nivelacion_modalidad", "nivelacion_m3", "costo_nivelacion", "costo_total"])
+    return 200, resultado
 
 
 @router.get("/cotizaciones/public/{codigo}", response={200: CotizacionDetalladaSchema, 404: MessageSchema})
@@ -416,7 +450,7 @@ def resumen_ganancias(request, cotizacion_id: int):
     if not c or not obra:
         return 404, {"message": "Cotización u obra no encontrada"}
     neto = (c.costo_total / Decimal("1.19")).quantize(Decimal("1"))
-    presupuestado = ((c.costo_materiales + c.costo_mano_obra + c.costo_flete) / Decimal("1.19")).quantize(Decimal("1"))
+    presupuestado = ((c.costo_materiales + c.costo_mano_obra + c.costo_flete + c.costo_nivelacion) / Decimal("1.19")).quantize(Decimal("1"))
     return 200, {
         "neto_cobrado": neto, "costo_presupuestado": presupuestado, "gasto_real": obra.gasto_real_acumulado,
         "ganancia_estimada": neto - presupuestado, "ganancia_real": neto - obra.gasto_real_acumulado,

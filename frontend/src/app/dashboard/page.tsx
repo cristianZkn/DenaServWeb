@@ -31,6 +31,9 @@ interface Cotizacion {
   costo_total: number;
   estado: string;
   tipo_proyecto?: string;
+  nivelacion_modalidad?: string;
+  nivelacion_m3?: number;
+  costo_nivelacion?: number;
   fecha_creacion: string;
   base_terreno?: CatalogoTipo | null;
   revestimiento?: CatalogoTipo | null;
@@ -46,6 +49,53 @@ export default function DashboardPage() {
   const [hitos, setHitos] = useState<HitoPago[]>([]);
   const [actualizandoHito, setActualizandoHito] = useState<number | null>(null);
   const [hitosCargando, setHitosCargando] = useState(false);
+
+  // Visita técnica al terreno: cubicación del estabilizado (no va en la cotización inicial)
+  const [visita, setVisita] = useState<Cotizacion | null>(null);
+  const [espesor, setEspesor] = useState(10);
+  const [aridoEmpresa, setAridoEmpresa] = useState(true);
+  const [previa, setPrevia] = useState<{ m3: number; costo: number; total_nuevo: number } | null>(null);
+  const [guardandoVisita, setGuardandoVisita] = useState(false);
+
+  const llamarNivelacion = async (cot: Cotizacion, aplicar: boolean) => {
+    const res = await fetch(`/api/cotizaciones/${cot.id}/nivelacion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+      body: JSON.stringify({ espesor_cm: espesor, arido_empresa: aridoEmpresa, aplicar }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Error al calcular");
+    return data;
+  };
+
+  useEffect(() => {
+    if (!visita) return;
+    const t = setTimeout(() => {
+      llamarNivelacion(visita, false).then(setPrevia).catch(() => setPrevia(null));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [visita, espesor, aridoEmpresa]);
+
+  const abrirVisita = (c: Cotizacion) => {
+    setVisita(c);
+    setEspesor(10);
+    setAridoEmpresa(c.nivelacion_modalidad !== "CLIENTE");
+    setPrevia(null);
+  };
+
+  const guardarVisita = async () => {
+    if (!visita) return;
+    setGuardandoVisita(true);
+    try {
+      await llamarNivelacion(visita, true);
+      setVisita(null);
+      fetchCotizaciones();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setGuardandoVisita(false);
+    }
+  };
   const router = useRouter();
 
   const fetchCotizaciones = async () => {
@@ -255,7 +305,20 @@ export default function DashboardPage() {
                         Ver Pagos
                       </button>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right space-x-3 whitespace-nowrap">
+                      {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
+                        <button
+                          onClick={() => abrirVisita(cotizacion)}
+                          className="text-xs font-semibold text-slate-700 underline cursor-pointer"
+                          title="Cubicar el relleno de estabilizado tras visitar el terreno"
+                        >
+                          {cotizacion.nivelacion_modalidad
+                            ? cotizacion.nivelacion_modalidad === "EMPRESA"
+                              ? "Estabilizado: empresa"
+                              : "Estabilizado: cliente"
+                            : "Visita técnica"}
+                        </button>
+                      )}
                       <Link
                         href={`/cotizacion/${cotizacion.codigo_cotizacion}`}
                         target="_blank"
@@ -271,6 +334,62 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal de visita técnica (estabilizado) */}
+      {visita && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+            <div className="flex justify-between items-start border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Visita técnica: {visita.codigo_cotizacion}</h2>
+                <p className="text-xs text-slate-500">
+                  Cubicación del estabilizado base o polvo de roca para la base del radier ({visita.superficie_m2} m²).
+                </p>
+              </div>
+              <button onClick={() => setVisita(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">
+                ✕
+              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Espesor de la capa (cm)</label>
+              <input type="number" min="1" value={espesor} onChange={(e) => setEspesor(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Quién lo adquiere</label>
+              <select value={String(aridoEmpresa)} onChange={(e) => setAridoEmpresa(e.target.value === "true")}>
+                <option value="true">La empresa (se suma al valor informado)</option>
+                <option value="false">El cliente lo compra directamente</option>
+              </select>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm space-y-1">
+              {previa ? (
+                <>
+                  <div>Volumen a informar al cliente: <strong>{Number(previa.m3).toLocaleString("es-CL")} m³</strong></div>
+                  <div>Costo sumado: <strong>${Number(previa.costo).toLocaleString("es-CL")}</strong></div>
+                  <div>Nuevo total (IVA incl.): <strong>${Number(previa.total_nuevo).toLocaleString("es-CL")}</strong></div>
+                </>
+              ) : (
+                <div className="text-slate-400">Calculando...</div>
+              )}
+              <p className="text-[11px] text-slate-500 pt-1">
+                La diferencia se reparte entre los hitos de pago aún pendientes.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button onClick={() => setVisita(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm cursor-pointer">
+                Cancelar
+              </button>
+              <button
+                onClick={guardarVisita}
+                disabled={guardandoVisita || !previa}
+                className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer"
+              >
+                {guardandoVisita ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Hitos de Pago */}
       {modalHitosAbierto && selectedCotizacion && (

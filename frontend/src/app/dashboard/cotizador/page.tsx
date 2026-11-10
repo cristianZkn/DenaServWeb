@@ -19,7 +19,6 @@ export default function CotizadorPage() {
 
   const [basesTerreno, setBasesTerreno] = useState<CatalogoItem[]>([]);
   const [revestimientos, setRevestimientos] = useState<CatalogoItem[]>([]);
-  const [nivelacion, setNivelacion] = useState<{ m3: number; costo: number } | null>(null);
 
   const [formData, setFormData] = useState({
     cliente_nombre: "",
@@ -30,8 +29,6 @@ export default function CotizadorPage() {
     distancia_flete_km: 25,
     base_terreno_id: "" as string | number,
     revestimiento_id: "" as string | number,
-    espesor_cm: 10,
-    arido_empresa: true,
     ganancia_m2: 30000,
     tipo_proyecto: "CASA",
     radier_m2: 37500,
@@ -95,8 +92,6 @@ export default function CotizadorPage() {
             distancia_km: Number(formData.distancia_flete_km) || 0,
             base_terreno_id: baseSel ? baseSel.id : null,
             revestimiento_id: revestSel ? revestSel.id : null,
-            espesor_cm: Number(formData.espesor_cm) || 0,
-            arido_empresa: formData.arido_empresa,
             ganancia_m2: Number(formData.ganancia_m2) || 0,
             tipo_proyecto: formData.tipo_proyecto,
             radier_m2: Number(formData.radier_m2) || undefined,
@@ -105,7 +100,6 @@ export default function CotizadorPage() {
         });
         if (!res.ok) return;
         const r = await res.json();
-        setNivelacion({ m3: Number(r.volumen_estabilizado_m3), costo: Number(r.costo_nivelacion) });
         setFormData((prev) => ({
           ...prev,
           costo_materiales: Number(r.costo_materiales_total),
@@ -123,8 +117,6 @@ export default function CotizadorPage() {
     formData.distancia_flete_km,
     formData.base_terreno_id,
     formData.revestimiento_id,
-    formData.espesor_cm,
-    formData.arido_empresa,
     formData.ganancia_m2,
     formData.m2_vigas_vista,
     formData.tipo_proyecto,
@@ -162,7 +154,6 @@ export default function CotizadorPage() {
         distancia_flete_km: parseFloat(formData.distancia_flete_km as any),
         base_terreno_id: formData.base_terreno_id ? parseInt(formData.base_terreno_id as any) : null,
         revestimiento_id: formData.revestimiento_id ? parseInt(formData.revestimiento_id as any) : null,
-        espesor_cm: Number(formData.espesor_cm) || 0,
         ganancia_m2: Number(formData.ganancia_m2) || 0,
         radier_m2: Number(formData.radier_m2) || null,
         m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
@@ -406,43 +397,12 @@ export default function CotizadorPage() {
             </div>
           </div>
 
+          <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded p-2">
+            El relleno de estabilizado no se incluye aquí: se cubica en la visita al terreno y se agrega después desde
+            el panel de cotizaciones (el cliente lo compra o la empresa lo suma al valor informado).
+          </p>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Espesor capa de estabilizado (cm)
-              </label>
-              <input
-                type="number"
-                name="espesor_cm"
-                min="0"
-                value={formData.espesor_cm}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Suministro del estabilizado
-              </label>
-              <select
-                name="arido_empresa"
-                value={String(formData.arido_empresa)}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 focus:outline-blue-600 bg-white"
-              >
-                <option value="true">Provisto por la empresa</option>
-                <option value="false">Comprado por el cliente</option>
-              </select>
-            </div>
-
-            {formData.arido_empresa && nivelacion && nivelacion.m3 > 0 && (
-              <p className="text-xs text-slate-600 bg-white border border-slate-200 rounded p-2 self-end">
-                Estabilizado calculado: <strong>{nivelacion.m3.toLocaleString("es-CL")} m³</strong> (factor 1,20) ·
-                costo ${nivelacion.costo.toLocaleString("es-CL")}
-              </p>
-            )}
-
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
                 Ganancia de la empresa ($ por m²)
