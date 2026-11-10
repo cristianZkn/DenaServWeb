@@ -22,7 +22,7 @@ export interface FichaData {
 }
 
 const DESTINO_HITO: Record<string, string> = {
-  ANTICIPO_40: "Al firmar el contrato o antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
+  ANTICIPO_40: "Antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
   AVANCE_30: "Al alcanzar el 50 % de avance: adelantos por trabajos de maestros y proveedores.",
   ENTREGA_30: "Al terminar el proyecto, con la revisión y entrega de llaves: pago final a maestros y utilidad de la empresa.",
 };
@@ -59,7 +59,7 @@ export default function FichaPdf({ c }: { c: FichaData }) {
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <Text style={s.title}>DENASERV</Text>
-          <Text>Ficha técnica y presupuesto — Folio {c.codigo_cotizacion}</Text>
+          <Text>Ficha informativa del proyecto — Folio {c.codigo_cotizacion}</Text>
         </View>
 
         <Row a="Cliente" b={c.cliente_nombre} />
@@ -116,7 +116,7 @@ export default function FichaPdf({ c }: { c: FichaData }) {
           </Text>
         ) : null}
         <Text style={s.note}>
-          Documento generado por DENASERV WEB. Valores en pesos chilenos (CLP). Oferta válida por {VIGENCIA_DIAS} días corridos desde la emisión.
+          Documento informativo y resumen del proyecto, no constituye contrato. Generado por DENASERV WEB. Valores en pesos chilenos (CLP). Oferta válida por {VIGENCIA_DIAS} días corridos desde la emisión.
         </Text>
       </Page>
     </Document>

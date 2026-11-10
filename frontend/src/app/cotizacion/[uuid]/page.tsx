@@ -11,7 +11,7 @@ interface CatalogoItem {
 }
 
 const DESTINO_HITO: Record<string, string> = {
-  ANTICIPO_40: "Al firmar el contrato o antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
+  ANTICIPO_40: "Antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
   AVANCE_30: "Al alcanzar el 50 % de avance: adelantos por trabajos de maestros y proveedores.",
   ENTREGA_30: "Al terminar el proyecto, con la revisión y entrega de llaves: pago final a maestros y utilidad de la empresa.",
 };
@@ -137,7 +137,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
 
         {/* Encabezado Principal */}
         <div className="bg-blue-900 text-white p-8 text-center">
-          <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tight">Cotización Formal de Obra</h1>
+          <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tight">Ficha Informativa del Proyecto</h1>
           <p className="text-lg text-blue-200 font-medium">DENASERV — Fabricación y Montaje de Casas Prefabricadas</p>
         </div>
 
@@ -247,7 +247,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             </div>
           </div>
 
-          {/* Hitos de Pago Notariales */}
+          {/* Hitos de pago */}
           <div>
             <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">
               Cronograma de Pagos por Hitos de Avance
