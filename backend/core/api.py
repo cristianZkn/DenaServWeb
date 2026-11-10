@@ -90,7 +90,8 @@ class AuthBearer(HttpBearer):
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = Usuario.objects.filter(id=payload.get("user_id"), activo=True).first()
             return user
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
+        except Exception as e:  # token vencido/inválido o fallo de BD: se rechaza, pero queda el motivo en el log
+            logger.warning("Auth rechazada (%s): %s", type(e).__name__, e)
             return None
 
 
