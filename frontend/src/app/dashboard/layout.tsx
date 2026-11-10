@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
+const NAV = [
+  { href: "/dashboard", label: "Cotizaciones" },
+  { href: "/dashboard/cotizador", label: "Nueva Cotización" },
+  { href: "/dashboard/catalogos", label: "Catálogo de Tipos" },
+  { href: "/dashboard/proveedores", label: "Proveedores" },
+];
 
 export default function DashboardLayout({
   children,
@@ -10,7 +17,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string>("");
+  const [autorizado, setAutorizado] = useState(false);
+
+  useEffect(() => {
+    // Guardia de sesión para todo el panel + cierre de sesión automático si la API responde 401 (token vencido).
+    if (!localStorage.getItem("token")) {
+      router.replace("/login");
+      return;
+    }
+    setAutorizado(true);
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const res = await originalFetch(...args);
+      const url = String(args[0] instanceof Request ? args[0].url : args[0]);
+      if (res.status === 401 && url.includes("/api/") && !url.includes("/auth/")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("usuario");
+        window.location.href = "/login";
+      }
+      return res;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [router]);
 
   useEffect(() => {
     const rawUser = localStorage.getItem("usuario");
@@ -28,6 +60,8 @@ export default function DashboardLayout({
     router.push("/login");
   };
 
+  if (!autorizado) return null;
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Navbar Minimalista */}
@@ -36,34 +70,8 @@ export default function DashboardLayout({
           <div className="flex justify-between h-16 items-center">
             <div className="flex space-x-8 items-center">
               <Link href="/dashboard" className="text-xl font-bold tracking-tight">
-                DenaServ <span className="text-xs bg-blue-800 text-blue-200 px-2 py-0.5 rounded ml-1 font-normal">v2.0</span>
+                DenaServ
               </Link>
-              <div className="hidden md:flex space-x-2">
-                <Link
-                  href="/dashboard"
-                  className="hover:bg-blue-800 font-medium px-3 py-2 rounded-md text-base transition-colors"
-                >
-                  Cotizaciones
-                </Link>
-                <Link
-                  href="/dashboard/cotizador"
-                  className="hover:bg-blue-800 font-medium px-3 py-2 rounded-md text-base transition-colors"
-                >
-                  Nueva Cotización
-                </Link>
-                <Link
-                  href="/dashboard/catalogos"
-                  className="hover:bg-blue-800 font-medium px-3 py-2 rounded-md text-base transition-colors"
-                >
-                  Catálogo de Tipos
-                </Link>
-                <Link
-                  href="/dashboard/proveedores"
-                  className="hover:bg-blue-800 font-medium px-3 py-2 rounded-md text-base transition-colors"
-                >
-                  Proveedores
-                </Link>
-              </div>
             </div>
             <div className="flex items-center space-x-4">
               {userEmail && (
@@ -78,6 +86,25 @@ export default function DashboardLayout({
                 Cerrar Sesión
               </button>
             </div>
+          </div>
+        </div>
+        {/* Menú de navegación (visible también en móvil, con scroll horizontal) */}
+        <div className="border-t border-blue-800 overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-1 py-1.5 whitespace-nowrap">
+            {NAV.map((n) => {
+              const activo = n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href);
+              return (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    activo ? "bg-blue-700 text-white" : "text-blue-100 hover:bg-blue-800"
+                  }`}
+                >
+                  {n.label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </nav>

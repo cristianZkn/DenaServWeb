@@ -264,6 +264,7 @@ export default function ProveedoresPage() {
                   <th className="p-4">RUT</th>
                   <th className="p-4">Razón Social</th>
                   <th className="p-4">Contacto & Teléfono</th>
+                  <th className="p-4">Descuento</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4 text-right">Acciones</th>
                 </tr>
@@ -271,13 +272,13 @@ export default function ProveedoresPage() {
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
                       Cargando proveedores...
                     </td>
                   </tr>
                 ) : proveedores.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
                       No hay proveedores registrados.
                     </td>
                   </tr>
@@ -293,6 +294,7 @@ export default function ProveedoresPage() {
                         <div className="text-slate-700">{p.contacto_nombre || "-"}</div>
                         <div className="text-xs text-slate-400">{p.telefono || "-"}</div>
                       </td>
+                      <td className="p-4 font-semibold text-slate-700">{Number(p.descuento_pct) || 0}%</td>
                       <td className="p-4">
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-bold ${

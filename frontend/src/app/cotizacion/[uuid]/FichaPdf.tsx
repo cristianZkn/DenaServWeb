@@ -41,7 +41,7 @@ const Row = ({ a, b, strong }: { a: string; b: string; strong?: boolean }) => (
 export default function FichaPdf({ c }: { c: FichaData }) {
   const emision = new Date(c.fecha_creacion);
   const vence = new Date(emision.getTime() + VIGENCIA_DIAS * 86400000);
-  // El total guardado incluye IVA 19%.
+  // El total guardado ya incluye IVA 19% (precios de la empresa y retail son con IVA).
   const neto = Math.round(Number(c.costo_total) / 1.19);
   const iva = Math.round(Number(c.costo_total)) - neto;
 
@@ -78,12 +78,19 @@ export default function FichaPdf({ c }: { c: FichaData }) {
         })}
 
         <Text style={s.h2}>Desglose económico</Text>
-        <Row a="Materiales" b={clp(c.costo_materiales)} />
-        <Row a="Mano de obra" b={clp(c.costo_mano_obra)} />
-        <Row a="Flete y logística" b={clp(c.costo_flete)} />
+        {[
+          ["Materiales", c.costo_materiales],
+          ["Mano de obra", c.costo_mano_obra],
+          ["Flete y logística", c.costo_flete],
+          ["Gestión y utilidad", Math.max(0, Math.round(Number(c.costo_total) - c.costo_materiales - c.costo_mano_obra - c.costo_flete))],
+        ]
+          .filter(([, v]) => Number(v) > 0)
+          .map(([l, v]) => (
+            <Row key={l as string} a={l as string} b={clp(Number(v))} />
+          ))}
         <Row a="Neto" b={clp(neto)} />
         <Row a="IVA 19%" b={clp(iva)} />
-        <Row a="TOTAL" b={clp(c.costo_total)} strong />
+        <Row a="TOTAL (IVA incluido)" b={clp(c.costo_total)} strong />
 
         <Text style={s.h2}>Cronograma de pagos (40-30-30)</Text>
         {c.hitos_pago.map((h) => (

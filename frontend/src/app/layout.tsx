@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sistema de Cotizaciones",
-  description: "Plataforma interna para cotizaciones de casas",
+  title: "DENASERV WEB",
+  description: "Casas prefabricadas: portafolio de obras y plataforma de cotizaciones",
 };
 
 export default function RootLayout({

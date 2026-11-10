@@ -99,6 +99,10 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
     );
   }
 
+  const subtotal = Number(cotizacion.costo_materiales) + Number(cotizacion.costo_mano_obra) + Number(cotizacion.costo_flete);
+  const gestion = Math.max(0, Math.round(Number(cotizacion.costo_total) - subtotal)); // ganancia de la empresa
+  const neto = Math.round(Number(cotizacion.costo_total) / 1.19);
+
   return (
     <div className="min-h-screen bg-slate-100 py-10 px-4">
       <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-xl overflow-hidden border border-slate-200">
@@ -200,20 +204,29 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
               Desglose Financiero de la Cotización
             </h3>
             <div className="space-y-2 text-sm bg-slate-50 p-6 rounded-xl border border-slate-200">
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-600">Suministro de Materiales:</span>
-                <span className="font-semibold">${Number(cotizacion.costo_materiales).toLocaleString("es-CL")}</span>
+              {[
+                ["Suministro de Materiales", cotizacion.costo_materiales],
+                ["Mano de Obra Especializada", cotizacion.costo_mano_obra],
+                ["Transporte y Logística de Flete", cotizacion.costo_flete],
+                ["Gestión y utilidad", gestion],
+              ]
+                .filter(([, v]) => Number(v) > 0)
+                .map(([label, v]) => (
+                  <div key={label as string} className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-slate-600">{label}:</span>
+                    <span className="font-semibold">${Number(v).toLocaleString("es-CL")}</span>
+                  </div>
+                ))}
+              <div className="flex justify-between py-1 border-b border-slate-200 text-slate-500">
+                <span>Neto:</span>
+                <span>${neto.toLocaleString("es-CL")}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-600">Mano de Obra Especializada:</span>
-                <span className="font-semibold">${Number(cotizacion.costo_mano_obra).toLocaleString("es-CL")}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-600">Transporte y Logística de Flete:</span>
-                <span className="font-semibold">${Number(cotizacion.costo_flete).toLocaleString("es-CL")}</span>
+              <div className="flex justify-between py-1 border-b border-slate-200 text-slate-500">
+                <span>IVA 19%:</span>
+                <span>${(Number(cotizacion.costo_total) - neto).toLocaleString("es-CL")}</span>
               </div>
               <div className="flex justify-between pt-3 text-lg font-black text-blue-900">
-                <span>COSTO TOTAL ESTIMADO:</span>
+                <span>TOTAL (IVA incluido):</span>
                 <span>${Number(cotizacion.costo_total).toLocaleString("es-CL")}</span>
               </div>
             </div>

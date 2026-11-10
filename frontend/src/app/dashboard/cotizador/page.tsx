@@ -90,7 +90,6 @@ export default function CotizadorPage() {
     const baseSel = basesTerreno.find((b) => b.id === Number(formData.base_terreno_id));
     const revestSel = revestimientos.find((r) => r.id === Number(formData.revestimiento_id));
     const estabSel = estabilizados.find((e) => e.id === Number(formData.estabilizado_id));
-    if (!baseSel || !revestSel) return;
 
     const timer = setTimeout(async () => {
       try {
@@ -100,8 +99,8 @@ export default function CotizadorPage() {
           body: JSON.stringify({
             superficie_m2: Number(formData.superficie_m2) || 0,
             distancia_km: Number(formData.distancia_flete_km) || 0,
-            base_terreno_id: baseSel.id,
-            revestimiento_id: revestSel.id,
+            base_terreno_id: baseSel ? baseSel.id : null,
+            revestimiento_id: revestSel ? revestSel.id : null,
             estabilizado_id: estabSel ? estabSel.id : null,
             espesor_cm: Number(formData.espesor_cm) || 0,
             arido_empresa: formData.arido_empresa,
@@ -192,8 +191,7 @@ export default function CotizadorPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        router.push(`/cotizacion/${data.codigo_cotizacion}`);
+        router.push("/dashboard");
       } else {
         const errData = await res.json();
         setError(`Error al guardar: ${errData.message || JSON.stringify(errData)}`);
@@ -296,7 +294,7 @@ export default function CotizadorPage() {
           </div>
         </section>
 
-        {/* TIPO DE PROYECTO */}
+        {/* TIPO DE PROYECTO (sección 2) */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">
           <label className="block text-sm font-semibold text-slate-700">Tipo de proyecto</label>
           <select
@@ -344,7 +342,7 @@ export default function CotizadorPage() {
               <input
                 type="number"
                 name="superficie_m2"
-                min="10"
+                min="1"
                 step="0.5"
                 value={formData.superficie_m2}
                 onChange={handleChange}
@@ -369,6 +367,8 @@ export default function CotizadorPage() {
             </div>
           </div>
 
+          {formData.tipo_proyecto === "CASA" && (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
@@ -505,12 +505,14 @@ export default function CotizadorPage() {
               />
             </div>
           </div>
+          </>
+          )}
         </section>
 
         {/* SECCIÓN 3: DESGLOSE DE COSTOS Y TOTAL */}
         <section className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-            3. Desglose de Costos de Obra
+            3. Desglose de Costos de Obra (calculado automáticamente)
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -522,8 +524,9 @@ export default function CotizadorPage() {
                 type="number"
                 name="costo_materiales"
                 value={formData.costo_materiales}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white font-medium"
+                readOnly
+                tabIndex={-1}
+                className="w-full px-3 py-2 border rounded-lg border-slate-200 bg-slate-100 text-slate-700 font-medium"
               />
             </div>
 
@@ -535,8 +538,9 @@ export default function CotizadorPage() {
                 type="number"
                 name="costo_mano_obra"
                 value={formData.costo_mano_obra}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white font-medium"
+                readOnly
+                tabIndex={-1}
+                className="w-full px-3 py-2 border rounded-lg border-slate-200 bg-slate-100 text-slate-700 font-medium"
               />
             </div>
 
@@ -548,8 +552,9 @@ export default function CotizadorPage() {
                 type="number"
                 name="costo_flete"
                 value={formData.costo_flete}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg border-slate-300 bg-white font-medium"
+                readOnly
+                tabIndex={-1}
+                className="w-full px-3 py-2 border rounded-lg border-slate-200 bg-slate-100 text-slate-700 font-medium"
               />
             </div>
           </div>
@@ -558,7 +563,7 @@ export default function CotizadorPage() {
             <div>
               <h3 className="text-xl font-bold">Costo Total de Cotización:</h3>
               <p className="text-xs text-blue-200 mt-1">
-                Se generarán automáticamente los 3 hitos de pago: Anticipo (40%), Avance (30%) y Entrega (30%).
+                IVA incluido. Se generarán automáticamente los 3 hitos de pago: Anticipo (40%), Avance (30%) y Entrega (30%).
               </p>
             </div>
             <div className="text-3xl font-black mt-3 sm:mt-0 tracking-tight">

@@ -30,6 +30,7 @@ interface Cotizacion {
   superficie_m2: number;
   costo_total: number;
   estado: string;
+  tipo_proyecto?: string;
   fecha_creacion: string;
   base_terreno?: CatalogoTipo | null;
   revestimiento?: CatalogoTipo | null;
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   const [modalHitosAbierto, setModalHitosAbierto] = useState(false);
   const [hitos, setHitos] = useState<HitoPago[]>([]);
   const [actualizandoHito, setActualizandoHito] = useState<number | null>(null);
+  const [hitosCargando, setHitosCargando] = useState(false);
   const router = useRouter();
 
   const fetchCotizaciones = async () => {
@@ -104,6 +106,8 @@ export default function DashboardPage() {
   const abrirGestionHitos = async (cotizacion: Cotizacion) => {
     setSelectedCotizacion(cotizacion);
     setModalHitosAbierto(true);
+    setHitos([]);
+    setHitosCargando(true);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/hitos`, {
@@ -114,6 +118,8 @@ export default function DashboardPage() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setHitosCargando(false);
     }
   };
 
@@ -204,6 +210,10 @@ export default function DashboardPage() {
                   <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-mono font-bold text-blue-900">
                       {cotizacion.codigo_cotizacion}
+                      <div className="text-[10px] font-sans font-semibold uppercase text-slate-400">
+                        {cotizacion.tipo_proyecto === "SOLO_RADIER" ? "Solo radier" : "Casa"} ·{" "}
+                        {new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
+                      </div>
                     </td>
                     <td className="p-4">
                       <div className="font-bold text-slate-800">{cotizacion.cliente_nombre}</div>
@@ -242,7 +252,7 @@ export default function DashboardPage() {
                         onClick={() => abrirGestionHitos(cotizacion)}
                         className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md border border-slate-300 transition cursor-pointer"
                       >
-                        Ver Pagos (3)
+                        Ver Pagos
                       </button>
                     </td>
                     <td className="p-4 text-right">
@@ -285,7 +295,7 @@ export default function DashboardPage() {
 
             <div className="space-y-3">
               {hitos.length === 0 ? (
-                <div className="p-6 text-center text-slate-400">Cargando hitos...</div>
+                <div className="p-6 text-center text-slate-400">{hitosCargando ? "Cargando hitos..." : "No se pudieron cargar los hitos de pago."}</div>
               ) : (
                 hitos.map((hito, idx) => (
                   <div

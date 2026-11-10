@@ -22,7 +22,7 @@ export default function PortafolioPage() {
     fetch("/api/portafolio/")
       .then((res) => res.json())
       .then((data) => {
-        setProyectos(data);
+        setProyectos(Array.isArray(data) ? data : []);
       })
       .catch((err) => console.error("Error al cargar portafolio:", err))
       .finally(() => setLoading(false));
