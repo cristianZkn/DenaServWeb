@@ -57,7 +57,8 @@ async function handleProxy(
     const responseHeaders = new Headers();
     backendResponse.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
-      if (!["content-encoding", "transfer-encoding", "connection"].includes(lower)) {
+      // fetch ya descomprime el cuerpo: content-length (del cuerpo comprimido) lo dejaría truncado.
+      if (!["content-encoding", "content-length", "transfer-encoding", "connection"].includes(lower)) {
         responseHeaders.set(key, value);
       }
     });
