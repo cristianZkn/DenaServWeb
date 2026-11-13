@@ -661,6 +661,20 @@ class PagosEstadosPortafolioTests(TestCase):
         self.assertEqual(Client().get("/api/portafolio/").json(), [])      # despublicado: no se ve en la web
         self.assertEqual(len(self.c.get("/api/portafolio/admin/", **self.h).json()), 1)
 
+    def test_agregar_foto_conserva_la_foto_externa(self):
+        """Obras antiguas con imagen_url: al subir una foto nueva la anterior no desaparece, y puede quitarse."""
+        import base64
+        from core.models import PortafolioProyecto
+        png = "data:image/png;base64," + base64.b64encode(b"PNG-fake" + b"0" * 20).decode()
+        p = PortafolioProyecto.objects.create(titulo="Casa antigua", imagen_url="https://ejemplo.cl/casa.jpg")
+        r = self.c.patch(f"/api/portafolio/{p.id}/", {"agregar_imagenes": [png]}, content_type="application/json", **self.h).json()
+        self.assertEqual(len(r["imagenes"]), 2)
+        self.assertEqual(r["imagenes"][0], "https://ejemplo.cl/casa.jpg")
+        r = self.c.patch(f"/api/portafolio/{p.id}/", {"agregar_imagenes": [png], "quitar_portada": True},
+                         content_type="application/json", **self.h).json()
+        self.assertEqual(len(r["imagenes"]), 2)
+        self.assertTrue(all(u.startswith("/api/portafolio/imagenes/") for u in r["imagenes"]))
+
     def test_portafolio_rechaza_archivos_no_imagen(self):
         r = self.c.post("/api/portafolio/", {"titulo": "Casa mala", "imagenes": ["data:text/html;base64,PGI+"]},
                         content_type="application/json", **self.h)

@@ -313,8 +313,9 @@ class PortafolioProyectoSchema(Schema):
 
     @staticmethod
     def resolve_imagenes(obj):
+        # La foto externa (imagen_url, de obras cargadas antes de subir fotos) va primero y se conserva al agregar fotos nuevas.
         urls = [f"/api/portafolio/imagenes/{i.id}/" for i in obj.imagenes.all()]
-        return urls or ([obj.imagen_url] if obj.imagen_url else [])
+        return ([obj.imagen_url] if obj.imagen_url else []) + urls
 
     @staticmethod
     def resolve_whatsapp_url(obj):
@@ -345,6 +346,7 @@ class PortafolioProyectoUpdateSchema(Schema):
     publicado: Optional[bool] = None
     agregar_imagenes: List[str] = []
     quitar_imagenes: List[int] = []
+    quitar_portada: bool = False  # quita la foto externa (imagen_url)
 
 
 class ProgresoObraSchema(Schema):

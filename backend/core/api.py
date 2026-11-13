@@ -679,7 +679,7 @@ def _decodificar_imagen(data_url: str):
 
 def _guardar_imagenes(proyecto, data_urls):
     existentes = proyecto.imagenes.count()
-    if existentes + len(data_urls) > MAX_IMAGENES:
+    if existentes + (1 if proyecto.imagen_url else 0) + len(data_urls) > MAX_IMAGENES:
         raise ValueError(f"Un proyecto admite hasta {MAX_IMAGENES} imágenes.")
     for n, du in enumerate(data_urls, start=existentes):
         mime, contenido = _decodificar_imagen(du)
@@ -726,8 +726,10 @@ def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyec
         return 404, {"message": "Proyecto no encontrado"}
     try:
         with transaction.atomic():
-            for k, v in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes"}).items():
+            for k, v in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes", "quitar_portada"}).items():
                 setattr(proyecto, k, v)
+            if data.quitar_portada:
+                proyecto.imagen_url = None
             proyecto.save()
             proyecto.imagenes.filter(id__in=data.quitar_imagenes).delete()
             _guardar_imagenes(proyecto, data.agregar_imagenes)

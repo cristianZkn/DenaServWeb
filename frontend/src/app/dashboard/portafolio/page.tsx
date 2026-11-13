@@ -107,14 +107,14 @@ export default function PortafolioAdminPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {proyectos.map((p) => (
             <article key={p.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="relative h-44 bg-slate-200">
+              <div className="relative h-44 bg-slate-200 overflow-hidden">
                 {p.imagenes[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.imagenes[0]} alt={p.titulo} className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos</div>
                 )}
-                <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded">{p.imagenes.length} fotos</span>
+                <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded">{p.imagenes.length} {p.imagenes.length === 1 ? "foto" : "fotos"}</span>
               </div>
               <div className="p-4 flex-1 flex flex-col gap-2">
                 <h2 className="font-bold text-lg leading-tight">{p.titulo}</h2>
@@ -155,6 +155,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   const [publicado, setPublicado] = useState(proyecto?.publicado ?? true);
   const [existentes, setExistentes] = useState<string[]>(proyecto?.imagenes ?? []);
   const [quitar, setQuitar] = useState<number[]>([]);
+  const [quitarPortada, setQuitarPortada] = useState(false); // foto externa de obras antiguas (no está en la base de datos)
   const [nuevas, setNuevas] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -175,8 +176,8 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   };
 
   const quitarExistente = (url: string) => {
-    const id = Number(url.split("/").filter(Boolean).pop());
-    if (Number.isFinite(id)) setQuitar((p) => [...p, id]);
+    if (url.startsWith("/api/portafolio/imagenes/")) setQuitar((p) => [...p, Number(url.split("/").filter(Boolean).pop())]);
+    else setQuitarPortada(true);
     setExistentes((p) => p.filter((u) => u !== url));
   };
 
@@ -189,7 +190,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
       const base = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, ubicacion_comuna: comuna.trim() || null, publicado };
       // Las fotos suben de a pocas por vez: así ninguna solicitud supera el límite de tamaño del servidor.
       const r = proyecto
-        ? await fetch(`/api/portafolio/${proyecto.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ ...base, quitar_imagenes: quitar }) })
+        ? await fetch(`/api/portafolio/${proyecto.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ ...base, quitar_imagenes: quitar, quitar_portada: quitarPortada }) })
         : await fetch("/api/portafolio", { method: "POST", headers: jsonAuth(), body: JSON.stringify(base) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.message || "No se pudo guardar el proyecto.");

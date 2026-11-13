@@ -23,7 +23,7 @@ function Tarjeta({ proyecto }: { proyecto: Proyecto }) {
   const [actual, setActual] = useState(0);
   return (
     <article className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col border border-slate-100">
-      <div className="relative h-52 sm:h-64 w-full bg-slate-200">
+      <div className="relative h-52 sm:h-64 w-full bg-slate-200 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={fotos[actual]} alt={`${proyecto.titulo} (foto ${actual + 1} de ${fotos.length})`} className="absolute inset-0 w-full h-full object-cover" />
       </div>
