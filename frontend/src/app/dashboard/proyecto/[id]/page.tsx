@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 import type { FichaData } from "@/app/cotizacion/[uuid]/FichaPdf";
 
 interface Item {
@@ -10,17 +11,10 @@ interface Item {
   nombre: string;
   precio_base_unitario: number;
 }
-interface Hito {
-  id: number;
-  fase: string;
-  porcentaje: number;
-  monto_pago: number;
-  estado: string;
-}
+type Hito = HitoPago;
 interface Obra {
   id: number;
   porcentaje_avance_real: number;
-  gasto_real_acumulado: number;
 }
 interface Detalle extends FichaData {
   cliente_rut?: string | null;
@@ -39,9 +33,7 @@ interface Detalle extends FichaData {
 interface Ganancias {
   neto_cobrado: number;
   costo_presupuestado: number;
-  gasto_real: number;
   ganancia_estimada: number;
-  ganancia_real: number;
   avance_real: number;
   hito_avance_exigible: boolean;
 }
@@ -83,7 +75,6 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const [motivo, setMotivo] = useState("");
   const [previa, setPrevia] = useState<{ total_anterior: string; total_nuevo: string; diferencia: string } | null>(null);
   const [avance, setAvance] = useState(0);
-  const [gasto, setGasto] = useState(0);
 
   const cargar = useCallback(async () => {
     try {
@@ -113,7 +104,6 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       });
       const o = c.obras_ejecucion?.[0];
       setAvance(o ? Number(o.porcentaje_avance_real) : 0);
-      setGasto(o ? Number(o.gasto_real_acumulado) : 0);
     } catch (e: any) {
       setError(e.message);
     }
@@ -198,18 +188,13 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     const res = await fetch(`/api/obras/${obra.id}`, {
       method: "PATCH",
       headers: jsonAuth(),
-      body: JSON.stringify({ porcentaje_avance_real: avance, gasto_real_acumulado: gasto }),
+      body: JSON.stringify({ porcentaje_avance_real: avance }),
     });
     avisar(res.ok ? "Listo: el avance de la obra quedó guardado." : "No se pudo guardar el avance.", !res.ok);
     cargar();
   };
 
-  const cambiarPago = async (h: Hito) => {
-    const nuevo = h.estado === "PAGADO" ? "PENDIENTE" : "PAGADO";
-    if (!confirm(nuevo === "PAGADO" ? "¿Marcar este pago como RECIBIDO?" : "¿Marcar este pago como pendiente?")) return;
-    await fetch(`/api/hitos-pago/${h.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ estado: nuevo }) });
-    cargar();
-  };
+  const [pagando, setPagando] = useState<Hito | null>(null);
 
   const descargarPdf = async () => {
     if (!cot || !gan) return;
@@ -415,14 +400,22 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
                 <div>
                   <div className="text-base text-slate-600">{NOMBRE_HITO[h.fase] || h.fase}</div>
                   <div className="text-2xl font-black">{clp(h.monto_pago)}</div>
+                  <span className={`inline-block mt-1 px-2.5 py-0.5 rounded border text-sm font-bold ${COLOR_ESTADO[h.estado] || ""}`}>
+                    {ETIQUETA_ESTADO[h.estado] || h.estado}
+                  </span>
+                  {h.estado === "ABONADO" && (
+                    <div className="text-base text-orange-900 font-semibold mt-1">
+                      Abonado {clp(h.monto_abonado)} · falta {clp(h.monto_pendiente)}
+                    </div>
+                  )}
                 </div>
                 <button
-                  onClick={() => cambiarPago(h)}
+                  onClick={() => setPagando(h)}
                   className={`px-5 py-3 rounded-xl text-lg font-bold border-2 cursor-pointer ${
-                    h.estado === "PAGADO" ? "bg-green-100 text-green-900 border-green-600" : "bg-amber-100 text-amber-900 border-amber-500"
+                    h.estado === "PAGADO" ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-50" : "bg-green-700 text-white border-green-700 hover:bg-green-800"
                   }`}
                 >
-                  {h.estado === "PAGADO" ? "✓ Recibido" : "Pendiente · marcar recibido"}
+                  {textoBotonPago(h)}
                 </button>
               </div>
             ))}
@@ -439,10 +432,6 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
               <label className={campo}>Avance de la obra (%)</label>
               <input type="number" min="0" max="100" value={avance} onChange={(e) => setAvance(parseFloat(e.target.value) || 0)} />
             </div>
-            <div>
-              <label className={campo}>Lo gastado hasta ahora ($)</label>
-              <input type="number" min="0" value={gasto} onChange={(e) => setGasto(parseFloat(e.target.value) || 0)} />
-            </div>
             <button onClick={guardarObra} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
               Guardar avance
             </button>
@@ -452,12 +441,13 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
               <h3 className="text-2xl font-black mb-2">Resumen para la empresa</h3>
               <div className="flex justify-between"><span>Ganancia estimada</span><strong>{clp(gan.ganancia_estimada)}</strong></div>
-              <div className="flex justify-between"><span>Ganancia con lo gastado hasta hoy</span><strong>{clp(gan.ganancia_real)}</strong></div>
               <div className="flex justify-between text-slate-500 text-base"><span>Cobrado sin IVA</span><span>{clp(gan.neto_cobrado)}</span></div>
             </div>
           )}
         </section>
       )}
+
+      {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: el pago quedó registrado."); cargar(); }} />}
 
       <details className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <summary className="text-xl font-bold cursor-pointer">Cambios anteriores del valor ({cambios.length})</summary>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, NOMBRE_HITO, clp, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 
 interface CatalogoTipo {
   id: number;
@@ -10,15 +12,11 @@ interface CatalogoTipo {
   categoria: string;
 }
 
-interface HitoPago {
+interface ProgresoObra {
   id: number;
-  cotizacion_id: number;
-  fase: string;
-  porcentaje: number;
-  monto_pago: number;
-  estado: string;
-  fecha_pago: string | null;
-  comprobante_ref: string | null;
+  codigo_cotizacion: string;
+  cliente_nombre: string;
+  avance: number;
 }
 
 interface Cotizacion {
@@ -49,7 +47,8 @@ export default function DashboardPage() {
   const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null);
   const [modalHitosAbierto, setModalHitosAbierto] = useState(false);
   const [hitos, setHitos] = useState<HitoPago[]>([]);
-  const [actualizandoHito, setActualizandoHito] = useState<number | null>(null);
+  const [pagando, setPagando] = useState<HitoPago | null>(null);
+  const [progreso, setProgreso] = useState<ProgresoObra[]>([]);
   const [hitosCargando, setHitosCargando] = useState(false);
 
   // Visita técnica al terreno: cubicación del estabilizado (no va en la cotización inicial)
@@ -111,6 +110,10 @@ export default function DashboardPage() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const res = await fetch("/api/cotizaciones", { headers });
+      fetch("/api/cotizaciones/progreso", { headers })
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setProgreso)
+        .catch(() => setProgreso([]));
 
       if (res.ok) {
         const data = await res.json();
@@ -133,6 +136,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleCambiarEstadoCotizacion = async (cotizacionId: number, nuevoEstado: string) => {
+    setError("");
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`/api/cotizaciones/${cotizacionId}/estado`, {
@@ -148,11 +152,15 @@ export default function DashboardPage() {
         setCotizaciones((prev) =>
           prev.map((c) => (c.id === cotizacionId ? { ...c, estado: nuevoEstado } : c))
         );
+        fetchCotizaciones();
       } else {
-        alert("No se pudo actualizar el estado.");
+        // El servidor explica por qué no se pudo (por ejemplo, pagos pendientes); la obra sigue en su estado anterior.
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || "No se pudo cambiar el estado de la cotización.");
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e) {
-      alert("Error al comunicarse con el servidor.");
+      setError("No hay conexión con el servidor. Intente de nuevo.");
     }
   };
 
@@ -173,33 +181,6 @@ export default function DashboardPage() {
       console.error(e);
     } finally {
       setHitosCargando(false);
-    }
-  };
-
-  const handleToggleEstadoHito = async (hitoId: number, estadoActual: string) => {
-    setActualizandoHito(hitoId);
-    const nuevoEstado = estadoActual === "PAGADO" ? "PENDIENTE" : "PAGADO";
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/hitos-pago/${hitoId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ estado: nuevoEstado }),
-      });
-
-      if (res.ok) {
-        const hitoActualizado = await res.json();
-        setHitos((prev) => prev.map((h) => (h.id === hitoId ? hitoActualizado : h)));
-      } else {
-        alert("Error al actualizar estado del hito.");
-      }
-    } catch (e) {
-      alert("Error de red.");
-    } finally {
-      setActualizandoHito(null);
     }
   };
 
@@ -242,10 +223,54 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r-md text-sm">
+        <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-r-md text-base font-semibold">
           {error}
         </div>
       )}
+
+      {/* Avance físico de las obras en ejecución */}
+      <section aria-labelledby="progreso-titulo" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de las obras en ejecución</h2>
+        {progreso.length === 0 ? (
+          <p className="text-slate-500 text-sm mt-1">
+            No hay obras en ejecución. Cuando una cotización pase a «En ejecución», aquí verá cuánto lleva construido.
+          </p>
+        ) : (
+          <>
+            <div
+              role="img"
+              aria-label={`Gráfico de barras con el avance de ${progreso.length} obras: ` + progreso.map((p) => `${p.cliente_nombre} ${p.avance}%`).join(", ")}
+              style={{ height: Math.max(120, progreso.length * 48 + 40) }}
+              className="mt-2"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={progreso.map((p) => ({ ...p, avance: Number(p.avance) }))} layout="vertical" margin={{ left: 8, right: 36, top: 4, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                  <YAxis type="category" dataKey="cliente_nombre" width={130} tick={{ fontSize: 13 }} />
+                  <Tooltip formatter={(v) => [`${v}%`, "Avance"]} labelFormatter={(l) => String(l)} />
+                  <Bar dataKey="avance" fill="#15803d" radius={[0, 6, 6, 0]} background={{ fill: "#e2e8f0", radius: 6 }}>
+                    <LabelList dataKey="avance" position="right" formatter={(v) => `${v}%`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <details className="mt-1 text-sm text-slate-600">
+              <summary className="cursor-pointer font-semibold">Ver los mismos datos en una tabla</summary>
+              <table className="mt-2 w-full text-left">
+                <tbody>
+                  {progreso.map((p) => (
+                    <tr key={p.id} className="border-t border-slate-100">
+                      <td className="py-1">{p.cliente_nombre} <span className="text-slate-400">{p.codigo_cotizacion}</span></td>
+                      <td className="py-1 text-right font-semibold">{p.avance}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </>
+        )}
+      </section>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -303,7 +328,7 @@ export default function DashboardPage() {
                         }`}
                       >
                         <option value="BORRADOR">En preparación</option>
-                        <option value="ACEPTADA">Aceptada</option>
+                        <option value="ACEPTADA">En ejecución</option>
                         <option value="FINALIZADA">Obra terminada</option>
                       </select>
                       {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
@@ -326,7 +351,7 @@ export default function DashboardPage() {
                           onClick={() => abrirGestionHitos(cotizacion)}
                           className="!min-h-0 text-sm font-semibold bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 transition"
                         >
-                          Pagos
+                          Ver pagos
                         </button>
                         <Link
                           href={`/cotizacion/${cotizacion.token_publico}`}
@@ -334,13 +359,13 @@ export default function DashboardPage() {
                           className="text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition"
                           title="Abrir la ficha que ve el cliente"
                         >
-                          Ficha ↗
+                          Ver ficha del cliente ↗
                         </Link>
                         <Link
                           href={`/dashboard/proyecto/${cotizacion.id}`}
                           className="bg-blue-900 hover:bg-blue-800 text-white font-semibold text-sm px-4 py-1.5 rounded-lg transition"
                         >
-                          Abrir
+                          Ver proyecto
                         </Link>
                       </div>
                     </td>
@@ -439,52 +464,39 @@ export default function DashboardPage() {
                     className={`p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors ${
                       hito.estado === "PAGADO"
                         ? "bg-green-50/60 border-green-200"
+                        : hito.estado === "ABONADO"
+                        ? "bg-orange-50/60 border-orange-200"
                         : "bg-slate-50 border-slate-200"
                     }`}
                   >
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                          Hito #{idx + 1}
-                        </span>
-                        <span className="font-bold text-slate-800">
-                          {hito.fase.replace(/_/g, " ")} ({hito.porcentaje}%)
-                        </span>
+                      <div className="font-bold text-slate-800">
+                        {idx + 1}. {NOMBRE_HITO[hito.fase] || hito.fase.replace(/_/g, " ")}
                       </div>
-                      <div className="text-lg font-black text-slate-900 mt-1">
-                        ${Number(hito.monto_pago).toLocaleString("es-CL")}
-                      </div>
-                      {hito.fecha_pago && (
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Fecha de Pago: {hito.fecha_pago}
+                      <div className="text-lg font-black text-slate-900 mt-1">{clp(hito.monto_pago)}</div>
+                      {hito.estado === "ABONADO" && (
+                        <div className="text-sm text-orange-900 font-semibold">
+                          Abonado {clp(hito.monto_abonado)} · falta {clp(hito.monto_pendiente)}
                         </div>
+                      )}
+                      {hito.fecha_pago && hito.estado !== "PENDIENTE" && (
+                        <div className="text-xs text-slate-500 mt-0.5">Último pago: {hito.fecha_pago}</div>
                       )}
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span
-                        className={`px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider ${
-                          hito.estado === "PAGADO"
-                            ? "bg-green-100 text-green-800 border border-green-300"
-                            : "bg-amber-100 text-amber-800 border border-amber-300"
-                        }`}
-                      >
-                        {hito.estado}
+                      <span className={`px-2.5 py-1 rounded border text-sm font-bold ${COLOR_ESTADO[hito.estado] || ""}`}>
+                        {ETIQUETA_ESTADO[hito.estado] || hito.estado}
                       </span>
                       <button
-                        onClick={() => handleToggleEstadoHito(hito.id, hito.estado)}
-                        disabled={actualizandoHito === hito.id}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition cursor-pointer ${
+                        onClick={() => setPagando(hito)}
+                        className={`text-sm font-semibold px-3 py-2 rounded-lg border transition cursor-pointer ${
                           hito.estado === "PAGADO"
                             ? "bg-white text-slate-700 hover:bg-slate-100 border-slate-300"
                             : "bg-green-700 text-white hover:bg-green-800 border-green-700"
                         }`}
                       >
-                        {actualizandoHito === hito.id
-                          ? "Actualizando..."
-                          : hito.estado === "PAGADO"
-                          ? "Marcar Pendiente"
-                          : "Marcar Pagado ✓"}
+                        {textoBotonPago(hito)}
                       </button>
                     </div>
                   </div>
@@ -502,6 +514,16 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+      {pagando && (
+        <PagoModal
+          hito={pagando}
+          onClose={() => setPagando(null)}
+          onSaved={(h) => {
+            setHitos((prev) => prev.map((x) => (x.id === h.id ? h : x)));
+            fetchCotizaciones();
+          }}
+        />
       )}
     </div>
   );

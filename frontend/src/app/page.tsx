@@ -9,9 +9,48 @@ interface Proyecto {
   descripcion: string | null;
   ubicacion_comuna: string | null;
   imagen_url: string | null;
+  imagenes: string[];
   publicado: boolean;
   cotizacion_id: number | null;
   whatsapp_url: string | null;
+}
+
+const FOTO_POR_DEFECTO = "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=800";
+
+/** Tarjeta de obra: foto grande y miniaturas para ver las demás fotos. */
+function Tarjeta({ proyecto }: { proyecto: Proyecto }) {
+  const fotos = proyecto.imagenes?.length ? proyecto.imagenes : [proyecto.imagen_url || FOTO_POR_DEFECTO];
+  const [actual, setActual] = useState(0);
+  return (
+    <article className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col border border-slate-100">
+      <div className="relative h-64 w-full bg-slate-200">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={fotos[actual]} alt={`${proyecto.titulo} (foto ${actual + 1} de ${fotos.length})`} className="absolute inset-0 w-full h-full object-cover" />
+      </div>
+      {fotos.length > 1 && (
+        <ul className="flex gap-1.5 p-2 overflow-x-auto bg-slate-50 border-b border-slate-100" aria-label="Más fotos de la obra">
+          {fotos.map((f, i) => (
+            <li key={f} className="shrink-0">
+              <button type="button" onClick={() => setActual(i)} aria-label={`Ver foto ${i + 1}`} aria-current={i === actual}
+                className={`block w-16 h-12 rounded overflow-hidden border-2 cursor-pointer ${i === actual ? "border-blue-700" : "border-transparent opacity-70 hover:opacity-100"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f} alt="" className="w-full h-full object-cover" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="p-6 flex-grow flex flex-col">
+        <h2 className="text-2xl font-bold mb-2 leading-tight">{proyecto.titulo}</h2>
+        {proyecto.ubicacion_comuna && <p className="text-slate-500 font-medium mb-4 text-sm">📍 {proyecto.ubicacion_comuna}</p>}
+        {proyecto.descripcion && <p className="text-sm text-slate-600 mb-6 flex-grow line-clamp-3">{proyecto.descripcion}</p>}
+        <a href={proyecto.whatsapp_url || "https://wa.me/"} target="_blank" rel="noopener noreferrer"
+          className="w-full block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md">
+          Consultar por WhatsApp
+        </a>
+      </div>
+    </article>
+  );
 }
 
 export default function PortafolioPage() {
@@ -67,55 +106,9 @@ export default function PortafolioPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {proyectos.map((proyecto) => {
-              const portada =
-                proyecto.imagen_url ||
-                "https://images.unsplash.com/photo-1518780664697-55e3ad937233?auto=format&fit=crop&q=80&w=800";
-              return (
-                <article
-                  key={proyecto.id}
-                  className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col border border-slate-100"
-                >
-                  <div className="relative h-64 w-full bg-slate-200">
-                    <img
-                      src={portada}
-                      alt={proyecto.titulo}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-6 flex-grow flex flex-col">
-                    <h2 className="text-2xl font-bold mb-2 leading-tight">{proyecto.titulo}</h2>
-                    {proyecto.ubicacion_comuna && (
-                      <p className="text-slate-500 font-medium mb-4 flex items-center text-sm">
-                        <svg className="w-4 h-4 mr-1 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path
-                            fillRule="evenodd"
-                            d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                            clipRule="evenodd"
-                          ></path>
-                        </svg>
-                        {proyecto.ubicacion_comuna}
-                      </p>
-                    )}
-
-                    {proyecto.descripcion && (
-                      <p className="text-sm text-slate-600 mb-6 flex-grow line-clamp-3">
-                        {proyecto.descripcion}
-                      </p>
-                    )}
-
-                    <a
-                      href={proyecto.whatsapp_url || "https://wa.me/"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md"
-                    >
-                      Consultar por WhatsApp
-                    </a>
-                  </div>
-                </article>
-              );
-            })}
+            {proyectos.map((proyecto) => (
+              <Tarjeta key={proyecto.id} proyecto={proyecto} />
+            ))}
           </div>
         )}
       </main>

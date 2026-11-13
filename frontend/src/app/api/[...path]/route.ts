@@ -64,7 +64,8 @@ async function handleProxy(
       }
     });
 
-    const responseBody = await backendResponse.text();
+    // Se copia como bytes: así también pasan intactas las imágenes del portafolio.
+    const responseBody = await backendResponse.arrayBuffer();
 
     return new NextResponse(responseBody, {
       status: backendResponse.status,

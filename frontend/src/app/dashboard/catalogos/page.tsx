@@ -22,7 +22,7 @@ interface Insumo {
   ultimo_error: string;
 }
 
-interface Proveedor { id: number; razon_social: string }
+interface Proveedor { id: number; razon_social: string; activo?: boolean }
 interface Estado {
   estado: "idle" | "running" | "done" | "error";
   resultado: { actualizados?: number; sin_cambio?: number; errores?: { nombre: string; error: string }[]; a_revisar?: { nombre: string; error: string }[]; message?: string } | null;
@@ -296,28 +296,32 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     m2_por_unidad: item?.m2_por_unidad ? String(item.m2_por_unidad) : "",
     precio_base_unitario: item ? String(item.precio_base_unitario) : "",
     proveedor_id: item?.proveedor_id ? String(item.proveedor_id) : "",
+    sin_ficha: item ? !item.url : false,
+    unidad_medida: item?.unidad_medida || "UN",
     activo: item?.activo ?? true,
     verificado: item?.verificado ?? false,
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-  const manual = f.categoria === "BASE_TERRENO"; // las bases se cotizan a mano por m²; el resto sale de la ficha
+  // Las bases se cotizan a mano por m²; cualquier otro material puede ingresarse a mano si su proveedor no tiene ficha en línea.
+  const manual = f.categoria === "BASE_TERRENO" || f.sin_ficha;
   const set = (k: string, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!manual && !f.fuente_url.trim()) return setError("Pegue la dirección (URL) de la ficha del producto en Easy, Sodimac o MCT.");
-    if (manual && !f.nombre.trim()) return setError("Escriba el nombre de la base.");
+    if (!manual && !f.fuente_url.trim()) return setError("Pegue la dirección (URL) de la ficha del producto, o marque que no tiene ficha en línea.");
+    if (manual && !f.nombre.trim()) return setError("Escriba el nombre del material.");
+    if (manual && !f.proveedor_id) return setError("Elija la empresa a la que se le compra este material.");
     setGuardando(true);
     const payload: Record<string, unknown> = {
       categoria: f.categoria, nombre: f.nombre.trim(), activo: f.activo, verificado: f.verificado,
       fuente_url: manual ? "" : f.fuente_url.trim(),
     };
+    if (f.proveedor_id) payload.proveedor_id = Number(f.proveedor_id);
     if (manual) {
-      payload.unidad_medida = "M2";
+      payload.unidad_medida = f.categoria === "BASE_TERRENO" ? "M2" : f.unidad_medida;
       payload.precio_base_unitario = Number(f.precio_base_unitario) || 0;
-      payload.proveedor_id = f.proveedor_id ? Number(f.proveedor_id) : null;
     }
     if (f.categoria === "REVESTIMIENTO" && f.m2_por_unidad) payload.m2_por_unidad = Number(f.m2_por_unidad);
     try {
@@ -355,27 +359,47 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
           </select>
         </div>
 
+        <div>
+          <label className={etiqueta} htmlFor="m-prov">Empresa (proveedor)</label>
+          <select id="m-prov" value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
+            <option value="">{manual ? "Elija una empresa…" : "Detectar por la dirección de la ficha"}</option>
+            {proveedores.filter((p) => p.activo !== false).map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
+          </select>
+          <p className="text-sm text-slate-500 mt-1">
+            La lista sale de «Proveedores». ¿Falta una empresa? Agréguela primero en esa sección.
+          </p>
+        </div>
+
+        {f.categoria !== "BASE_TERRENO" && (
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" className="!w-5 !min-h-0 mt-1" checked={f.sin_ficha} onChange={(e) => set("sin_ficha", e.target.checked)} />
+            <span>Este material no tiene ficha en línea: ingresaré el precio a mano.</span>
+          </label>
+        )}
+
         {manual ? (
           <>
             <div>
-              <label className={etiqueta} htmlFor="m-nom">Nombre de la base</label>
-              <input id="m-nom" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Ej: Radier H20 10 cm" />
+              <label className={etiqueta} htmlFor="m-nom">Nombre del material</label>
+              <input id="m-nom" value={f.nombre} onChange={(e) => set("nombre", e.target.value)}
+                placeholder={f.categoria === "BASE_TERRENO" ? "Ej: Radier H20 10 cm" : "Ej: Clavos 3 pulgadas"} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={etiqueta} htmlFor="m-pre">Precio por m² (lista)</label>
+                <label className={etiqueta} htmlFor="m-pre">{f.categoria === "BASE_TERRENO" ? "Precio por m² (lista)" : "Precio de lista ($)"}</label>
                 <input id="m-pre" type="number" min="0" step="500" value={f.precio_base_unitario} onFocus={(e) => e.target.select()}
                   onChange={(e) => set("precio_base_unitario", e.target.value)} />
               </div>
-              <div>
-                <label className={etiqueta} htmlFor="m-prov">Proveedor</label>
-                <select id="m-prov" value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
-                  <option value="">Sin proveedor</option>
-                  {proveedores.map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
-                </select>
-              </div>
+              {f.categoria !== "BASE_TERRENO" && (
+                <div>
+                  <label className={etiqueta} htmlFor="m-uni">Se vende por</label>
+                  <select id="m-uni" value={f.unidad_medida} onChange={(e) => set("unidad_medida", e.target.value)}>
+                    {["UN", "M2", "ML", "KG", "SACO", "CAJA", "ROLLO", "PLANCHA"].map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
-            <p className="text-sm text-slate-500">Solo ponga precios reales: esta base aparece en el cotizador y cambia el valor de la casa.</p>
+            <p className="text-sm text-slate-500">Solo ponga precios reales: el material aparece en el cotizador y puede cambiar el valor de la casa.</p>
           </>
         ) : (
           <>
@@ -383,7 +407,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
               <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto</label>
               <input id="m-url" type="url" value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
                 placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
-              <p className="text-sm text-slate-500 mt-1">De Easy, Sodimac o MCT. El nombre, el proveedor y el precio se leen solos de esa página.</p>
+              <p className="text-sm text-slate-500 mt-1">Hoy se leen solas las fichas de Easy, Sodimac y MCT. El nombre y el precio salen de esa página.</p>
             </div>
             <div>
               <label className={etiqueta} htmlFor="m-nom2">Nombre (opcional)</label>

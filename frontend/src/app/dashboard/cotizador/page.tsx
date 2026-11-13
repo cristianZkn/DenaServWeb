@@ -22,6 +22,7 @@ interface Presupuesto {
   iva: number;
   total: number;
   hitos: { fase: string; porcentaje: number; monto: number }[];
+  insumos: { id: number; nombre: string; unidad: string; etapa: string; cantidad: number; subtotal: number }[];
 }
 
 const clp = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`;
@@ -186,6 +187,7 @@ export default function CotizadorPage() {
           iva: Number(r.iva),
           total: Number(r.total),
           hitos: (r.hitos || []).map((h: any) => ({ fase: h.fase, porcentaje: Number(h.porcentaje), monto: Number(h.monto) })),
+          insumos: (r.insumos || []).map((i: any) => ({ id: i.id, nombre: i.nombre, unidad: i.unidad, etapa: i.etapa, cantidad: Number(i.cantidad), subtotal: Number(i.subtotal) })),
         });
       } catch {
         setCalcError("No hay conexión con el servidor. El valor se actualizará cuando vuelva.");
@@ -272,6 +274,8 @@ export default function CotizadorPage() {
   }
 
   const esCasa = formData.tipo_proyecto === "CASA";
+  const baseElegida = !esCasa ? null : basesTerreno.find((b) => String(b.id) === String(formData.base_terreno_id));
+  const revestElegido = esCasa ? revestimientos.find((r) => String(r.id) === String(formData.revestimiento_id)) : null;
 
   return (
     <form onSubmit={handleSubmit} className="max-w-6xl mx-auto pb-28 lg:pb-0">
@@ -444,6 +448,48 @@ export default function CotizadorPage() {
                       </ul>
                     </li>
                   </ul>
+
+                  <section aria-labelledby="carrito-titulo" className="border-t border-slate-200 pt-4">
+                    <div className="flex items-baseline justify-between">
+                      <h2 id="carrito-titulo" className="text-base font-bold text-slate-900">Materiales de la obra</h2>
+                      <span className="text-sm text-slate-500">{presupuesto.insumos.length + (baseElegida ? 1 : 0) + (revestElegido ? 1 : 0)} ítems</span>
+                    </div>
+                    <ul className="mt-2 max-h-72 overflow-y-auto divide-y divide-slate-100 text-sm pr-1">
+                      {baseElegida && (
+                        <li className="py-2">
+                          <div className="font-semibold text-slate-800">{baseElegida.nombre}</div>
+                          <div className="text-slate-500">Base · {Number(formData.superficie_m2) || 0} m²</div>
+                        </li>
+                      )}
+                      {revestElegido && (
+                        <li className="py-2">
+                          <div className="font-semibold text-slate-800">{revestElegido.nombre}</div>
+                          <div className="text-slate-500">Revestimiento · {Number(formData.superficie_m2) || 0} m²</div>
+                        </li>
+                      )}
+                      {presupuesto.insumos.map((i) => (
+                        <li key={i.id} className="py-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-800">{i.nombre}</div>
+                            <div className="text-slate-500">
+                              {i.cantidad.toLocaleString("es-CL")} {i.unidad.toLowerCase()} · {i.etapa === "ETAPA_2" ? "Terminaciones" : "Obra gruesa"}
+                            </div>
+                          </div>
+                          <span className="font-bold tabular-nums whitespace-nowrap">{clp(i.subtotal)}</span>
+                        </li>
+                      ))}
+                      {presupuesto.insumos.length === 0 && !baseElegida && !revestElegido && (
+                        <li className="py-3 text-slate-500">Elija la base y el revestimiento para ver la lista de materiales.</li>
+                      )}
+                    </ul>
+                    {presupuesto.insumos.length > 0 && (
+                      <p className="flex justify-between border-t border-slate-200 pt-2 mt-1 text-sm font-bold">
+                        <span>Subtotal de la lista</span>
+                        <span className="tabular-nums">{clp(presupuesto.insumos.reduce((t, i) => t + i.subtotal, 0))}</span>
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-500 mt-1">Es el desglose para las compras: su costo ya está dentro del valor de la obra.</p>
+                  </section>
 
                   {presupuesto.hitos.length > 0 && (
                     <div>

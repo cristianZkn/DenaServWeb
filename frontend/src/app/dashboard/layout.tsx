@@ -8,7 +8,7 @@ const NAV = [
   { href: "/dashboard", label: "Mis cotizaciones" },
   { href: "/dashboard/catalogos", label: "Materiales y precios" },
   { href: "/dashboard/proveedores", label: "Proveedores" },
-  { href: "/dashboard/cotizador", label: "+ Nueva cotización" },
+  { href: "/dashboard/portafolio", label: "Portafolio" },
 ];
 
 export default function DashboardLayout({
@@ -74,18 +74,13 @@ export default function DashboardLayout({
             <div className="flex gap-1 whitespace-nowrap">
               {NAV.map((n) => {
                 const activo = n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href);
-                const principal = n.href === "/dashboard/cotizador";
                 return (
                   <Link
                     key={n.href}
                     href={n.href}
                     aria-current={activo ? "page" : undefined}
                     className={`px-3.5 py-1.5 rounded-lg text-base font-semibold transition-colors ${
-                      principal
-                        ? "bg-amber-500 text-blue-950 hover:bg-amber-400 ml-2"
-                        : activo
-                        ? "bg-white/15 text-white"
-                        : "text-blue-100 hover:bg-white/10"
+                      activo ? "bg-white/15 text-white" : "text-blue-100 hover:bg-white/10"
                     }`}
                   >
                     {n.label}

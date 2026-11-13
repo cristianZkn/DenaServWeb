@@ -21,6 +21,8 @@ interface HitoPago {
   fase: string;
   porcentaje: number;
   monto_pago: number;
+  monto_abonado?: number;
+  monto_pendiente?: number;
   estado: string;
   fecha_pago: string | null;
   comprobante_ref: string | null;
@@ -258,7 +260,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                   <div
                     key={hito.id}
                     className={`p-5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
-                      hito.estado === "PAGADO" ? "bg-green-50/70 border-green-300" : "bg-white border-slate-200"
+                      hito.estado === "PAGADO" ? "bg-green-50/70 border-green-300" : hito.estado === "ABONADO" ? "bg-orange-50/70 border-orange-300" : "bg-white border-slate-200"
                     }`}
                   >
                     <div>
@@ -274,6 +276,11 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                         ${Number(hito.monto_pago).toLocaleString("es-CL")}
                       </p>
                       {DESTINO_HITO[hito.fase] && <p className="text-xs text-slate-500 mt-1 max-w-md">{DESTINO_HITO[hito.fase]}</p>}
+                      {hito.estado === "ABONADO" && (
+                        <p className="text-sm text-orange-800 font-semibold mt-1">
+                          Abonado ${Number(hito.monto_abonado).toLocaleString("es-CL")} · falta ${Number(hito.monto_pendiente).toLocaleString("es-CL")}
+                        </p>
+                      )}
                       {hito.fecha_pago && (
                         <p className="text-xs text-slate-500 mt-1">Fecha de pago: {hito.fecha_pago}</p>
                       )}
@@ -283,10 +290,12 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                       className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                         hito.estado === "PAGADO"
                           ? "bg-green-200 text-green-900"
+                          : hito.estado === "ABONADO"
+                          ? "bg-orange-200 text-orange-900"
                           : "bg-amber-100 text-amber-800"
                       }`}
                     >
-                      {hito.estado}
+                      {hito.estado === "ABONADO" ? "Pago parcial" : hito.estado === "PAGADO" ? "Pagado" : "Pendiente"}
                     </span>
                   </div>
                 ))

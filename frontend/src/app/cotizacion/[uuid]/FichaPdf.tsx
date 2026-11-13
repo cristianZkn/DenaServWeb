@@ -50,9 +50,7 @@ const Row = ({ a, b, strong }: { a: string; b: string; strong?: boolean }) => (
 export interface Interno {
   neto_cobrado: number;
   costo_presupuestado: number;
-  gasto_real: number;
   ganancia_estimada: number;
-  ganancia_real: number;
   avance_real: number;
 }
 
@@ -116,9 +114,8 @@ export default function FichaPdf({ c, interno }: { c: FichaData; interno?: Inter
             <Text style={s.h2}>Control interno</Text>
             <Row a="Neto cobrado" b={clp(interno.neto_cobrado)} />
             <Row a="Costo presupuestado (neto)" b={clp(interno.costo_presupuestado)} />
-            <Row a="Gasto real acumulado" b={clp(interno.gasto_real)} />
-            <Row a="Ganancia estimada" b={clp(interno.ganancia_estimada)} />
-            <Row a="Ganancia real" b={clp(interno.ganancia_real)} strong />
+            <Row a="Ganancia estimada" b={clp(interno.ganancia_estimada)} strong />
+            
             <Row a="Avance físico real" b={`${interno.avance_real}%`} />
           </View>
         ) : null}
