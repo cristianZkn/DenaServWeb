@@ -153,9 +153,9 @@ export default function ProveedoresPage() {
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">Directorio de Proveedores</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">Proveedores</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestión de empresas aliadas y distribuidores de insumos constructivos.
+            Administración de las empresas proveedoras de insumos de construcción.
           </p>
         </div>
       </div>
@@ -164,7 +164,7 @@ export default function ProveedoresPage() {
         {/* Formulario */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
           <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">
-            {isEditing ? "Editar Proveedor" : "Registrar Proveedor"}
+            {isEditing ? "Editar proveedor" : "Registrar proveedor"}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4 text-sm">
             <div>

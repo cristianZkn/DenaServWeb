@@ -229,6 +229,12 @@ class MaterialAdicionalInSchema(Schema):
     cantidad: float = Field(gt=0, le=100000)
 
 
+class ManoObraInSchema(Schema):
+    """Trabajadores que cobran el mismo monto. Para pagos diferenciados se envían varias líneas."""
+    cantidad: int = Field(gt=0, le=100)
+    cobro: float = Field(ge=0, le=100_000_000)  # lo que cobra cada uno por toda la obra
+
+
 class CotizacionInSchema(_ContactoMixin, Schema):
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
@@ -249,6 +255,8 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
     materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)  # lista de materiales agregados a mano
+    maestros: List[ManoObraInSchema] = Field([], max_length=30)
+    modo_lista: bool = False  # True: el valor sale de la lista (materiales + maestros)
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -280,6 +288,7 @@ class CotizacionSchema(Schema):
     m2_vigas_vista: float = 0
     radier_m2: float = 0
     ajuste_monto: float = 0
+    modo_lista: bool = False
     fecha_creacion: datetime
     usuario_id: int
     usuario: Optional[UsuarioSchema] = None
@@ -357,6 +366,8 @@ class CalculoInSchema(Schema):
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
     materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)
+    maestros: List[ManoObraInSchema] = Field([], max_length=30)
+    modo_lista: bool = False
 
 
 class NivelacionInSchema(Schema):

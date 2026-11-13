@@ -18,7 +18,7 @@ from ninja.security import APIKeyHeader, HttpBearer
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
-    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion
+    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
@@ -28,7 +28,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    MaterialAdicionalInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema
 )
 from . import calculo, precios
@@ -68,7 +68,8 @@ def _calcular_desde_catalogo(data):
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
-        tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, adicionales=adicionales)
+        tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, adicionales=adicionales,
+        maestros=[m.dict() for m in data.maestros], modo_lista=data.modo_lista)
 
 
 def _repartir_en_hitos(cot, delta) -> bool:
@@ -333,6 +334,9 @@ def listar_cotizaciones(request):
 
 @router.post("/cotizaciones/", response={200: CotizacionSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_cotizacion(request, data: CotizacionInSchema):
+    # Una obra solo puede darse por terminada cuando todos sus pagos están completos (ver cambio de estado).
+    if data.estado not in ("BORRADOR", "ACEPTADA"):
+        return 400, {"message": "Una cotización nueva solo puede crearse en preparación o en ejecución."}
     try:
         with transaction.atomic():
             usuario = request.auth
@@ -343,7 +347,8 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
                 ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista,
-                tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales))
+                tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales,
+                maestros=data.maestros, modo_lista=data.modo_lista))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -364,6 +369,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.DEFAULTS["ganancia_m2"],
                 m2_vigas_vista=data.m2_vigas_vista,
                 radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.DEFAULTS["radier_m2"],
+                modo_lista=data.modo_lista,
                 usuario=request.auth
             )
 
@@ -371,10 +377,13 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
                                         cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"])
                 for i in r["insumos"]])
+            ManoObraLinea.objects.bulk_create([
+                ManoObraLinea(cotizacion=cotizacion, cantidad=l["cantidad"], cobro=l["cobro"])
+                for l in r.get("mano_obra_lineas", [])])
             DetalleCotizacionInsumo.objects.bulk_create([
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
                                         cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"], es_adicional=True)
-                for i in r["adicionales"]])
+                for i in r.get("adicionales", [])])
 
             # Hitos 40/30/30 en Decimal; el último absorbe el redondeo.
             for fase, pct, monto in calculo.hitos(r["total"]):
@@ -493,7 +502,9 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 ganancia_m2=float(cot.ganancia_m2), m2_vigas_vista=float(cot.m2_vigas_vista),
                 tipo_proyecto=cot.tipo_proyecto, radier_m2=float(cot.radier_m2),
                 materiales=[MaterialAdicionalInSchema(catalogo_id=d.catalogo_tipo_id, cantidad=float(d.cantidad_calculada))
-                            for d in cot.detalles_insumo.filter(es_adicional=True)]))
+                            for d in cot.detalles_insumo.filter(es_adicional=True)],
+                maestros=[ManoObraInSchema(cantidad=l.cantidad, cobro=float(l.cobro)) for l in cot.mano_obra.all()],
+                modo_lista=cot.modo_lista))
         except ValueError as e:
             return 400, {"message": str(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (

@@ -82,7 +82,7 @@ export default function PortafolioAdminPage() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto">
           <h1 className="text-2xl font-extrabold text-slate-900">Portafolio</h1>
-          <p className="text-slate-600">Obras terminadas que se muestran en la página pública.</p>
+          <p className="text-slate-600">Obras finalizadas que se exhiben en la página pública.</p>
         </div>
         <a href="/portafolio" target="_blank" className="text-blue-800 font-semibold hover:underline">Ver página pública ↗</a>
         <button onClick={() => { setAviso(""); setError(""); setEditando("nuevo"); }} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer">

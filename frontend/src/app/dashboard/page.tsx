@@ -187,7 +187,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="text-xl p-12 text-center text-slate-500 font-semibold">
-        Cargando panel de cotizaciones...
+        Cargando cotizaciones...
       </div>
     );
   }
@@ -204,7 +204,7 @@ export default function DashboardPage() {
       {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-extrabold text-slate-900 mr-auto">
-          Mis cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
+          Cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
         </h1>
         <input
           type="search"
@@ -230,10 +230,10 @@ export default function DashboardPage() {
 
       {/* Avance físico de las obras en ejecución */}
       <section aria-labelledby="progreso-titulo" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-        <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de las obras en ejecución</h2>
+        <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
         {progreso.length === 0 ? (
           <p className="text-slate-500 text-sm mt-1">
-            No hay obras en ejecución. Cuando una cotización pase a «En ejecución», aquí verá cuánto lleva construido.
+            No existen obras en ejecución. Al pasar una cotización al estado «En ejecución», su avance se mostrará en este gráfico.
           </p>
         ) : (
           <>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-slate-500">
                     {cotizaciones.length === 0
-                      ? "Aún no hay cotizaciones. Cree la primera con «Nueva cotización»."
+                      ? "No existen cotizaciones registradas. Cree la primera mediante «Nueva cotización»."
                       : "Ninguna cotización coincide con la búsqueda."}
                   </td>
                 </tr>
@@ -335,7 +335,7 @@ export default function DashboardPage() {
                         <button
                           onClick={() => abrirVisita(cotizacion)}
                           className="!min-h-0 block mt-1 text-xs font-semibold text-blue-700 hover:underline"
-                          title="Medir el relleno de estabilizado tras visitar el terreno"
+                          title="Medir el relleno de estabilizado tras la visita al terreno"
                         >
                           {cotizacion.nivelacion_modalidad
                             ? cotizacion.nivelacion_modalidad === "EMPRESA"
@@ -385,7 +385,7 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Visita técnica: {visita.codigo_cotizacion}</h2>
                 <p className="text-xs text-slate-500">
-                  Cubicación del estabilizado base o polvo de roca para la base del radier ({visita.superficie_m2} m²).
+                  Cubicación del estabilizado (polvo de roca) para la base del radier ({visita.superficie_m2} m²).
                 </p>
               </div>
               <button onClick={() => setVisita(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">
@@ -440,7 +440,7 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center border-b pb-3">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
-                  Hitos de Pago: {selectedCotizacion.codigo_cotizacion}
+                  Pagos del contrato: {selectedCotizacion.codigo_cotizacion}
                 </h2>
                 <p className="text-xs text-slate-500">
                   Cliente: {selectedCotizacion.cliente_nombre} | Total: ${Number(selectedCotizacion.costo_total).toLocaleString("es-CL")}

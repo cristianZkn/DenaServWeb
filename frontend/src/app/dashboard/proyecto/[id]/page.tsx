@@ -17,6 +17,7 @@ interface Obra {
   porcentaje_avance_real: number;
 }
 interface Detalle extends FichaData {
+  modo_lista?: boolean;
   cliente_rut?: string | null;
   id: number;
   estado: string;
@@ -257,7 +258,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {error && <div className="bg-red-50 border-l-8 border-red-600 text-red-800 p-4 rounded-r-xl text-lg font-semibold">{error}</div>}
 
       <div className="flex flex-col sm:flex-row gap-2">
-        {pestana("valor", "Cambiar el valor")}
+        {pestana("valor", "Modificar valor")}
         {pestana("datos", "Datos del cliente")}
         {pestana("avance", "Avance y pagos")}
       </div>
@@ -280,7 +281,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <label className={campo}>Dirección del terreno</label>
             <input value={form.direccion_terreno} onChange={set("direccion_terreno")} maxLength={255} />
           </div>
-          <p className={ayuda}>Cambiar estos datos no modifica el valor de la casa.</p>
+          <p className={ayuda}>La modificación de estos datos no altera el valor de la obra.</p>
           <button onClick={guardarDatos} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
             Guardar datos
           </button>
@@ -301,7 +302,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
               <label className={campo}>Kilómetros hasta el terreno</label>
               <input type="number" min="0" value={form.distancia_flete_km} onChange={set("distancia_flete_km")} />
             </div>
-            {esCasa ? (
+            {cot.modo_lista ? null : esCasa ? (
               <div className="sm:col-span-2">
                 <label className={campo}>Material exterior de la casa</label>
                 <select value={form.revestimiento_id} onChange={set("revestimiento_id")}>
@@ -322,10 +323,10 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
 
           <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
-            <h3 className="text-xl font-bold text-slate-900">Sumar o restar un monto al total</h3>
+            <h3 className="text-xl font-bold text-slate-900">Ajuste manual del valor total</h3>
             <p className={ayuda}>
-              Úselo cuando un costo cambió (por ejemplo, subió el zinc). Escriba un número positivo para <strong>sumar</strong> o
-              negativo para <strong>descontar</strong>, por ejemplo -50000.
+              Utilícelo cuando un costo haya variado (por ejemplo, el alza del zinc). Ingrese un monto positivo para <strong>sumar</strong> o
+              negativo para <strong>descontar</strong>; por ejemplo, -50000.
             </p>
             <div>
               <label className={campo}>Monto a sumar o restar ($)</label>
@@ -336,7 +337,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           <details className="border border-slate-200 rounded-xl p-4">
             <summary className="text-lg font-semibold text-slate-700 cursor-pointer">Opciones avanzadas</summary>
             <div className="grid sm:grid-cols-2 gap-4 pt-4">
-              {esCasa && (
+              {esCasa && !cot.modo_lista && (
                 <>
                   <div>
                     <label className={campo}>Metros con vigas a la vista</label>
@@ -371,7 +372,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
                 <div className={`text-lg font-bold ${dif > 0 ? "text-red-700" : dif < 0 ? "text-green-700" : "text-slate-500"}`}>
                   {dif === 0 ? "Sin cambios en el valor" : dif > 0 ? `Sube ${clp(dif)}` : `Baja ${clp(-dif)}`}
                 </div>
-                {dif !== 0 && <p className={ayuda}>La diferencia se reparte entre los pagos que aún no se han recibido.</p>}
+                {dif !== 0 && <p className={ayuda}>La diferencia se distribuye entre los pagos aún no recibidos.</p>}
               </>
             ) : (
               <div className="text-lg text-slate-400">Calculando...</div>
@@ -380,7 +381,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
           {dif !== 0 && (
             <div>
-              <label className={campo}>¿Por qué cambia el valor? *</label>
+              <label className={campo}>Motivo de la modificación *</label>
               <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: subió el precio del zinc" />
             </div>
           )}
@@ -394,7 +395,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {panel === "avance" && (
         <section className="space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-2xl font-black">Pagos del cliente</h3>
+            <h3 className="text-2xl font-black">Pagos del contrato</h3>
             {cot.hitos_pago.map((h) => (
               <div key={h.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 border-slate-200 rounded-xl p-4">
                 <div>
@@ -427,7 +428,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-2xl font-black">Cómo va la obra</h3>
+            <h3 className="text-2xl font-black">Avance de la obra</h3>
             <div>
               <label className={campo}>Avance de la obra (%)</label>
               <input type="number" min="0" max="100" value={avance} onChange={(e) => setAvance(parseFloat(e.target.value) || 0)} />
@@ -439,7 +440,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
           {gan && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
-              <h3 className="text-2xl font-black mb-2">Resumen para la empresa</h3>
+              <h3 className="text-2xl font-black mb-2">Resumen económico</h3>
               <div className="flex justify-between"><span>Ganancia estimada</span><strong>{clp(gan.ganancia_estimada)}</strong></div>
               <div className="flex justify-between text-slate-500 text-base"><span>Cobrado sin IVA</span><span>{clp(gan.neto_cobrado)}</span></div>
             </div>
@@ -450,9 +451,9 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: el pago quedó registrado."); cargar(); }} />}
 
       <details className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <summary className="text-xl font-bold cursor-pointer">Cambios anteriores del valor ({cambios.length})</summary>
+        <summary className="text-xl font-bold cursor-pointer">Historial de modificaciones del valor ({cambios.length})</summary>
         {cambios.length === 0 ? (
-          <p className="text-base text-slate-500 pt-3">Todavía no se ha cambiado el valor de esta cotización.</p>
+          <p className="text-base text-slate-500 pt-3">Esta cotización no registra modificaciones de valor.</p>
         ) : (
           <ul className="divide-y divide-slate-200 pt-3">
             {cambios.map((c) => (

@@ -81,7 +81,7 @@ export default function PortafolioPage() {
                 href="/login"
                 className="text-sm font-semibold hover:text-blue-200 transition bg-blue-800/80 px-4 py-2 rounded-lg"
               >
-                Acceso Oficina (Google SSO)
+                Acceso de la empresa
               </Link>
             </div>
           </div>
@@ -90,9 +90,9 @@ export default function PortafolioPage() {
 
       {/* Hero Section */}
       <header className="bg-gradient-to-br from-blue-900 to-blue-700 text-white py-20 text-center shadow-inner">
-        <h1 className="text-5xl md:text-6xl font-black mb-6 tracking-tight">Construimos tu hogar.</h1>
+        <h1 className="text-5xl md:text-6xl font-black mb-6 tracking-tight">Construcción de viviendas prefabricadas</h1>
         <p className="text-xl md:text-2xl font-light max-w-3xl mx-auto px-4 text-blue-100">
-          Casas prefabricadas de alta calidad, precisión estructural y terminaciones de excelencia.
+          Obras ejecutadas con calidad estructural y terminaciones de excelencia. Conozca algunos de nuestros proyectos terminados.
         </p>
       </header>
 
@@ -102,7 +102,7 @@ export default function PortafolioPage() {
           <div className="text-center text-xl font-bold text-slate-500 py-20">Cargando proyectos...</div>
         ) : proyectos.length === 0 ? (
           <div className="text-center text-xl text-slate-500 py-20">
-            Aún no hay proyectos publicados en el portafolio.
+            Actualmente no existen proyectos publicados en el portafolio.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">

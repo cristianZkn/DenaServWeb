@@ -688,7 +688,7 @@ class MaterialesAdicionalesTests(TestCase):
                                                precio_base_unitario=10000, proveedor=prov)  # neto 9.000
 
     def calc(self, **extra):
-        return self.c.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 10, **extra},
+        return self.c.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 10, "modo_lista": True, **extra},
                            content_type="application/json", **self.h)
 
     def test_lista_suma_al_valor_con_costo_neto(self):
@@ -705,7 +705,7 @@ class MaterialesAdicionalesTests(TestCase):
 
     def test_se_guarda_y_sobrevive_al_reajuste(self):
         cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Lista", "direccion_terreno": "Calle Uno 1",
-                          "superficie_m2": 40, "materiales": [{"catalogo_id": self.osb.id, "cantidad": 3}]},
+                          "superficie_m2": 40, "modo_lista": True, "materiales": [{"catalogo_id": self.osb.id, "cantidad": 3}]},
                           content_type="application/json", **self.h).json()
         from .models import DetalleCotizacionInsumo
         d = DetalleCotizacionInsumo.objects.get(cotizacion_id=cot["id"], es_adicional=True)
@@ -714,3 +714,63 @@ class MaterialesAdicionalesTests(TestCase):
         r = self.c.patch(f"/api/cotizaciones/{cot['id']}/", {"superficie_m2": 40, "aplicar": False},
                          content_type="application/json", **self.h).json()
         self.assertEqual(float(r["diferencia"]), 0)
+
+
+class ModoListaTests(TestCase):
+    """El valor sale de la lista: materiales + maestros + traslado + vigas + ganancia (sin tarifas por m²)."""
+    def setUp(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="9-1", nombre_completo="L", email="l@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        prov = Proveedor.objects.create(rut_empresa="PROV-L", razon_social="Prov L", descuento_pct=0)
+        self.cem = CatalogoTipo.objects.create(categoria="BASE_RADIER", nombre="Saco cemento", unidad_medida="SACO",
+                                               precio_base_unitario=5000, proveedor=prov)
+        self.base = {"superficie_m2": 50, "distancia_km": 10, "modo_lista": True, "m2_vigas_vista": 10,
+                     "ganancia_m2": 30000,
+                     "materiales": [{"catalogo_id": self.cem.id, "cantidad": 10}],
+                     "maestros": [{"cantidad": 2, "cobro": 400000}]}
+
+    def calcular(self, **over):
+        return self.c.post("/api/cotizaciones/calcular", {**self.base, **over}, content_type="application/json", **self.h)
+
+    def test_formula_exacta(self):
+        r = self.calcular().json()
+        materiales, mano, flete, vigas, ganancia = 50000, 800000, 50 * 5000, 10 * 65000, 50 * 30000
+        self.assertEqual(float(r["costo_materiales_total"]), materiales)
+        self.assertEqual(float(r["costo_mano_obra"]), mano)
+        self.assertEqual(float(r["costo_flete"]), flete)
+        self.assertEqual(float(r["total"]), materiales + mano + flete + vigas + ganancia)
+        self.assertEqual(float(r["mano_obra_lineas"][0]["subtotal"]), mano)
+
+    def test_sin_lista_no_inventa_materiales_ni_mano_de_obra(self):
+        r = self.calcular(materiales=[], maestros=[]).json()
+        self.assertEqual((float(r["costo_materiales_total"]), float(r["costo_mano_obra"])), (0, 0))
+
+    def test_radier_no_cobra_vigas(self):
+        r = self.calcular(tipo_proyecto="SOLO_RADIER").json()
+        self.assertEqual(float(r["costo_vigas_vista"]), 0)
+
+    def test_modo_antiguo_no_cambia(self):
+        r = self.calcular(modo_lista=False, materiales=[], maestros=[]).json()
+        self.assertGreater(float(r["costo_mano_obra"]), 0)  # tarifa por m² de las cotizaciones antiguas
+
+    def test_guarda_maestros_y_conserva_valor_al_reajustar(self):
+        cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Lista", "direccion_terreno": "Calle Uno 1",
+                          "superficie_m2": 50, "distancia_flete_km": 10, "m2_vigas_vista": 10, "modo_lista": True,
+                          "materiales": self.base["materiales"], "maestros": self.base["maestros"]},
+                          content_type="application/json", **self.h).json()
+        from .models import ManoObraLinea
+        self.assertEqual(ManoObraLinea.objects.get(cotizacion_id=cot["id"]).cobro, 400000)
+        self.assertTrue(cot["modo_lista"])
+        r = self.c.patch(f"/api/cotizaciones/{cot['id']}/", {"superficie_m2": 50, "aplicar": False},
+                         content_type="application/json", **self.h).json()
+        self.assertEqual(float(r["diferencia"]), 0)
+
+    def test_pagos_diferenciados_se_suman(self):
+        r = self.calcular(maestros=[{"cantidad": 2, "cobro": 400000}, {"cantidad": 1, "cobro": 250000}]).json()
+        self.assertEqual(float(r["costo_mano_obra"]), 2 * 400000 + 250000)
+        self.assertEqual(len(r["mano_obra_lineas"]), 2)
+
+    def test_maestros_invalidos(self):
+        self.assertEqual(self.calcular(maestros=[{"cantidad": 0, "cobro": 1000}]).status_code, 422)
+        self.assertEqual(self.calcular(maestros=[{"cantidad": 1, "cobro": -5}]).status_code, 422)

@@ -95,7 +95,7 @@ export default function LoginPage() {
         <p className="font-semibold text-slate-700 mb-4">Ingrese con su cuenta de Google</p>
         <div ref={btnRef} className="flex justify-center" />
 
-        <p className="mt-8 text-sm text-slate-500">Solo pueden entrar los correos autorizados por la empresa.</p>
+        <p className="mt-8 text-sm text-slate-500">El acceso está restringido a los correos autorizados por la empresa.</p>
       </div>
     </div>
   );

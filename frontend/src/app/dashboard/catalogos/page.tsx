@@ -137,11 +137,11 @@ export default function CatalogosPage() {
         <div className="mr-auto">
           <h1 className="text-2xl font-extrabold text-slate-900">Materiales y precios</h1>
           <p className="text-sm text-slate-500">
-            Precios leídos de la ficha de cada producto. Última actualización:{" "}
+            Precios obtenidos de la ficha de cada producto. Última actualización:{" "}
             <strong className={ultima.dias > 8 ? "text-amber-700" : "text-slate-700"}>
               {estado?.ultima_actualizacion ? `${new Date(estado.ultima_actualizacion).toLocaleDateString("es-CL")} · ${ultima.texto.toLowerCase()}` : "nunca"}
             </strong>
-            . Se renuevan solos cada lunes.
+            . Se actualizan automáticamente cada lunes.
           </p>
         </div>
         <button

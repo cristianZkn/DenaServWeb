@@ -194,6 +194,8 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                 <span className="text-xs font-semibold text-slate-500">Superficie Total</span>
                 <p className="text-xl font-black text-slate-900 mt-1">{cotizacion.superficie_m2} m²</p>
               </div>
+              {(cotizacion.base_terreno || cotizacion.revestimiento) && (
+                <>
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                 <span className="text-xs font-semibold text-slate-500">Tipo de Base</span>
                 <p className="text-base font-bold text-slate-800 mt-1">
@@ -206,6 +208,8 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
                   {cotizacion.revestimiento?.nombre || "No especificado"}
                 </p>
               </div>
+                </>
+              )}
             </div>
           </div>
 

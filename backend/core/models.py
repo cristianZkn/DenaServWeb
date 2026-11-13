@@ -123,6 +123,8 @@ class Cotizacion(models.Model):
     nivelacion_modalidad = models.CharField(max_length=10, blank=True, default='')  # 'CLIENTE' | 'EMPRESA'
     nivelacion_m3 = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     costo_nivelacion = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    # True = el valor sale de la lista (materiales + maestros) y no de tarifas por m²; las cotizaciones antiguas son False.
+    modo_lista = models.BooleanField(default=False)
     fecha_creacion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(
         Usuario,
@@ -164,6 +166,17 @@ class DetalleCotizacionInsumo(models.Model):
 
     def __str__(self):
         return f"{self.cotizacion.codigo_cotizacion} - {self.catalogo_tipo.nombre} ({self.etapa_obra})"
+
+
+# 5b. mano_obra_linea: trabajadores de la obra. Una línea por cada monto distinto (pagos diferenciados)
+class ManoObraLinea(models.Model):
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='mano_obra')
+    cantidad = models.PositiveSmallIntegerField(default=1)  # trabajadores que cobran este mismo monto
+    cobro = models.DecimalField(max_digits=18, decimal_places=2)  # lo que cobra cada uno por toda la obra
+
+    class Meta:
+        db_table = 'mano_obra_linea'
+        ordering = ['id']
 
 
 # 6. hito_pago
