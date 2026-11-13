@@ -433,6 +433,13 @@ def obtener_cotizacion_detalle(request, cotizacion_id: int):
         return 404, {"message": "Cotización no encontrada"}
 
 
+@router.delete("/cotizaciones/{cotizacion_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_cotizacion(request, cotizacion_id: int):
+    """Cancela la cotización u obra con todo lo asociado (pagos, avance, lista, historial). Los proyectos del portafolio se conservan."""
+    n, _ = Cotizacion.objects.filter(id=cotizacion_id).delete()
+    return (200, {"message": "Cotización eliminada"}) if n else (404, {"message": "Cotización no encontrada"})
+
+
 @router.patch("/cotizaciones/{cotizacion_id}/estado", response={200: CotizacionSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_estado_cotizacion(request, cotizacion_id: int, data: CotizacionEstadoUpdateSchema):
     if data.estado not in ESTADOS_COTIZACION:

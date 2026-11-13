@@ -4,6 +4,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
 import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 import type { FichaData } from "@/app/cotizacion/[uuid]/FichaPdf";
@@ -198,6 +199,21 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   };
 
   const [pagando, setPagando] = useState<Hito | null>(null);
+  const router = useRouter();
+
+  const cancelarCotizacion = async () => {
+    if (!cot) return;
+    const conPagos = cot.hitos_pago.some((h) => h.estado !== "PENDIENTE");
+    const ok = await preguntar({
+      titulo: "¿Seguro que desea eliminar esta cotización?",
+      mensaje: `Se eliminarán «${cot.codigo_cotizacion}» de ${cot.cliente_nombre}, su lista, su avance y sus pagos${conPagos ? " (incluidos los pagos ya registrados)" : ""}. Esta acción no se puede deshacer.`,
+      peligro: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/cotizaciones/${id}`, { method: "DELETE", headers: jsonAuth() });
+    if (!res.ok) return avisar("No se pudo eliminar la cotización.", true);
+    router.push("/dashboard");
+  };
   const { preguntar, dialogo } = useDialogo();
 
   const descargarPdf = async () => {
@@ -252,6 +268,9 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             </Link>
             <button onClick={descargarPdf} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">
               Descargar ficha de la empresa (PDF)
+            </button>
+            <button onClick={cancelarCotizacion} className="px-4 py-2.5 text-base font-semibold text-red-700 border border-red-200 rounded-xl hover:bg-red-50 cursor-pointer">
+              Cancelar obra o cotización
             </button>
           </div>
         </div>

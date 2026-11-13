@@ -661,6 +661,15 @@ class PagosEstadosPortafolioTests(TestCase):
         self.assertEqual(Client().get("/api/portafolio/").json(), [])      # despublicado: no se ve en la web
         self.assertEqual(len(self.c.get("/api/portafolio/admin/", **self.h).json()), 1)
 
+    def test_eliminar_cotizacion(self):
+        from core.models import Cotizacion, HitoPago
+        cid = self.cot["id"]
+        self.assertTrue(HitoPago.objects.filter(cotizacion_id=cid).exists())
+        self.assertEqual(self.c.delete(f"/api/cotizaciones/{cid}/", **self.h).status_code, 200)
+        self.assertFalse(Cotizacion.objects.filter(id=cid).exists())
+        self.assertFalse(HitoPago.objects.filter(cotizacion_id=cid).exists())
+        self.assertEqual(self.c.delete(f"/api/cotizaciones/{cid}/", **self.h).status_code, 404)
+
     def test_agregar_foto_conserva_la_foto_externa(self):
         """Obras antiguas con imagen_url: al subir una foto nueva la anterior no desaparece, y puede quitarse."""
         import base64
