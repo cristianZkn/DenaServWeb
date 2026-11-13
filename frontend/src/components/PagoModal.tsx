@@ -87,11 +87,11 @@ export default function PagoModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]" role="dialog" aria-modal="true" aria-labelledby="pago-titulo">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 border border-slate-200">
         <div>
           <h2 id="pago-titulo" className="text-xl font-black text-slate-900">Registrar pago</h2>
           <p className="text-slate-600 mt-1">{NOMBRE_HITO[hito.fase] || hito.fase}</p>
-          <p className="text-3xl font-black text-blue-900 mt-1">{clp(total)}</p>
+          <p className="text-2xl sm:text-3xl font-black text-blue-900 mt-1 break-words">{clp(total)}</p>
           {Number(hito.monto_abonado) > 0 && hito.estado !== "PAGADO" && (
             <p className="text-sm text-orange-800 font-semibold mt-1">
               Ya se abonó {clp(hito.monto_abonado)} · faltan {clp(hito.monto_pendiente)}
@@ -127,7 +127,7 @@ export default function PagoModal({
 
         {completo === false && (
           <div className="space-y-3 bg-orange-50 border border-orange-200 rounded-xl p-4">
-            <div className="flex gap-4 text-base">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-base">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="modo" checked={modo === "pagado"} onChange={() => { setModo("pagado"); setMonto(""); }} className="!w-auto !min-h-0" />
                 Monto pagado

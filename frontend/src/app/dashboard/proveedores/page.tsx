@@ -162,7 +162,7 @@ export default function ProveedoresPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Formulario */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
           <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">
             {isEditing ? "Editar proveedor" : "Registrar proveedor"}
           </h2>
@@ -267,7 +267,7 @@ export default function ProveedoresPage() {
         {/* Listado */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full min-w-[44rem] text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
                   <th className="p-4">RUT</th>

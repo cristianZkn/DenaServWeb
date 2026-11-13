@@ -96,8 +96,8 @@ function NumberField({
 /** Sección del formulario con su título. */
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 space-y-5">
-      <h2 className="text-xl font-bold text-slate-900">{titulo}</h2>
+    <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-7 space-y-5 min-w-0">
+      <h2 className="text-lg sm:text-xl font-bold text-slate-900">{titulo}</h2>
       {children}
     </section>
   );
@@ -297,7 +297,7 @@ export default function CotizadorPage() {
   return (
     <form onSubmit={guardar} className="max-w-6xl mx-auto pb-28 lg:pb-0">
       <div className="mb-6">
-        <h1 className="text-3xl font-extrabold text-slate-900">Nueva cotización</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Nueva cotización</h1>
         <p className="text-slate-600 mt-1">Complete la información solicitada. El valor de la obra se actualiza en el panel lateral.</p>
       </div>
 
@@ -422,7 +422,7 @@ export default function CotizadorPage() {
                   const linea = presupuesto?.materialesLinea.find((a) => a.id === m.catalogo_id);
                   return (
                     <li key={m.catalogo_id} className="p-3 flex flex-wrap items-center gap-3">
-                      <div className="flex-1 min-w-[10rem]">
+                      <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[10rem]">
                         <div className="font-semibold text-slate-900">{nombre}</div>
                         <div className="text-sm text-slate-500">{linea ? `${clp(linea.precioNeto)} por unidad (con descuento)` : "Calculando…"}</div>
                       </div>
@@ -430,7 +430,7 @@ export default function CotizadorPage() {
                         onFocus={(e) => e.target.select()}
                         onChange={(e) => setMateriales((prev) => prev.map((x) => (x.catalogo_id === m.catalogo_id ? { ...x, cantidad: e.target.value } : x)))}
                         className="!w-24 h-11 px-2 text-lg border-2 border-slate-300 rounded-lg" />
-                      <span className="w-28 text-right font-bold tabular-nums">{linea ? clp(linea.subtotal) : "—"}</span>
+                      <span className="ml-auto sm:ml-0 sm:w-28 text-right font-bold tabular-nums">{linea ? clp(linea.subtotal) : "—"}</span>
                       <button type="button" onClick={() => setMateriales((prev) => prev.filter((x) => x.catalogo_id !== m.catalogo_id))}
                         className="text-red-700 font-semibold hover:underline cursor-pointer">Quitar</button>
                     </li>
@@ -465,17 +465,19 @@ export default function CotizadorPage() {
             ) : (
               <div className="space-y-3">
                 {manoObraLineas.map((l, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_1.5fr_auto_auto] sm:grid-cols-[8rem_12rem_1fr_auto] gap-3 items-end">
+                  <div key={i} className="grid grid-cols-2 sm:grid-cols-[8rem_12rem_1fr_auto] gap-3 items-end">
                     <NumberField label="Cantidad" name={`mo_cantidad_${i}`} value={l.cantidad}
                       onChange={(_, v) => actualizarLinea(i, "cantidad", v)} step="1" max={100} />
                     <NumberField label="Cobro por trabajador" name={`mo_cobro_${i}`} value={l.cobro}
                       onChange={(_, v) => actualizarLinea(i, "cobro", v)} step="1000" suffix="$" />
-                    <span className="h-12 flex items-center justify-end font-bold tabular-nums">
-                      {clp(Math.floor(num(l.cantidad)) * num(l.cobro))}
-                    </span>
-                    <button type="button" disabled={manoObraLineas.length === 1} aria-label={`Quitar línea ${i + 1}`}
-                      onClick={() => setManoObraLineas((prev) => prev.filter((_, k) => k !== i))}
-                      className="h-12 px-2 text-red-700 font-semibold hover:underline cursor-pointer disabled:opacity-40">Quitar</button>
+                    <div className="col-span-2 sm:contents flex items-center justify-between gap-3 border-b border-slate-100 pb-3 sm:border-0 sm:pb-0">
+                      <span className="sm:h-12 flex items-center sm:justify-end font-bold tabular-nums">
+                        {clp(Math.floor(num(l.cantidad)) * num(l.cobro))}
+                      </span>
+                      <button type="button" disabled={manoObraLineas.length === 1} aria-label={`Quitar línea ${i + 1}`}
+                        onClick={() => setManoObraLineas((prev) => prev.filter((_, k) => k !== i))}
+                        className="sm:h-12 px-2 text-red-700 font-semibold hover:underline cursor-pointer disabled:opacity-40">Quitar</button>
+                    </div>
                   </div>
                 ))}
                 <button type="button" onClick={() => setManoObraLineas((prev) => [...prev, { cantidad: "1", cobro: "" }])}
@@ -492,15 +494,15 @@ export default function CotizadorPage() {
         {/* Panel lateral: presupuesto en vivo */}
         <aside className="lg:sticky lg:top-6" aria-live="polite">
           <div className="rounded-2xl overflow-hidden border border-slate-300 bg-white shadow-sm">
-            <div className="bg-blue-900 text-white px-6 py-5">
+            <div className="bg-blue-900 text-white px-4 sm:px-6 py-5">
               <p className="text-sm text-blue-200">Valor de la obra, IVA incluido</p>
-              <p className={`text-4xl font-black tabular-nums tracking-tight mt-1 transition-opacity ${calculando ? "opacity-60" : ""}`}>
+              <p className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tight mt-1 transition-opacity ${calculando ? "opacity-60" : ""}`}>
                 {presupuesto ? clp(presupuesto.total) : "—"}
               </p>
               <p className="text-sm text-blue-200 mt-1 h-5">{calculando ? "Calculando…" : ""}</p>
             </div>
 
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-4 sm:px-6 py-5 space-y-5">
               {errorCalculo && <p role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg p-3">{errorCalculo}</p>}
 
               {presupuesto && (
@@ -522,7 +524,7 @@ export default function CotizadorPage() {
                   <section aria-labelledby="detalle-titulo" className="border-t border-slate-200 pt-4">
                     <div className="flex items-baseline justify-between">
                       <h2 id="detalle-titulo" className="text-base font-bold text-slate-900">Detalle de la lista</h2>
-                      <span className="text-sm text-slate-500">{totalLineas} {totalLineas === 1 ? "partida" : "partidas"}</span>
+                      <span className="text-sm text-slate-500 shrink-0">{totalLineas} {totalLineas === 1 ? "partida" : "partidas"}</span>
                     </div>
                     {totalLineas === 0 ? (
                       <p className="py-3 text-sm text-slate-500">Agregue materiales y mano de obra para conformar el valor de la obra.</p>
@@ -585,9 +587,9 @@ export default function CotizadorPage() {
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-300 p-3 flex items-center gap-3 z-20">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-slate-500">Valor de la obra</p>
-          <p className="text-xl font-black text-blue-900 tabular-nums truncate">{presupuesto ? clp(presupuesto.total) : "—"}</p>
+          <p className="text-lg sm:text-xl font-black text-blue-900 tabular-nums truncate">{presupuesto ? clp(presupuesto.total) : "—"}</p>
         </div>
-        <button type="submit" disabled={guardando || !presupuesto} className="px-6 h-12 font-bold text-white bg-blue-900 rounded-lg cursor-pointer disabled:opacity-50">
+        <button type="submit" disabled={guardando || !presupuesto} className="px-5 sm:px-6 h-12 shrink-0 font-bold text-white bg-blue-900 rounded-lg cursor-pointer disabled:opacity-50">
           {guardando ? "Guardando…" : "Guardar"}
         </button>
       </div>

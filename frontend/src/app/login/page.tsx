@@ -71,7 +71,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-blue-900">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-blue-900 tracking-tight">
             DENA<span className="text-accent">SERV</span>

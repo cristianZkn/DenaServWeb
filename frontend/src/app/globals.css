@@ -43,6 +43,12 @@
 
 html {
   font-size: 112.5%; /* 18 px base: todo el texto (rem) crece un 12 % */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* En pantallas angostas se vuelve a 16 px para que botones, formularios y tablas quepan sin deformarse */
+@media (max-width: 640px) {
+  html { font-size: 100%; }
 }
 
 body {
@@ -52,7 +58,11 @@ body {
   font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip; /* ningún elemento ancho debe generar scroll horizontal de la página */
 }
+
+img, video, canvas, svg { max-width: 100%; }
+img { height: auto; }
 
 @layer base {
   input:not([type="checkbox"]):not([type="radio"]), select, textarea {

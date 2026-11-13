@@ -203,7 +203,7 @@ export default function DashboardPage() {
     <div className="space-y-4">
       {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-900 mr-auto">
+        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 w-full sm:w-auto sm:mr-auto">
           Cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
         </h1>
         <input
@@ -212,11 +212,11 @@ export default function DashboardPage() {
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar cliente, código o dirección"
           aria-label="Buscar cotización"
-          className="sm:!w-80"
+          className="flex-1 min-w-0 sm:!w-80 sm:flex-none"
         />
         <Link
           href="/dashboard/cotizador"
-          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 inline-flex items-center rounded-lg shadow-sm transition"
+          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 sm:px-5 h-11 inline-flex items-center justify-center rounded-lg shadow-sm transition whitespace-nowrap"
         >
           + Nueva cotización
         </Link>
@@ -247,7 +247,7 @@ export default function DashboardPage() {
                 <BarChart data={progreso.map((p) => ({ ...p, avance: Number(p.avance) }))} layout="vertical" margin={{ left: 8, right: 36, top: 4, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                  <YAxis type="category" dataKey="cliente_nombre" width={130} tick={{ fontSize: 13 }} />
+                  <YAxis type="category" dataKey="cliente_nombre" width={96} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => [`${v}%`, "Avance"]} labelFormatter={(l) => String(l)} />
                   <Bar dataKey="avance" fill="#15803d" radius={[0, 6, 6, 0]} background={{ fill: "#e2e8f0", radius: 6 }}>
                     <LabelList dataKey="avance" position="right" formatter={(v) => `${v}%`} />
@@ -274,8 +274,8 @@ export default function DashboardPage() {
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
+          <table className="w-full text-left border-collapse block md:table">
+            <thead className="hidden md:table-header-group">
               <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Terreno</th>
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                 <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
+            <tbody className="divide-y divide-slate-100 text-sm block md:table-row-group">
               {visibles.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-slate-500">
@@ -295,8 +295,8 @@ export default function DashboardPage() {
                 </tr>
               ) : (
                 visibles.map((cotizacion) => (
-                  <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
+                  <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors block md:table-row p-2 md:p-0">
+                    <td className="px-4 py-2 md:py-3 block md:table-cell">
                       <div className="font-bold text-slate-900">{cotizacion.cliente_nombre}</div>
                       <div className="text-xs text-slate-500">
                         <span className="font-mono font-semibold text-blue-800">{cotizacion.codigo_cotizacion}</span>
@@ -305,16 +305,16 @@ export default function DashboardPage() {
                         {cotizacion.cliente_telefono ? ` · ${cotizacion.cliente_telefono}` : ""}
                       </div>
                     </td>
-                    <td className="px-4 py-3 max-w-xs">
+                    <td className="px-4 py-1 md:py-3 md:max-w-xs block md:table-cell">
                       <div className="text-slate-800 truncate" title={cotizacion.direccion_terreno}>
                         {cotizacion.direccion_terreno}
                       </div>
                       <div className="text-xs text-slate-500">{cotizacion.superficie_m2} m²</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-bold text-slate-900 tabular-nums whitespace-nowrap">
+                    <td className="px-4 py-1 md:py-3 md:text-right font-bold text-slate-900 tabular-nums whitespace-nowrap block md:table-cell">
                       ${Number(cotizacion.costo_total).toLocaleString("es-CL")}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2 md:py-3 block md:table-cell">
                       <select
                         value={cotizacion.estado}
                         onChange={(e) => handleCambiarEstadoCotizacion(cotizacion.id, e.target.value)}
@@ -345,8 +345,8 @@ export default function DashboardPage() {
                         </button>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                    <td className="px-4 py-2 md:py-3 block md:table-cell">
+                      <div className="flex flex-wrap items-center md:justify-end gap-2">
                         <button
                           onClick={() => abrirGestionHitos(cotizacion)}
                           className="!min-h-0 text-sm font-semibold bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 transition"
@@ -379,8 +379,8 @@ export default function DashboardPage() {
 
       {/* Modal de visita técnica (estabilizado) */}
       {visita && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 border border-slate-200 space-y-4">
             <div className="flex justify-between items-start border-b pb-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Visita técnica: {visita.codigo_cotizacion}</h2>
@@ -435,8 +435,8 @@ export default function DashboardPage() {
 
       {/* Modal de Hitos de Pago */}
       {modalHitosAbierto && selectedCotizacion && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 border border-slate-200 space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
@@ -484,7 +484,7 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <span className={`px-2.5 py-1 rounded border text-sm font-bold ${COLOR_ESTADO[hito.estado] || ""}`}>
                         {ETIQUETA_ESTADO[hito.estado] || hito.estado}
                       </span>

@@ -194,7 +194,7 @@ export default function CatalogosPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <input type="search" placeholder="Buscar material o proveedor" aria-label="Buscar" value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)} className="sm:!w-80" />
+            onChange={(e) => setBusqueda(e.target.value)} className="flex-1 min-w-0 sm:!w-80 sm:flex-none" />
           <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
             <input type="checkbox" className="!w-4 !min-h-0" checked={verInactivos} onChange={(e) => setVerInactivos(e.target.checked)} />
             Ver desactivados o por confirmar ({ocultos})
@@ -204,7 +204,7 @@ export default function CatalogosPage() {
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[46rem] text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
                 <th className="px-4 py-3">Material</th>
@@ -348,7 +348,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
   const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
-      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-slate-900">{item ? "Editar material" : "Agregar material"}</h2>
         {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm">{error}</div>}
 

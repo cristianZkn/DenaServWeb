@@ -218,7 +218,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">
               Desglose Financiero de la Cotización
             </h3>
-            <div className="space-y-2 text-sm bg-slate-50 p-6 rounded-xl border border-slate-200">
+            <div className="space-y-2 text-sm bg-slate-50 p-4 sm:p-6 rounded-xl border border-slate-200">
               {[
                 ["Suministro de Materiales", cotizacion.costo_materiales],
                 ["Mano de Obra Especializada", cotizacion.costo_mano_obra],

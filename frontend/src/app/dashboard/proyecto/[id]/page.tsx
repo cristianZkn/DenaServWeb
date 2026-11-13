@@ -226,7 +226,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   );
 
   return (
-    <div className="max-w-6xl mx-auto grid lg:grid-cols-[19rem_1fr] gap-5 items-start">
+    <div className="max-w-6xl mx-auto grid lg:grid-cols-[19rem_minmax(0,1fr)] gap-5 items-start">
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
       <aside className="lg:sticky lg:top-20 space-y-3">
         <Link href="/dashboard" className="inline-block text-base font-semibold text-blue-800 hover:underline">
@@ -240,7 +240,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
           <div className="bg-blue-900 text-white rounded-xl p-4">
             <div className="text-sm text-blue-200">Valor total, IVA incluido</div>
-            <div className="text-3xl font-black tabular-nums">{clp(cot.costo_total)}</div>
+            <div className="text-2xl sm:text-3xl font-black tabular-nums break-words">{clp(cot.costo_total)}</div>
           </div>
           <div className="grid gap-2">
             <Link href={`/cotizacion/${(cot as any).token_publico}`} target="_blank" className="px-4 py-2.5 text-center text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50">
@@ -264,7 +264,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       </div>
 
       {panel === "datos" && (
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <label className={campo}>Nombre del cliente</label>
             <input value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
@@ -289,7 +289,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       )}
 
       {panel === "valor" && (
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
           <p className="text-lg text-slate-700">
             Cambie lo que haya variado. Abajo verá cuánto quedaría el valor de la casa <strong>antes de guardar</strong>.
           </p>
@@ -394,7 +394,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
       {panel === "avance" && (
         <section className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <h3 className="text-2xl font-black">Pagos del contrato</h3>
             {cot.hitos_pago.map((h) => (
               <div key={h.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-2 border-slate-200 rounded-xl p-4">
@@ -427,7 +427,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <h3 className="text-2xl font-black">Avance de la obra</h3>
             <div>
               <label className={campo}>Avance de la obra (%)</label>
@@ -439,7 +439,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
 
           {gan && (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
               <h3 className="text-2xl font-black mb-2">Resumen económico</h3>
               <div className="flex justify-between"><span>Ganancia estimada</span><strong>{clp(gan.ganancia_estimada)}</strong></div>
               <div className="flex justify-between text-slate-500 text-base"><span>Cobrado sin IVA</span><span>{clp(gan.neto_cobrado)}</span></div>

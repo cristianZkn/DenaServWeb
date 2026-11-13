@@ -208,7 +208,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="pf-titulo">
-      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
         <h2 id="pf-titulo" className="text-xl font-bold text-slate-900">{proyecto ? "Editar obra" : "Agregar obra terminada"}</h2>
         {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm font-semibold">{error}</div>}
 
