@@ -207,11 +207,12 @@ class GananciasWhatsappTests(TestCase):
         cot = c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 50},
                      content_type="application/json", **h).json()
         obra = ObraEjecucion.objects.get(cotizacion_id=cot["id"])
-        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55, "gasto_real_acumulado": 1000},
+        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55},
                 content_type="application/json", **h)
         g = c.get(f"/api/cotizaciones/{cot['id']}/ganancias/", **h).json()
         self.assertTrue(g["hito_avance_exigible"])
-        self.assertEqual(g["ganancia_real"], g["neto_cobrado"] - 1000)
+        self.assertNotIn("gasto_real", g)
+        self.assertEqual(g["ganancia_estimada"], g["neto_cobrado"] - g["costo_presupuestado"])
         from .models import PortafolioProyecto
         PortafolioProyecto.objects.create(titulo="Casa Maipú", cotizacion_id=cot["id"])
         url = c.get("/api/portafolio/").json()[0]["whatsapp_url"]
@@ -591,3 +592,87 @@ class ValidacionDatosTests(TestCase):
 
     def test_rut_y_telefono_vacios_son_opcionales(self):
         self.assertEqual(self.post(cliente_rut="", cliente_telefono="").status_code, 200)
+
+
+class PagosEstadosPortafolioTests(TestCase):
+    def setUp(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="7-7", nombre_completo="P", email="p@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Pagos", "direccion_terreno": "Calle Uno 1",
+                               "superficie_m2": 40}, content_type="application/json", **self.h).json()
+        self.hitos = list(HitoPago.objects.filter(cotizacion_id=self.cot["id"]).order_by("id"))
+
+    def pagar(self, hito, **body):
+        return self.c.patch(f"/api/hitos-pago/{hito.id}/", body, content_type="application/json", **self.h)
+
+    def estado(self, nuevo):
+        return self.c.patch(f"/api/cotizaciones/{self.cot['id']}/estado", {"estado": nuevo},
+                            content_type="application/json", **self.h)
+
+    def test_pago_parcial_calcula_deuda_y_se_completa(self):
+        h = self.hitos[0]
+        r = self.pagar(h, pago_completo=False, monto_abonado=1000).json()
+        self.assertEqual((r["estado"], r["monto_abonado"]), ("ABONADO", 1000))
+        self.assertEqual(r["monto_pendiente"], float(h.monto_pago) - 1000)
+        r = self.pagar(h, pago_completo=True).json()
+        self.assertEqual((r["estado"], r["monto_pendiente"]), ("PAGADO", 0))
+
+    def test_monto_parcial_fuera_de_rango(self):
+        h = self.hitos[0]
+        self.assertEqual(self.pagar(h, pago_completo=False, monto_abonado=float(h.monto_pago) + 1).status_code, 400)
+        self.assertEqual(self.pagar(h, pago_completo=False).status_code, 400)
+
+    def test_no_finaliza_con_pagos_pendientes_ni_sin_ejecucion(self):
+        self.assertEqual(self.estado("FINALIZADA").status_code, 409)       # aún borrador
+        self.assertEqual(self.estado("ACEPTADA").status_code, 200)
+        r = self.estado("FINALIZADA")
+        self.assertEqual(r.status_code, 409)                                 # pagos pendientes
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "ACEPTADA")
+        for h in self.hitos[:-1]:
+            self.pagar(h, pago_completo=True)
+        self.pagar(self.hitos[-1], pago_completo=False, monto_abonado=1)    # un abono no basta
+        self.assertEqual(self.estado("FINALIZADA").status_code, 409)
+        self.pagar(self.hitos[-1], pago_completo=True)
+        self.assertEqual(self.estado("FINALIZADA").status_code, 200)
+
+    def test_progreso_solo_obras_en_ejecucion(self):
+        self.assertEqual(self.c.get("/api/cotizaciones/progreso/", **self.h).json(), [])
+        self.estado("ACEPTADA")
+        obra = ObraEjecucion.objects.get(cotizacion_id=self.cot["id"])
+        self.c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 35}, content_type="application/json", **self.h)
+        p = self.c.get("/api/cotizaciones/progreso/", **self.h).json()
+        self.assertEqual([(x["id"], x["avance"]) for x in p], [(self.cot["id"], 35)])
+
+    def test_portafolio_con_varias_imagenes(self):
+        import base64
+        png = "data:image/png;base64," + base64.b64encode(b"PNG-fake" + b"0" * 20).decode()
+        r = self.c.post("/api/portafolio/", {"titulo": "Casa Limache", "descripcion": "Casa de 54 m2",
+                        "imagenes": [png, png]}, content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        p = r.json()
+        self.assertEqual(len(p["imagenes"]), 2)
+        img = Client().get(p["imagenes"][0])
+        self.assertEqual((img.status_code, img["Content-Type"]), (200, "image/png"))
+        self.assertEqual(len(Client().get("/api/portafolio/").json()), 1)
+        quitada = self.c.patch(f"/api/portafolio/{p['id']}/", {"quitar_imagenes": [int(p["imagenes"][0].split("/")[-2])],
+                               "publicado": False}, content_type="application/json", **self.h).json()
+        self.assertEqual(len(quitada["imagenes"]), 1)
+        self.assertEqual(Client().get("/api/portafolio/").json(), [])      # despublicado: no se ve en la web
+        self.assertEqual(len(self.c.get("/api/portafolio/admin/", **self.h).json()), 1)
+
+    def test_portafolio_rechaza_archivos_no_imagen(self):
+        r = self.c.post("/api/portafolio/", {"titulo": "Casa mala", "imagenes": ["data:text/html;base64,PGI+"]},
+                        content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+
+
+class CargarMaterialesTests(TestCase):
+    def test_carga_es_repetible_y_crea_proveedor(self):
+        from django.core.management import call_command
+        from pathlib import Path
+        archivo = Path(__file__).parent / "fixtures" / "materiales_ejemplo.json"
+        call_command("cargar_materiales", str(archivo))
+        call_command("cargar_materiales", str(archivo))
+        self.assertEqual(CatalogoTipo.objects.filter(categoria="INSUMO").count(), 2)
+        self.assertEqual(Proveedor.objects.filter(razon_social="Homecenter").count(), 1)

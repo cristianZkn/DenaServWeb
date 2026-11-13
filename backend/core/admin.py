@@ -41,7 +41,7 @@ class HitoPagoAdmin(admin.ModelAdmin):
 
 @admin.register(ObraEjecucion)
 class ObraEjecucionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cotizacion', 'porcentaje_avance_real', 'gasto_real_acumulado', 'fecha_ultima_actualizacion')
+    list_display = ('id', 'cotizacion', 'porcentaje_avance_real', 'fecha_ultima_actualizacion')
     search_fields = ('cotizacion__codigo_cotizacion',)
 
 @admin.register(PortafolioProyecto)

@@ -1,3 +1,4 @@
+import base64
 import hmac
 import logging
 import jwt
@@ -10,13 +11,14 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.security import APIKeyHeader, HttpBearer
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
-    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, CambioCotizacion
+    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
@@ -26,7 +28,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema
 )
 from . import calculo, precios
@@ -67,7 +69,7 @@ def _repartir_en_hitos(cot, delta) -> bool:
     False si hay diferencia pero no queda ningún hito pendiente."""
     if not delta:
         return True
-    pendientes = list(cot.hitos_pago.filter(estado="PENDIENTE").order_by("id"))
+    pendientes = list(cot.hitos_pago.exclude(estado="PAGADO").order_by("id"))
     if not pendientes:
         return False
     pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
@@ -76,7 +78,9 @@ def _repartir_en_hitos(cot, delta) -> bool:
         parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
         h.monto_pago += parte
         asignado += parte
-        h.save(update_fields=["monto_pago"])
+        if h.monto_abonado >= h.monto_pago:  # el ajuste bajó el monto por debajo de lo ya abonado
+            h.monto_abonado, h.estado = h.monto_pago, "PAGADO"
+        h.save(update_fields=["monto_pago", "monto_abonado", "estado"])
     return True
 
 
@@ -371,7 +375,6 @@ def crear_cotizacion(request, data: CotizacionInSchema):
             ObraEjecucion.objects.create(
                 cotizacion=cotizacion,
                 porcentaje_avance_real=0.00,
-                gasto_real_acumulado=0.00,
                 fecha_ultima_actualizacion=date.today(),
                 observaciones="Obra creada a partir de cotización inicial."
             )
@@ -389,6 +392,14 @@ def calcular_cotizacion(request, data: CalculoInSchema):
         return 400, {"message": str(e)}
 
 
+@router.get("/cotizaciones/progreso/", response=List[ProgresoObraSchema], auth=AuthBearer())
+def progreso_obras(request):
+    """Avance físico de cada obra en ejecución (cotizaciones aceptadas), para el gráfico del panel."""
+    obras = ObraEjecucion.objects.select_related("cotizacion").filter(cotizacion__estado="ACEPTADA").order_by("id")
+    return [{"id": o.cotizacion_id, "codigo_cotizacion": o.cotizacion.codigo_cotizacion,
+             "cliente_nombre": o.cotizacion.cliente_nombre, "avance": o.porcentaje_avance_real} for o in obras]
+
+
 @router.get("/cotizaciones/{cotizacion_id}/", response={200: CotizacionDetalladaSchema, 404: MessageSchema}, auth=AuthBearer())
 def obtener_cotizacion_detalle(request, cotizacion_id: int):
     try:
@@ -402,17 +413,25 @@ def obtener_cotizacion_detalle(request, cotizacion_id: int):
         return 404, {"message": "Cotización no encontrada"}
 
 
-@router.patch("/cotizaciones/{cotizacion_id}/estado", response={200: CotizacionSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.patch("/cotizaciones/{cotizacion_id}/estado", response={200: CotizacionSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_estado_cotizacion(request, cotizacion_id: int, data: CotizacionEstadoUpdateSchema):
+    if data.estado not in ESTADOS_COTIZACION:
+        return 400, {"message": "Estado no válido. Use BORRADOR, ACEPTADA o FINALIZADA."}
     try:
         cotizacion = Cotizacion.objects.get(id=cotizacion_id)
+        if data.estado == "FINALIZADA":
+            # Solo una obra en ejecución (ACEPTADA) con todos sus pagos completos puede darse por terminada.
+            if cotizacion.estado != "ACEPTADA":
+                return 409, {"message": "Solo una obra en ejecución (aceptada) puede finalizarse."}
+            sin_pagar = cotizacion.hitos_pago.exclude(estado="PAGADO").count()
+            if sin_pagar:
+                quedan = "queda 1 pago" if sin_pagar == 1 else f"quedan {sin_pagar} pagos"
+                return 409, {"message": f"No se puede finalizar: {quedan} sin cobrar por completo. La obra sigue en ejecución."}
         cotizacion.estado = data.estado
         cotizacion.save(update_fields=["estado"])
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}
-    except Exception as e:
-        return 400, {"message": str(e)}
 
 
 @router.post("/cotizaciones/{cotizacion_id}/nivelacion", response={200: dict, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
@@ -435,6 +454,7 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
     return 200, resultado
 
 
+ESTADOS_COTIZACION = {"BORRADOR", "ACEPTADA", "FINALIZADA"}
 _CAMPOS_PRECIO = {"superficie_m2", "distancia_flete_km", "base_terreno_id", "revestimiento_id",
                   "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
 _CAMPOS_DECIMAL = {"superficie_m2", "distancia_flete_km", "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
@@ -534,22 +554,38 @@ def listar_hitos_cotizacion(request, cotizacion_id: int):
 
 @router.patch("/hitos-pago/{hito_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_hito_pago(request, hito_id: int, data: HitoPagoUpdateSchema):
-    try:
-        hito = HitoPago.objects.get(id=hito_id)
-        if data.estado is not None:
-            hito.estado = data.estado
-        if data.fecha_pago is not None:
-            hito.fecha_pago = data.fecha_pago
-        elif data.estado == "PAGADO" and not hito.fecha_pago:
-            hito.fecha_pago = date.today()
-        if data.comprobante_ref is not None:
-            hito.comprobante_ref = data.comprobante_ref
-        hito.save()
-        return 200, hito
-    except HitoPago.DoesNotExist:
+    """Registra un pago. `pago_completo=True` (o estado PAGADO) salda el hito; `pago_completo=False` exige
+    `monto_abonado` (total recibido) y deja el hito en ABONADO con la deuda restante; estado PENDIENTE lo deja en cero."""
+    hito = HitoPago.objects.filter(id=hito_id).first()
+    if not hito:
         return 404, {"message": "Hito de pago no encontrado"}
-    except Exception as e:
-        return 400, {"message": str(e)}
+    if data.pago_completo is True or data.estado == "PAGADO":
+        abonado = hito.monto_pago
+    elif data.estado == "PENDIENTE" and data.monto_abonado is None:
+        abonado = Decimal(0)
+    elif data.pago_completo is False or data.monto_abonado is not None:
+        if data.monto_abonado is None:
+            return 400, {"message": "Indique cuánto se pagó."}
+        abonado = Decimal(str(data.monto_abonado)).quantize(Decimal("1"))
+        if abonado < 0 or abonado > hito.monto_pago:
+            tope = f"{int(hito.monto_pago):,}".replace(",", ".")
+            return 400, {"message": f"El monto pagado debe estar entre $0 y ${tope}."}
+    elif data.estado is not None:
+        return 400, {"message": "Estado de pago no válido."}
+    else:
+        abonado = hito.monto_abonado
+    hito.monto_abonado = abonado
+    hito.estado = "PAGADO" if abonado >= hito.monto_pago else ("ABONADO" if abonado > 0 else "PENDIENTE")
+    if data.fecha_pago is not None:
+        hito.fecha_pago = data.fecha_pago
+    elif abonado > 0:
+        hito.fecha_pago = date.today()
+    else:
+        hito.fecha_pago = None
+    if data.comprobante_ref is not None:
+        hito.comprobante_ref = data.comprobante_ref
+    hito.save()
+    return 200, hito
 
 
 # ==============================================================================
@@ -565,7 +601,7 @@ def obtener_obra_cotizacion(request, cotizacion_id: int):
 
 @router.get("/cotizaciones/{cotizacion_id}/ganancias/", response={200: GananciasSchema, 404: MessageSchema}, auth=AuthBearer())
 def resumen_ganancias(request, cotizacion_id: int):
-    """vista_resumen_ganancias: neto cobrado vs costo presupuestado vs gasto real."""
+    """vista_resumen_ganancias: neto cobrado vs costo presupuestado."""
     c = Cotizacion.objects.filter(id=cotizacion_id).first()
     obra = ObraEjecucion.objects.filter(cotizacion_id=cotizacion_id).first()
     if not c or not obra:
@@ -573,8 +609,8 @@ def resumen_ganancias(request, cotizacion_id: int):
     neto = (c.costo_total / Decimal("1.19")).quantize(Decimal("1"))
     presupuestado = ((c.costo_materiales + c.costo_mano_obra + c.costo_flete + c.costo_nivelacion) / Decimal("1.19")).quantize(Decimal("1"))
     return 200, {
-        "neto_cobrado": neto, "costo_presupuestado": presupuestado, "gasto_real": obra.gasto_real_acumulado,
-        "ganancia_estimada": neto - presupuestado, "ganancia_real": neto - obra.gasto_real_acumulado,
+        "neto_cobrado": neto, "costo_presupuestado": presupuestado,
+        "ganancia_estimada": neto - presupuestado,
         "avance_real": obra.porcentaje_avance_real,
         "hito_avance_exigible": obra.porcentaje_avance_real >= 50,  # Hito 2 (30%) se cobra al 50% de avance
     }
@@ -598,15 +634,85 @@ def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
 # ==============================================================================
 # 8. PORTAFOLIO PROYECTO
 # ==============================================================================
+MAX_IMAGENES, MAX_BYTES_IMAGEN = 10, 2_500_000
+_MIME_OK = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _decodificar_imagen(data_url: str):
+    """'data:image/jpeg;base64,...' -> (mime, bytes). ValueError con mensaje para el usuario si no sirve."""
+    try:
+        cabecera, b64 = data_url.split(",", 1)
+        mime = cabecera.split(";")[0].removeprefix("data:")
+        contenido = base64.b64decode(b64, validate=True)
+    except Exception:
+        raise ValueError("Una de las imágenes no se pudo leer.")
+    if mime not in _MIME_OK:
+        raise ValueError("Solo se aceptan imágenes JPG, PNG o WebP.")
+    if len(contenido) > MAX_BYTES_IMAGEN:
+        raise ValueError("Cada imagen puede pesar hasta 2,5 MB.")
+    return mime, contenido
+
+
+def _guardar_imagenes(proyecto, data_urls):
+    existentes = proyecto.imagenes.count()
+    if existentes + len(data_urls) > MAX_IMAGENES:
+        raise ValueError(f"Un proyecto admite hasta {MAX_IMAGENES} imágenes.")
+    for n, du in enumerate(data_urls, start=existentes):
+        mime, contenido = _decodificar_imagen(du)
+        PortafolioImagen.objects.create(proyecto=proyecto, contenido=contenido, tipo_mime=mime, orden=n)
+
+
 @router.get("/portafolio/", response=List[PortafolioProyectoSchema])
 def listar_portafolio(request):
-    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").filter(publicado=True).order_by("-id")
+    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").prefetch_related("imagenes").filter(publicado=True).order_by("-id")
+
+
+@router.get("/portafolio/admin/", response=List[PortafolioProyectoSchema], auth=AuthBearer())
+def listar_portafolio_admin(request):
+    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").prefetch_related("imagenes").order_by("-id")
+
+
+@router.get("/portafolio/imagenes/{imagen_id}/")
+def servir_imagen_portafolio(request, imagen_id: int):
+    img = PortafolioImagen.objects.filter(id=imagen_id).first()
+    if not img:
+        return HttpResponse(status=404)
+    r = HttpResponse(bytes(img.contenido), content_type=img.tipo_mime)
+    r["Cache-Control"] = "public, max-age=86400"
+    return r
 
 
 @router.post("/portafolio/", response={200: PortafolioProyectoSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_proyecto_portafolio(request, data: PortafolioProyectoInSchema):
     try:
-        proyecto = PortafolioProyecto.objects.create(**data.dict())
+        with transaction.atomic():
+            proyecto = PortafolioProyecto.objects.create(**data.dict(exclude={"imagenes"}))
+            _guardar_imagenes(proyecto, data.imagenes)
         return 200, proyecto
+    except ValueError as e:
+        return 400, {"message": str(e)}
     except Exception as e:
         return 400, {"message": str(e)}
+
+
+@router.patch("/portafolio/{proyecto_id}/", response={200: PortafolioProyectoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyectoUpdateSchema):
+    proyecto = PortafolioProyecto.objects.filter(id=proyecto_id).first()
+    if not proyecto:
+        return 404, {"message": "Proyecto no encontrado"}
+    try:
+        with transaction.atomic():
+            for k, v in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes"}).items():
+                setattr(proyecto, k, v)
+            proyecto.save()
+            proyecto.imagenes.filter(id__in=data.quitar_imagenes).delete()
+            _guardar_imagenes(proyecto, data.agregar_imagenes)
+        return 200, proyecto
+    except ValueError as e:
+        return 400, {"message": str(e)}
+
+
+@router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_proyecto_portafolio(request, proyecto_id: int):
+    n, _ = PortafolioProyecto.objects.filter(id=proyecto_id).delete()
+    return (200, {"message": "Proyecto eliminado"}) if n else (404, {"message": "Proyecto no encontrado"})

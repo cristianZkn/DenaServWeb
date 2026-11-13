@@ -194,12 +194,16 @@ class HitoPagoSchema(Schema):
     fase: str
     porcentaje: float
     monto_pago: float
+    monto_abonado: float = 0
+    monto_pendiente: float = 0
     estado: str
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
 
 class HitoPagoUpdateSchema(Schema):
     estado: Optional[str] = None
+    pago_completo: Optional[bool] = None   # True = pagó todo; False = pago parcial (requiere monto_abonado)
+    monto_abonado: Optional[float] = None  # total recibido hasta ahora (no lo que falta)
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
 
@@ -209,13 +213,11 @@ class ObraEjecucionSchema(Schema):
     id: int
     cotizacion_id: int
     porcentaje_avance_real: float
-    gasto_real_acumulado: float
     fecha_ultima_actualizacion: Optional[date] = None
     observaciones: Optional[str] = None
 
 class ObraEjecucionInSchema(Schema):
-    porcentaje_avance_real: float = 0.00
-    gasto_real_acumulado: float = 0.00
+    porcentaje_avance_real: float = Field(0.00, ge=0, le=100)
     fecha_ultima_actualizacion: Optional[date] = None
     observaciones: Optional[str] = None
 
@@ -291,6 +293,12 @@ class PortafolioProyectoSchema(Schema):
     publicado: bool
     cotizacion_id: Optional[int] = None
     whatsapp_url: Optional[str] = None
+    imagenes: List[str] = []
+
+    @staticmethod
+    def resolve_imagenes(obj):
+        urls = [f"/api/portafolio/imagenes/{i.id}/" for i in obj.imagenes.all()]
+        return urls or ([obj.imagen_url] if obj.imagen_url else [])
 
     @staticmethod
     def resolve_whatsapp_url(obj):
@@ -305,12 +313,29 @@ class PortafolioProyectoSchema(Schema):
         return f"https://wa.me/{settings.WHATSAPP_NUMERO}?text={quote(texto)}"
 
 class PortafolioProyectoInSchema(Schema):
-    titulo: str
-    descripcion: Optional[str] = None
-    ubicacion_comuna: Optional[str] = None
+    titulo: str = Field(min_length=3, max_length=150)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    ubicacion_comuna: Optional[str] = Field(None, max_length=100)
     imagen_url: Optional[str] = None
     publicado: bool = True
     cotizacion_id: Optional[int] = None
+    imagenes: List[str] = []  # imágenes como data URL (data:image/jpeg;base64,...)
+
+
+class PortafolioProyectoUpdateSchema(Schema):
+    titulo: Optional[str] = Field(None, min_length=3, max_length=150)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    ubicacion_comuna: Optional[str] = Field(None, max_length=100)
+    publicado: Optional[bool] = None
+    agregar_imagenes: List[str] = []
+    quitar_imagenes: List[int] = []
+
+
+class ProgresoObraSchema(Schema):
+    id: int
+    codigo_cotizacion: str
+    cliente_nombre: str
+    avance: float
 
 
 # --- Motor de cálculo ---
@@ -337,9 +362,7 @@ class NivelacionInSchema(Schema):
 class GananciasSchema(Schema):
     neto_cobrado: float
     costo_presupuestado: float
-    gasto_real: float
     ganancia_estimada: float
-    ganancia_real: float
     avance_real: float
     hito_avance_exigible: bool
 

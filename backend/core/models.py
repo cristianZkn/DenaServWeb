@@ -174,7 +174,8 @@ class HitoPago(models.Model):
     fase = models.CharField(max_length=50)  # Ej: 'ANTICIPO_40', 'AVANCE_30'
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
     monto_pago = models.DecimalField(max_digits=18, decimal_places=2)
-    estado = models.CharField(max_length=50, default='PENDIENTE')  # 'PENDIENTE', 'PAGADO'
+    estado = models.CharField(max_length=50, default='PENDIENTE')  # 'PENDIENTE', 'ABONADO' (pago parcial), 'PAGADO'
+    monto_abonado = models.DecimalField(max_digits=18, decimal_places=2, default=0)  # lo recibido hasta ahora
     fecha_pago = models.DateField(null=True, blank=True)
     comprobante_ref = models.CharField(max_length=255, null=True, blank=True)
 
@@ -182,6 +183,10 @@ class HitoPago(models.Model):
         db_table = 'hito_pago'
         verbose_name = 'Hito de Pago'
         verbose_name_plural = 'Hitos de Pago'
+
+    @property
+    def monto_pendiente(self):
+        return max(self.monto_pago - self.monto_abonado, 0)
 
     def __str__(self):
         return f"{self.cotizacion.codigo_cotizacion} - {self.fase} ({self.estado})"
@@ -230,6 +235,18 @@ class PortafolioProyecto(models.Model):
 
     def __str__(self):
         return self.titulo
+
+
+# 8b. imágenes del portafolio (varias por proyecto, guardadas en la base: el disco de Render no es permanente)
+class PortafolioImagen(models.Model):
+    proyecto = models.ForeignKey(PortafolioProyecto, on_delete=models.CASCADE, related_name='imagenes')
+    contenido = models.BinaryField()
+    tipo_mime = models.CharField(max_length=30, default='image/jpeg')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'portafolio_imagen'
+        ordering = ['orden', 'id']
 
 
 # 9. cambio_cotizacion: historial de reajustes del monto total
