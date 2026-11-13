@@ -61,10 +61,9 @@ body {
   overflow-x: clip; /* ningún elemento ancho debe generar scroll horizontal de la página */
 }
 
-img, video, canvas, svg { max-width: 100%; }
-img { height: auto; }
-
 @layer base {
+  /* En la capa base para que las clases de Tailwind (h-full, object-cover…) tengan prioridad sobre estas reglas */
+  img, video, canvas, svg { max-width: 100%; }
   input:not([type="checkbox"]):not([type="radio"]), select, textarea {
     font-size: 1rem;
     min-height: 2.75rem;
