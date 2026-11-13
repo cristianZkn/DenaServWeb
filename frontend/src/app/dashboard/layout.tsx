@@ -57,7 +57,7 @@ export default function DashboardLayout({
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("usuario");
-    router.push("/login");
+    router.push("/"); // al cerrar sesión se vuelve al portafolio público
   };
 
   if (!autorizado) return null;

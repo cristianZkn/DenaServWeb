@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogo } from "@/components/ConfirmDialog";
+
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 interface Insumo {
@@ -289,6 +291,7 @@ export default function CatalogosPage() {
 function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
   item: Insumo | null; proveedores: Proveedor[]; onCerrar: () => void; onGuardado: (msg: string) => void;
 }) {
+  const { preguntar, dialogo } = useDialogo();
   const [f, setF] = useState({
     categoria: item?.categoria ?? "TABIQUERIA",
     nombre: item?.nombre ?? "",
@@ -339,7 +342,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
   };
 
   const eliminar = async () => {
-    if (!item || !confirm(`¿Eliminar «${item.nombre}»? Esta acción no se puede deshacer.`)) return;
+    if (!item || !(await preguntar({ titulo: "¿Seguro que desea eliminar este material?", mensaje: `«${item.nombre}» se eliminará de forma definitiva.`, peligro: true }))) return;
     const r = await fetch(`/api/catalogo-tipos/${item.id}`, { method: "DELETE", headers: authHeaders() });
     if (r.ok) onGuardado("Material eliminado.");
     else setError((await r.json().catch(() => ({}))).message || "No se pudo eliminar (puede estar usado en una cotización). Desactívelo en su lugar.");
@@ -348,6 +351,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
   const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
+      {dialogo}
       <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-slate-900">{item ? "Editar material" : "Agregar material"}</h2>
         {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm">{error}</div>}

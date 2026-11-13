@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogo } from "./ConfirmDialog";
+
 import { useState } from "react";
 
 export interface HitoPago {
@@ -57,6 +59,7 @@ export default function PagoModal({
   const [error, setError] = useState("");
 
   const total = Number(hito.monto_pago);
+  const { preguntar, dialogo } = useDialogo();
   const valor = Number(monto) || 0;
   const abonado = modo === "pagado" ? valor : total - valor;
   const pendiente = total - abonado;
@@ -87,6 +90,7 @@ export default function PagoModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]" role="dialog" aria-modal="true" aria-labelledby="pago-titulo">
+      {dialogo}
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 border border-slate-200">
         <div>
           <h2 id="pago-titulo" className="text-xl font-black text-slate-900">Registrar pago</h2>
@@ -177,7 +181,7 @@ export default function PagoModal({
             <button
               type="button"
               disabled={guardando}
-              onClick={() => confirm("¿Borrar lo registrado y dejar este pago como pendiente?") && enviar({ estado: "PENDIENTE" })}
+              onClick={async () => (await preguntar({ titulo: "¿Anular lo registrado?", mensaje: "Se borrarán los pagos registrados y este pago volverá a quedar pendiente.", peligro: true, textoConfirmar: "Anular" })) && enviar({ estado: "PENDIENTE" })}
               className="text-sm font-semibold text-red-700 hover:underline cursor-pointer"
             >
               Anular lo registrado

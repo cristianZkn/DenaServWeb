@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogo } from "@/components/ConfirmDialog";
+
 import { useCallback, useEffect, useState } from "react";
 
 interface Proyecto {
@@ -43,6 +45,7 @@ export default function PortafolioAdminPage() {
   const [aviso, setAviso] = useState("");
   const [error, setError] = useState("");
   const [editando, setEditando] = useState<Proyecto | "nuevo" | null>(null);
+  const { preguntar, dialogo } = useDialogo();
 
   const cargar = useCallback(async () => {
     try {
@@ -69,7 +72,7 @@ export default function PortafolioAdminPage() {
   };
 
   const eliminar = async (p: Proyecto) => {
-    if (!confirm(`¿Eliminar «${p.titulo}» y sus fotos? Esta acción no se puede deshacer.`)) return;
+    if (!(await preguntar({ titulo: "¿Seguro que desea eliminar este proyecto?", mensaje: `«${p.titulo}» y sus fotos se eliminarán de forma definitiva.`, peligro: true }))) return;
     const r = await fetch(`/api/portafolio/${p.id}`, { method: "DELETE", headers: auth() });
     if (r.ok) {
       setAviso("Proyecto eliminado.");
@@ -79,6 +82,7 @@ export default function PortafolioAdminPage() {
 
   return (
     <div className="space-y-4">
+      {dialogo}
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto">
           <h1 className="text-2xl font-extrabold text-slate-900">Portafolio</h1>

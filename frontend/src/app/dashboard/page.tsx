@@ -1,9 +1,10 @@
 "use client";
 
+import { useDialogo } from "@/components/ConfirmDialog";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, NOMBRE_HITO, clp, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 
 interface CatalogoTipo {
@@ -92,13 +93,14 @@ export default function DashboardPage() {
       setVisita(null);
       fetchCotizaciones();
     } catch (e: any) {
-      alert(e.message);
+      void preguntar({ titulo: "No se pudo guardar", mensaje: e.message, soloAviso: true });
     } finally {
       setGuardandoVisita(false);
     }
   };
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
+  const { preguntar, dialogo } = useDialogo();
 
   const fetchCotizaciones = async () => {
     const token = localStorage.getItem("token");
@@ -201,6 +203,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
+      {dialogo}
       {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 w-full sm:w-auto sm:mr-auto">
@@ -237,37 +240,26 @@ export default function DashboardPage() {
           </p>
         ) : (
           <>
-            <div
-              role="img"
-              aria-label={`Gráfico de barras con el avance de ${progreso.length} obras: ` + progreso.map((p) => `${p.cliente_nombre} ${p.avance}%`).join(", ")}
-              style={{ height: Math.max(120, progreso.length * 48 + 40) }}
-              className="mt-2"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={progreso.map((p) => ({ ...p, avance: Number(p.avance) }))} layout="vertical" margin={{ left: 8, right: 36, top: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                  <YAxis type="category" dataKey="cliente_nombre" width={96} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => [`${v}%`, "Avance"]} labelFormatter={(l) => String(l)} />
-                  <Bar dataKey="avance" fill="#15803d" radius={[0, 6, 6, 0]} background={{ fill: "#e2e8f0", radius: 6 }}>
-                    <LabelList dataKey="avance" position="right" formatter={(v) => `${v}%`} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <details className="mt-1 text-sm text-slate-600">
-              <summary className="cursor-pointer font-semibold">Ver los mismos datos en una tabla</summary>
-              <table className="mt-2 w-full text-left">
-                <tbody>
-                  {progreso.map((p) => (
-                    <tr key={p.id} className="border-t border-slate-100">
-                      <td className="py-1">{p.cliente_nombre} <span className="text-slate-400">{p.codigo_cotizacion}</span></td>
-                      <td className="py-1 text-right font-semibold">{p.avance}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            <ul className="mt-3 space-y-3" aria-label="Avance de cada obra">
+              {progreso.map((p) => {
+                const av = Math.max(0, Math.min(100, Number(p.avance)));
+                // Color según el avance: ámbar al inicio, verde azulado en el tramo medio y verde al terminar
+                const color = av >= 100 ? "from-green-600 to-green-500" : av >= 50 ? "from-blue-700 to-blue-500" : "from-amber-600 to-amber-400";
+                return (
+                  <li key={p.id}>
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span className="font-semibold text-slate-800 truncate">
+                        {p.cliente_nombre} <span className="font-normal text-slate-400">{p.codigo_cotizacion}</span>
+                      </span>
+                      <span className="font-extrabold tabular-nums text-slate-900">{av}%</span>
+                    </div>
+                    <div className="mt-1 h-3 rounded-full bg-slate-100 overflow-hidden" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${p.cliente_nombre}`}>
+                      <div className={`h-full rounded-full bg-gradient-to-r ${color} transition-[width] duration-700`} style={{ width: `${av}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </>
         )}
       </section>
@@ -355,11 +347,10 @@ export default function DashboardPage() {
                         </button>
                         <Link
                           href={`/cotizacion/${cotizacion.token_publico}`}
-                          target="_blank"
                           className="text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition"
                           title="Abrir la ficha que ve el cliente"
                         >
-                          Ver ficha del cliente ↗
+                          Ver ficha del cliente
                         </Link>
                         <Link
                           href={`/dashboard/proyecto/${cotizacion.id}`}

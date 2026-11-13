@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { FichaData } from "./FichaPdf";
 
 interface CatalogoItem {
@@ -63,6 +64,7 @@ async function descargarPdf(c: Cotizacion) {
 }
 
 export default function FichaCotizacion({ params }: { params: Promise<{ uuid: string }> }) {
+  const router = useRouter();
   const resolvedParams = use(params);
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
         {/* Barra superior / Regreso */}
         <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center text-sm">
           <button 
-            onClick={() => window.history.back()} 
+            onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} 
             className="text-blue-900 font-bold hover:underline cursor-pointer"
           >
             ← Volver Atrás

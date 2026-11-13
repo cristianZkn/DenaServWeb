@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogo } from "@/components/ConfirmDialog";
+
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
@@ -173,8 +175,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const guardarValor = async () => {
     const dif = previa ? Number(previa.diferencia) : 0;
     if (dif !== 0 && !motivo.trim()) return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true);
-    const texto = dif === 0 ? "¿Guardar los cambios?" : `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
-    if (!confirm(texto)) return;
+    const texto = `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
+    if (!(await preguntar({ titulo: dif === 0 ? "¿Guardar los cambios?" : "¿Confirma el cambio de valor?", mensaje: dif === 0 ? undefined : texto }))) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true)) });
     const data = await res.json();
     if (!res.ok) return avisar(data.message || "No se pudo guardar.", true);
@@ -196,6 +198,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   };
 
   const [pagando, setPagando] = useState<Hito | null>(null);
+  const { preguntar, dialogo } = useDialogo();
 
   const descargarPdf = async () => {
     if (!cot || !gan) return;
@@ -227,10 +230,11 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="max-w-6xl mx-auto grid lg:grid-cols-[19rem_minmax(0,1fr)] gap-5 items-start">
+      {dialogo}
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
       <aside className="lg:sticky lg:top-20 space-y-3">
         <Link href="/dashboard" className="inline-block text-base font-semibold text-blue-800 hover:underline">
-          ← Mis cotizaciones
+          ← Cotizaciones
         </Link>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <div>
@@ -243,7 +247,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <div className="text-2xl sm:text-3xl font-black tabular-nums break-words">{clp(cot.costo_total)}</div>
           </div>
           <div className="grid gap-2">
-            <Link href={`/cotizacion/${(cot as any).token_publico}`} target="_blank" className="px-4 py-2.5 text-center text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50">
+            <Link href={`/cotizacion/${(cot as any).token_publico}`} className="px-4 py-2.5 text-center text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50">
               Ver ficha del cliente
             </Link>
             <button onClick={descargarPdf} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogo } from "@/components/ConfirmDialog";
+
 import { correoValido, telefonoValido } from "@/lib/validar";
 import { useEffect, useState } from "react";
 
@@ -17,6 +19,8 @@ interface Proveedor {
 export default function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+  const { preguntar, dialogo } = useDialogo();
+  const avisar = (mensaje: string) => void preguntar({ titulo: "No se pudo completar la acción", mensaje, soloAviso: true });
   const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
@@ -59,11 +63,11 @@ export default function ProveedoresPage() {
 
     const rut = formData.rut_empresa.trim();
     const razon = formData.razon_social.trim();
-    if (rut.length < 3 || rut.length > 12) return alert("El RUT debe tener entre 3 y 12 caracteres.");
-    if (razon.length < 2 || razon.length > 150) return alert("La razón social debe tener entre 2 y 150 caracteres.");
-    if (formData.telefono.trim() && !telefonoValido(formData.telefono)) return alert("El teléfono debe tener 9 dígitos. Ejemplo: +56 9 1234 5678");
-    if (formData.email.trim() && !correoValido(formData.email.trim())) return alert("El correo no es válido. Ejemplo: contacto@proveedor.cl");
-    if (formData.descuento_pct < 0 || formData.descuento_pct > 100) return alert("El descuento debe estar entre 0 y 100.");
+    if (rut.length < 3 || rut.length > 12) return avisar("El RUT debe tener entre 3 y 12 caracteres.");
+    if (razon.length < 2 || razon.length > 150) return avisar("La razón social debe tener entre 2 y 150 caracteres.");
+    if (formData.telefono.trim() && !telefonoValido(formData.telefono)) return avisar("El teléfono debe tener 9 dígitos. Ejemplo: +56 9 1234 5678");
+    if (formData.email.trim() && !correoValido(formData.email.trim())) return avisar("El correo no es válido. Ejemplo: contacto@proveedor.cl");
+    if (formData.descuento_pct < 0 || formData.descuento_pct > 100) return avisar("El descuento debe estar entre 0 y 100.");
 
     const url = isEditing
       ? `/api/proveedores/${formData.id}`
@@ -95,10 +99,10 @@ export default function ProveedoresPage() {
         fetchProveedores();
       } else {
         const err = await res.json();
-        alert(err.message || "Error al procesar la solicitud.");
+        avisar(err.message || "Error al procesar la solicitud.");
       }
     } catch (err) {
-      alert("Error de conexión");
+      avisar("Error de conexión");
     }
   };
 
@@ -117,7 +121,7 @@ export default function ProveedoresPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("¿Deseas eliminar este proveedor?")) return;
+    if (!(await preguntar({ titulo: "¿Seguro que desea eliminar este proveedor?", mensaje: "Esta acción no se puede deshacer.", peligro: true }))) return;
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`/api/proveedores/${id}`, {
@@ -128,10 +132,10 @@ export default function ProveedoresPage() {
         fetchProveedores();
       } else {
         const err = await res.json();
-        alert(err.message || "No se pudo eliminar.");
+        avisar(err.message || "No se pudo eliminar.");
       }
     } catch (e) {
-      alert("Error al comunicarse con el backend.");
+      avisar("Error al comunicarse con el backend.");
     }
   };
 
@@ -151,6 +155,7 @@ export default function ProveedoresPage() {
 
   return (
     <div className="space-y-4">
+      {dialogo}
       <div className="flex justify-between items-center bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">Proveedores</h1>
