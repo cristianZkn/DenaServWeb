@@ -272,13 +272,11 @@ export default function ProveedoresPage() {
         {/* Listado */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] text-left border-collapse text-sm">
+            <table className="w-full min-w-[34rem] text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-600">
                   <th className="p-4">RUT</th>
-                  <th className="p-4">Razón Social</th>
                   <th className="p-4">Contacto & Teléfono</th>
-                  <th className="p-4">Descuento</th>
                   <th className="p-4">Estado</th>
                   <th className="p-4 text-right">Acciones</th>
                 </tr>
@@ -286,13 +284,13 @@ export default function ProveedoresPage() {
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={4} className="p-8 text-center text-slate-400">
                       Cargando proveedores...
                     </td>
                   </tr>
                 ) : proveedores.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={4} className="p-8 text-center text-slate-400">
                       No hay proveedores registrados.
                     </td>
                   </tr>
@@ -301,14 +299,10 @@ export default function ProveedoresPage() {
                     <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-4 font-mono font-medium text-slate-600">{p.rut_empresa}</td>
                       <td className="p-4">
-                        <span className="font-bold text-slate-800">{p.razon_social}</span>
-                        {p.email && <div className="text-xs text-slate-400">{p.email}</div>}
-                      </td>
-                      <td className="p-4">
                         <div className="text-slate-700">{p.contacto_nombre || "-"}</div>
                         <div className="text-xs text-slate-400">{p.telefono || "-"}</div>
+                        {p.email && <div className="text-xs text-slate-400">{p.email}</div>}
                       </td>
-                      <td className="p-4 font-semibold text-slate-700">{Number(p.descuento_pct) || 0}%</td>
                       <td className="p-4">
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -320,16 +314,16 @@ export default function ProveedoresPage() {
                           {p.activo ? "Activo" : "Inactivo"}
                         </span>
                       </td>
-                      <td className="p-4 text-right space-x-2">
+                      <td className="p-4 text-right whitespace-nowrap space-x-2">
                         <button
                           onClick={() => handleEdit(p)}
-                          className="text-blue-600 hover:text-blue-900 font-semibold text-xs cursor-pointer"
+                          className="!min-h-0 bg-blue-900 hover:bg-blue-800 text-white font-semibold text-sm px-3 py-1.5 rounded-lg cursor-pointer transition"
                         >
                           Editar
                         </button>
                         <button
                           onClick={() => handleDelete(p.id)}
-                          className="text-red-600 hover:text-red-900 font-semibold text-xs cursor-pointer"
+                          className="!min-h-0 bg-red-700 hover:bg-red-800 text-white font-semibold text-sm px-3 py-1.5 rounded-lg cursor-pointer transition"
                         >
                           Eliminar
                         </button>
