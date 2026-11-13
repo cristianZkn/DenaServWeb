@@ -676,3 +676,41 @@ class CargarMaterialesTests(TestCase):
         call_command("cargar_materiales", str(archivo))
         self.assertEqual(CatalogoTipo.objects.filter(categoria="INSUMO").count(), 2)
         self.assertEqual(Proveedor.objects.filter(razon_social="Homecenter").count(), 1)
+
+
+class MaterialesAdicionalesTests(TestCase):
+    def setUp(self):
+        from .api import create_jwt_token
+        u = Usuario.objects.create(rut="8-1", nombre_completo="M", email="m@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        prov = Proveedor.objects.create(rut_empresa="PROV-M", razon_social="Prov M", descuento_pct=10)
+        self.osb = CatalogoTipo.objects.create(categoria="INSUMO", nombre="Plancha OSB", unidad_medida="UN",
+                                               precio_base_unitario=10000, proveedor=prov)  # neto 9.000
+
+    def calc(self, **extra):
+        return self.c.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 10, **extra},
+                           content_type="application/json", **self.h)
+
+    def test_lista_suma_al_valor_con_costo_neto(self):
+        base = self.calc().json()
+        con = self.calc(materiales=[{"catalogo_id": self.osb.id, "cantidad": 25}]).json()
+        self.assertEqual(int(float(con["costo_adicionales"])), 225000)         # 25 x 9.000 (con descuento)
+        self.assertEqual(int(float(con["adicionales"][0]["subtotal"])), 225000)
+        self.assertEqual(float(con["costos_directos"]) - float(base["costos_directos"]), 225000)
+        self.assertGreater(float(con["total"]), float(base["total"]))
+
+    def test_material_inexistente_o_cantidad_invalida(self):
+        self.assertEqual(self.calc(materiales=[{"catalogo_id": 99999, "cantidad": 1}]).status_code, 400)
+        self.assertEqual(self.calc(materiales=[{"catalogo_id": self.osb.id, "cantidad": 0}]).status_code, 422)
+
+    def test_se_guarda_y_sobrevive_al_reajuste(self):
+        cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Lista", "direccion_terreno": "Calle Uno 1",
+                          "superficie_m2": 40, "materiales": [{"catalogo_id": self.osb.id, "cantidad": 3}]},
+                          content_type="application/json", **self.h).json()
+        from .models import DetalleCotizacionInsumo
+        d = DetalleCotizacionInsumo.objects.get(cotizacion_id=cot["id"], es_adicional=True)
+        self.assertEqual((d.catalogo_tipo_id, int(d.subtotal_costo)), (self.osb.id, 27000))
+        # Reajuste sin cambiar nada de precio: la lista agregada se conserva y el valor no cambia.
+        r = self.c.patch(f"/api/cotizaciones/{cot['id']}/", {"superficie_m2": 40, "aplicar": False},
+                         content_type="application/json", **self.h).json()
+        self.assertEqual(float(r["diferencia"]), 0)

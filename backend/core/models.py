@@ -154,6 +154,8 @@ class DetalleCotizacionInsumo(models.Model):
     etapa_obra = models.CharField(max_length=50)
     cantidad_calculada = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal_costo = models.DecimalField(max_digits=18, decimal_places=2)
+    # True = material que se agregó a mano a la cotización (suma al valor); False = desglose automático para compras.
+    es_adicional = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'detalle_cotizacion_insumo'

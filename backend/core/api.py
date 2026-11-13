@@ -28,7 +28,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    MaterialAdicionalInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema
 )
 from . import calculo, precios
@@ -54,6 +54,13 @@ def _calcular_desde_catalogo(data):
     get = lambda i: CatalogoTipo.objects.select_related('proveedor').filter(id=i).first() if i else None
     insumos_db = list(CatalogoTipo.objects.select_related('proveedor').filter(
         categoria__in=precios.CATEGORIAS_INSUMO, activo=True, rendimiento_m2__gt=0))
+    adicionales = []
+    for mat in data.materiales:
+        it = CatalogoTipo.objects.select_related('proveedor').filter(id=mat.catalogo_id, activo=True).first()
+        if not it:
+            raise ValueError("Uno de los materiales de la lista ya no está disponible en el catálogo.")
+        adicionales.append({'id': it.id, 'nombre': it.nombre, 'unidad': it.unidad_medida,
+                            'cantidad': mat.cantidad, 'precio_neto': _neto(it), 'etapa': it.etapa_obra or 'ETAPA_1'})
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
     return calculo.calcular(
@@ -61,7 +68,7 @@ def _calcular_desde_catalogo(data):
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
-        tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2)
+        tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, adicionales=adicionales)
 
 
 def _repartir_en_hitos(cot, delta) -> bool:
@@ -336,7 +343,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 superficie_m2=data.superficie_m2, distancia_km=data.distancia_flete_km,
                 base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
                 ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista,
-                tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2))
+                tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -364,6 +371,10 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
                                         cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"])
                 for i in r["insumos"]])
+            DetalleCotizacionInsumo.objects.bulk_create([
+                DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
+                                        cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"], es_adicional=True)
+                for i in r["adicionales"]])
 
             # Hitos 40/30/30 en Decimal; el último absorbe el redondeo.
             for fase, pct, monto in calculo.hitos(r["total"]):
@@ -480,7 +491,9 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 superficie_m2=float(cot.superficie_m2), distancia_km=float(cot.distancia_flete_km),
                 base_terreno_id=cot.base_terreno_id, revestimiento_id=cot.revestimiento_id,
                 ganancia_m2=float(cot.ganancia_m2), m2_vigas_vista=float(cot.m2_vigas_vista),
-                tipo_proyecto=cot.tipo_proyecto, radier_m2=float(cot.radier_m2)))
+                tipo_proyecto=cot.tipo_proyecto, radier_m2=float(cot.radier_m2),
+                materiales=[MaterialAdicionalInSchema(catalogo_id=d.catalogo_tipo_id, cantidad=float(d.cantidad_calculada))
+                            for d in cot.detalles_insumo.filter(es_adicional=True)]))
         except ValueError as e:
             return 400, {"message": str(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (

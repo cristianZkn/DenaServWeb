@@ -179,6 +179,7 @@ class DetalleCotizacionInsumoSchema(Schema):
     etapa_obra: str
     cantidad_calculada: float
     subtotal_costo: float
+    es_adicional: bool = False
 
 class DetalleCotizacionInsumoInSchema(Schema):
     catalogo_tipo_id: int
@@ -223,6 +224,11 @@ class ObraEjecucionInSchema(Schema):
 
 
 # --- 4. Cotización ---
+class MaterialAdicionalInSchema(Schema):
+    catalogo_id: int
+    cantidad: float = Field(gt=0, le=100000)
+
+
 class CotizacionInSchema(_ContactoMixin, Schema):
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
@@ -242,6 +248,7 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     m2_vigas_vista: float = Field(0, ge=0, le=10000)
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
+    materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)  # lista de materiales agregados a mano
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -349,6 +356,7 @@ class CalculoInSchema(Schema):
     m2_vigas_vista: float = 0
     tipo_proyecto: str = "CASA"
     radier_m2: Optional[float] = None
+    materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)
 
 
 class NivelacionInSchema(Schema):

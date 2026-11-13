@@ -70,15 +70,24 @@ def bom_insumos(m2: D, insumos) -> list:
     return out
 
 
-def _solo_radier(m2: D, km: D, p) -> dict:
+def lineas_adicionales(adicionales) -> list:
+    """Materiales que el usuario agrega a mano a la cotización: {id, nombre, unidad, cantidad, precio_neto} -> con subtotal."""
+    return [{**a, "cantidad": D(str(a["cantidad"])), "subtotal": _clp(D(str(a["cantidad"])) * D(str(a["precio_neto"])))}
+            for a in adicionales]
+
+
+def _solo_radier(m2: D, km: D, p, adicionales=()) -> dict:
     """Radier estándar: tarifa por m² que ya incluye material y mano de obra, más el traslado por tramo. IVA incluido."""
     radier = m2 * p["radier_m2"]
     flete = costo_flete(m2, km, p)
-    pv = precio_venta(radier + flete)
+    lineas = lineas_adicionales(adicionales)
+    extra = sum((l["subtotal"] for l in lineas), D(0))
+    pv = precio_venta(radier + flete + extra)
     return {
         "tipo_proyecto": "SOLO_RADIER", "costo_materiales": _clp(radier), "sobre_economico": D(0),
         "costo_materiales_total": _clp(radier), "costo_flete": _clp(flete),
         "costo_mano_obra": D(0), "costo_insumos": D(0), "costo_vigas_vista": D(0), "ganancia": D(0), "insumos": [],
+        "adicionales": lineas, "costo_adicionales": _clp(extra),
         "costos_directos": pv["total"], **pv, "tabiqueria": {},
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
     }
@@ -93,7 +102,7 @@ def nivelacion(m2, espesor_cm, arido_empresa=True, p=DEFAULTS) -> dict:
 
 
 def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, revest_min_m2=None,
-             separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", **over) -> dict:
+             separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", adicionales=(), **over) -> dict:
     """Cotización inicial por m² (modo de trabajo de la empresa).
 
     Materiales = referencia ($135.000/m², casa económica) + diferencia de la base y el revestimiento elegidos respecto de los
@@ -101,7 +110,7 @@ def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, rev
     p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km = D(str(m2)), D(str(km))
     if tipo_proyecto == "SOLO_RADIER":
-        return _solo_radier(m2, km, p)
+        return _solo_radier(m2, km, p, adicionales)
     if tipo_proyecto != "CASA":
         raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")
     extra = lambda precio, minimo: max(D(0), D(str(precio)) - D(str(minimo))) if minimo is not None else D(0)
@@ -112,13 +121,16 @@ def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, rev
     bom = bom_insumos(m2, insumos)
     costo_insumos = sum((i["subtotal"] for i in bom), D(0))
     vigas = D(str(m2_vigas_vista)) * p["viga_vista_m2"]
-    directos = materiales_total + flete + mano_obra + vigas
+    lineas = lineas_adicionales(adicionales)
+    costo_adicionales = sum((l["subtotal"] for l in lineas), D(0))
+    directos = materiales_total + flete + mano_obra + vigas + costo_adicionales
     ganancia = m2 * p["ganancia_m2"]
     pv = precio_venta(directos + ganancia)
     return {
         "costo_materiales_total": _clp(materiales_total), "sobre_economico": _clp(sobre_economico),
         "costo_flete": _clp(flete), "costo_mano_obra": _clp(mano_obra),
         "costo_insumos": _clp(costo_insumos), "costo_vigas_vista": _clp(vigas), "ganancia": _clp(ganancia), "insumos": bom,
+        "adicionales": lineas, "costo_adicionales": _clp(costo_adicionales),
         "costos_directos": _clp(directos), **pv,
         "tabiqueria": tabiqueria(m2, separacion_cm, p),
         "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],

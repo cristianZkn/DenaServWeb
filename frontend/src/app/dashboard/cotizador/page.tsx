@@ -23,6 +23,8 @@ interface Presupuesto {
   total: number;
   hitos: { fase: string; porcentaje: number; monto: number }[];
   insumos: { id: number; nombre: string; unidad: string; etapa: string; cantidad: number; subtotal: number }[];
+  adicionales: { id: number; nombre: string; unidad: string; cantidad: number; precio_neto: number; subtotal: number }[];
+  costoAdicionales: number;
 }
 
 const clp = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`;
@@ -101,6 +103,26 @@ export default function CotizadorPage() {
   const [basesTerreno, setBasesTerreno] = useState<CatalogoItem[]>([]);
   const [revestimientos, setRevestimientos] = useState<CatalogoItem[]>([]);
 
+  // Lista de materiales que el usuario ya sabe que llevará la obra (ej. 25 planchas, 3 sacos de cemento).
+  const [catalogoMateriales, setCatalogoMateriales] = useState<CatalogoItem[]>([]);
+  const [materiales, setMateriales] = useState<{ catalogo_id: number; cantidad: string }[]>([]);
+  const [nuevoMaterial, setNuevoMaterial] = useState("");
+  const [nuevaCantidad, setNuevaCantidad] = useState("1");
+  const materialesValidos = materiales
+    .filter((m) => Number(m.cantidad) > 0)
+    .map((m) => ({ catalogo_id: m.catalogo_id, cantidad: Number(m.cantidad) }));
+  const agregarMaterial = () => {
+    const id = Number(nuevoMaterial);
+    if (!id || !(Number(nuevaCantidad) > 0)) return;
+    setMateriales((prev) =>
+      prev.some((m) => m.catalogo_id === id)
+        ? prev.map((m) => (m.catalogo_id === id ? { ...m, cantidad: String(Number(m.cantidad) + Number(nuevaCantidad)) } : m))
+        : [...prev, { catalogo_id: id, cantidad: nuevaCantidad }]
+    );
+    setNuevoMaterial("");
+    setNuevaCantidad("1");
+  };
+
   // Los campos numéricos se guardan como texto; se convierten a número solo al calcular o guardar.
   const [formData, setFormData] = useState({
     cliente_nombre: "",
@@ -127,6 +149,10 @@ export default function CotizadorPage() {
           return;
         }
         const authHeaders = { Authorization: `Bearer ${token}` };
+        fetch("/api/catalogo-tipos/?activo=true", { headers: authHeaders })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((todos: CatalogoItem[]) => setCatalogoMateriales(todos.filter((c) => c.categoria !== "BASE_TERRENO" && c.categoria !== "REVESTIMIENTO")))
+          .catch(() => setCatalogoMateriales([]));
         const [resBases, resRevest] = await Promise.all([
           fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO&activo=true", { headers: authHeaders }),
           fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO&activo=true", { headers: authHeaders }),
@@ -168,6 +194,7 @@ export default function CotizadorPage() {
             ganancia_m2: Number(formData.ganancia_m2) || 0,
             tipo_proyecto: formData.tipo_proyecto,
             radier_m2: Number(formData.radier_m2) || undefined,
+            materiales: materialesValidos,
             m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
           }),
         });
@@ -187,6 +214,8 @@ export default function CotizadorPage() {
           iva: Number(r.iva),
           total: Number(r.total),
           hitos: (r.hitos || []).map((h: any) => ({ fase: h.fase, porcentaje: Number(h.porcentaje), monto: Number(h.monto) })),
+          adicionales: (r.adicionales || []).map((a: any) => ({ id: a.id, nombre: a.nombre, unidad: a.unidad, cantidad: Number(a.cantidad), precio_neto: Number(a.precio_neto), subtotal: Number(a.subtotal) })),
+          costoAdicionales: Number(r.costo_adicionales || 0),
           insumos: (r.insumos || []).map((i: any) => ({ id: i.id, nombre: i.nombre, unidad: i.unidad, etapa: i.etapa, cantidad: Number(i.cantidad), subtotal: Number(i.subtotal) })),
         });
       } catch {
@@ -206,6 +235,7 @@ export default function CotizadorPage() {
     formData.m2_vigas_vista,
     formData.tipo_proyecto,
     formData.radier_m2,
+    JSON.stringify(materialesValidos),
   ]);
 
   const setCampo = (name: string, value: string) => setFormData((prev) => ({ ...prev, [name]: value }));
@@ -243,6 +273,7 @@ export default function CotizadorPage() {
         revestimiento_id: formData.revestimiento_id ? Number(formData.revestimiento_id) : null,
         ganancia_m2: Number(formData.ganancia_m2) || 0,
         radier_m2: Number(formData.radier_m2) || null,
+        materiales: materialesValidos,
         m2_vigas_vista: Number(formData.m2_vigas_vista) || 0,
         costo_materiales: presupuesto.materiales,
         costo_mano_obra: presupuesto.manoObra,
@@ -415,6 +446,63 @@ export default function CotizadorPage() {
                 help="Incluye material y mano de obra, IVA incluido. Lo normal es entre $35.000 y $40.000. El traslado se suma aparte. Un radier especial (estacionamiento: mínimo 10 cm y malla ACMA) se calcula aparte: ingrese aquí el valor por m² que resulte." />
             )}
           </Paso>
+
+          <Paso titulo="Materiales que ya sabe que llevará">
+            <p className="text-slate-600 -mt-2">
+              Agregue lo que ya conoce, por ejemplo «25 planchas de madera, 3 sacos de arena, 2 sacos de cemento». Se suman al valor de la obra al precio con descuento del proveedor.
+            </p>
+            <div className="grid sm:grid-cols-[1fr_8rem_auto] gap-3 items-end">
+              <div>
+                <label htmlFor="nuevo_material" className={labelCls}>Material</label>
+                <select id="nuevo_material" value={nuevoMaterial} onChange={(e) => setNuevoMaterial(e.target.value)} className={inputCls}>
+                  <option value="">Elija un material…</option>
+                  {catalogoMateriales.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nombre} ({c.unidad_medida.toLowerCase()})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="nueva_cantidad" className={labelCls}>Cantidad</label>
+                <input id="nueva_cantidad" type="number" inputMode="decimal" min="0" step="any" value={nuevaCantidad}
+                  onFocus={(e) => e.target.select()} onChange={(e) => setNuevaCantidad(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarMaterial(); } }} className={inputCls} />
+              </div>
+              <button type="button" onClick={agregarMaterial} disabled={!nuevoMaterial || !(Number(nuevaCantidad) > 0)}
+                className="h-12 px-5 font-bold text-white bg-green-700 hover:bg-green-800 rounded-lg cursor-pointer disabled:opacity-50">
+                Agregar a la lista
+              </button>
+            </div>
+            {catalogoMateriales.length === 0 && (
+              <p className="text-sm text-slate-500">No hay materiales cargados. Agréguelos en «Materiales y precios».</p>
+            )}
+            {materiales.length > 0 && (
+              <ul className="divide-y divide-slate-200 border border-slate-200 rounded-xl">
+                {materiales.map((m) => {
+                  const cat = catalogoMateriales.find((c) => c.id === m.catalogo_id);
+                  const linea = presupuesto?.adicionales.find((a) => a.id === m.catalogo_id);
+                  return (
+                    <li key={m.catalogo_id} className="p-3 flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-[10rem]">
+                        <div className="font-semibold text-slate-900">{cat?.nombre ?? `Material ${m.catalogo_id}`}</div>
+                        <div className="text-sm text-slate-500">{linea ? `${clp(linea.precio_neto)} c/u (con descuento)` : "Calculando…"}</div>
+                      </div>
+                      <input type="number" inputMode="decimal" min="0" step="any" value={m.cantidad} aria-label={`Cantidad de ${cat?.nombre ?? "material"}`}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setMateriales((prev) => prev.map((x) => (x.catalogo_id === m.catalogo_id ? { ...x, cantidad: e.target.value } : x)))}
+                        className="!w-24 h-11 px-2 text-lg border-2 border-slate-300 rounded-lg" />
+                      <span className="w-28 text-right font-bold tabular-nums">{linea ? clp(linea.subtotal) : "—"}</span>
+                      <button type="button" onClick={() => setMateriales((prev) => prev.filter((x) => x.catalogo_id !== m.catalogo_id))}
+                        className="text-red-700 font-semibold hover:underline cursor-pointer">Quitar</button>
+                    </li>
+                  );
+                })}
+                <li className="p-3 flex justify-between font-bold bg-slate-50 rounded-b-xl">
+                  <span>Total de su lista</span>
+                  <span className="tabular-nums">{presupuesto ? clp(presupuesto.costoAdicionales) : "—"}</span>
+                </li>
+              </ul>
+            )}
+          </Paso>
         </div>
 
         {/* Presupuesto en vivo */}
@@ -437,6 +525,7 @@ export default function CotizadorPage() {
                 <>
                   <ul className="space-y-2.5 text-base">
                     <Linea concepto="Materiales" monto={presupuesto.materiales} />
+                    {presupuesto.costoAdicionales > 0 && <Linea concepto="Su lista de materiales" monto={presupuesto.costoAdicionales} />}
                     {presupuesto.vigas > 0 && <Linea concepto="Vigas a la vista" monto={presupuesto.vigas} />}
                     <Linea concepto="Mano de obra" monto={presupuesto.manoObra} />
                     <Linea concepto="Traslado" monto={presupuesto.flete} />
@@ -452,7 +541,7 @@ export default function CotizadorPage() {
                   <section aria-labelledby="carrito-titulo" className="border-t border-slate-200 pt-4">
                     <div className="flex items-baseline justify-between">
                       <h2 id="carrito-titulo" className="text-base font-bold text-slate-900">Materiales de la obra</h2>
-                      <span className="text-sm text-slate-500">{presupuesto.insumos.length + (baseElegida ? 1 : 0) + (revestElegido ? 1 : 0)} ítems</span>
+                      <span className="text-sm text-slate-500">{presupuesto.adicionales.length + presupuesto.insumos.length + (baseElegida ? 1 : 0) + (revestElegido ? 1 : 0)} ítems</span>
                     </div>
                     <ul className="mt-2 max-h-72 overflow-y-auto divide-y divide-slate-100 text-sm pr-1">
                       {baseElegida && (
@@ -467,6 +556,15 @@ export default function CotizadorPage() {
                           <div className="text-slate-500">Revestimiento · {Number(formData.superficie_m2) || 0} m²</div>
                         </li>
                       )}
+                      {presupuesto.adicionales.map((a) => (
+                        <li key={`ad-${a.id}`} className="py-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-800">{a.nombre}</div>
+                            <div className="text-slate-500">{a.cantidad.toLocaleString("es-CL")} {a.unidad.toLowerCase()} · de su lista</div>
+                          </div>
+                          <span className="font-bold tabular-nums whitespace-nowrap">{clp(a.subtotal)}</span>
+                        </li>
+                      ))}
                       {presupuesto.insumos.map((i) => (
                         <li key={i.id} className="py-2 flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -478,7 +576,7 @@ export default function CotizadorPage() {
                           <span className="font-bold tabular-nums whitespace-nowrap">{clp(i.subtotal)}</span>
                         </li>
                       ))}
-                      {presupuesto.insumos.length === 0 && !baseElegida && !revestElegido && (
+                      {presupuesto.adicionales.length === 0 && presupuesto.insumos.length === 0 && !baseElegida && !revestElegido && (
                         <li className="py-3 text-slate-500">Elija la base y el revestimiento para ver la lista de materiales.</li>
                       )}
                     </ul>
