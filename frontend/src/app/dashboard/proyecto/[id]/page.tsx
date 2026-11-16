@@ -322,7 +322,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
               <input type="number" min="1" step="0.5" value={form.superficie_m2} onChange={set("superficie_m2")} />
             </div>
             <div>
-              <label className={campo}>Kilómetros hasta el terreno</label>
+              <label className={campo}>Distancia total ida y vuelta (km)</label>
               <input type="number" min="0" value={form.distancia_flete_km} onChange={set("distancia_flete_km")} />
             </div>
             {cot.modo_lista ? null : esCasa ? (

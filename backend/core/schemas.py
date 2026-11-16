@@ -126,6 +126,7 @@ class CatalogoTipoSchema(Schema):
     fuente_termino: str = ''
     precio_actualizado_en: Optional[datetime] = None
     m2_por_unidad: float = 0
+    mano_obra_m2: float = 0
     precio_lista: Optional[float] = None
     descuento_pct: float = 0
     costo_neto: Optional[float] = None
@@ -144,6 +145,7 @@ class CatalogoTipoInSchema(Schema):
     rendimiento_m2: float = 0
     fuente_url: str = ''
     m2_por_unidad: float = 0
+    mano_obra_m2: float = Field(0, ge=0, le=1_000_000)  # mano de obra por m² instalado (0 = no aplica)
     verificado: bool = False
     activo: bool = True
 
@@ -164,6 +166,7 @@ class InsumoSchema(Schema):
     costo_neto: Optional[float] = None
     m2_por_unidad: float = 0
     neto_por_m2: Optional[float] = None  # solo revestimientos: costo neto por m² (lo que usa la cotización)
+    mano_obra_m2: float = 0
     actualizado_en: Optional[datetime] = None
     verificado: bool = False
     activo: bool
@@ -257,6 +260,13 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)  # lista de materiales agregados a mano
     maestros: List[ManoObraInSchema] = Field([], max_length=30)
     modo_lista: bool = False  # True: el valor sale de la lista (materiales + maestros)
+    # Cotización por tarifas (la que usa el formulario actual): mano de obra por m² y traslado por combustible.
+    modo_tarifas: bool = False
+    n_trabajadores: int = Field(0, ge=0, le=100)
+    dias_obra: int = Field(0, ge=0, le=365)
+    lleva_radier: bool = False
+    tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -289,6 +299,12 @@ class CotizacionSchema(Schema):
     radier_m2: float = 0
     ajuste_monto: float = 0
     modo_lista: bool = False
+    modo_tarifas: bool = False
+    n_trabajadores: int = 0
+    dias_obra: int = 0
+    lleva_radier: bool = False
+    tarifa_radier_m2: float = 35000
+    precio_litro: float = 1650
     fecha_creacion: datetime
     usuario_id: int
     usuario: Optional[UsuarioSchema] = None
@@ -370,6 +386,12 @@ class CalculoInSchema(Schema):
     materiales: List[MaterialAdicionalInSchema] = Field([], max_length=60)
     maestros: List[ManoObraInSchema] = Field([], max_length=30)
     modo_lista: bool = False
+    modo_tarifas: bool = False
+    n_trabajadores: int = Field(0, ge=0, le=100)
+    dias_obra: int = Field(0, ge=0, le=365)
+    lleva_radier: bool = False
+    tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
 
 
 class NivelacionInSchema(Schema):
@@ -427,6 +449,11 @@ class CotizacionEditSchema(_ContactoMixin, Schema):
     ganancia_m2: Optional[float] = None
     radier_m2: Optional[float] = None
     ajuste_monto: Optional[float] = None  # ajuste manual al total (+/-), se suma al cálculo
+    n_trabajadores: Optional[int] = Field(None, ge=0, le=100)
+    dias_obra: Optional[int] = Field(None, ge=0, le=365)
+    lleva_radier: Optional[bool] = None
+    tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
     motivo: Optional[str] = None
     aplicar: bool = False  # False = solo vista previa
 
