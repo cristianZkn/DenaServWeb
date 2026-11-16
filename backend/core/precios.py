@@ -48,7 +48,8 @@ def _m2_unidad(nombre: str):
 
 def proveedor_de(url: str) -> Proveedor:
     """Proveedor (tienda) dueño de la URL del producto; se crea la primera vez."""
-    tiendas = {"easy": ("EASY-WEB", "Easy"), "mct": ("MCT-WEB", "MCT Maderas"), "sodimac": ("SODIMAC-WEB", "Sodimac")}
+    tiendas = {"easy": ("EASY-WEB", "Easy"), "mct": ("MCT-WEB", "MCT Maderas"), "sodimac": ("SODIMAC-WEB", "Sodimac"),
+               "ferrelan": ("FERRELAN-WEB", "Ferrelan")}
     rut, nombre = tiendas[scraper.tienda_de(url)]
     return Proveedor.objects.get_or_create(rut_empresa=rut, defaults={"razon_social": nombre})[0]
 

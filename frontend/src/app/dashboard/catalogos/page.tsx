@@ -18,6 +18,7 @@ interface Insumo {
   costo_neto: number | null;
   m2_por_unidad: number;
   neto_por_m2: number | null;
+  mano_obra_m2: number;
   actualizado_en: string | null;
   verificado: boolean;
   activo: boolean;
@@ -297,6 +298,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     nombre: item?.nombre ?? "",
     fuente_url: item?.url ?? "",
     m2_por_unidad: item?.m2_por_unidad ? String(item.m2_por_unidad) : "",
+    mano_obra_m2: item?.mano_obra_m2 ? String(item.mano_obra_m2) : "",
     precio_base_unitario: item ? String(item.precio_base_unitario) : "",
     proveedor_id: item?.proveedor_id ? String(item.proveedor_id) : "",
     sin_ficha: item ? !item.url : false,
@@ -327,6 +329,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
       payload.precio_base_unitario = Number(f.precio_base_unitario) || 0;
     }
     if (f.categoria === "REVESTIMIENTO" && f.m2_por_unidad) payload.m2_por_unidad = Number(f.m2_por_unidad);
+    payload.mano_obra_m2 = Number(f.mano_obra_m2) || 0;
     try {
       const r = await fetch(item ? `/api/catalogo-tipos/${item.id}` : "/api/catalogo-tipos/", {
         method: item ? "PUT" : "POST", headers: authHeaders(), body: JSON.stringify(payload),
@@ -411,7 +414,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
               <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto</label>
               <input id="m-url" type="url" value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
                 placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
-              <p className="text-sm text-slate-500 mt-1">Hoy se leen solas las fichas de Easy, Sodimac y MCT. El nombre y el precio salen de esa página.</p>
+              <p className="text-sm text-slate-500 mt-1">Hoy se leen solas las fichas de Easy, Sodimac, MCT y Ferrelan. El nombre y el precio salen de esa página.</p>
             </div>
             <div>
               <label className={etiqueta} htmlFor="m-nom2">Nombre (opcional)</label>
@@ -426,6 +429,16 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
             )}
           </>
         )}
+
+        <div>
+          <label className={etiqueta} htmlFor="m-mo">Mano de obra por m² instalado (opcional)</label>
+          <input id="m-mo" type="number" min="0" step="100" value={f.mano_obra_m2} onFocus={(e) => e.target.select()}
+            onChange={(e) => set("mano_obra_m2", e.target.value)} placeholder="Ej.: 2000 para el OSB Smartside Lap" />
+          <p className="text-sm text-slate-500 mt-1">
+            Si a cada trabajador se le paga aparte por instalar este material, escriba cuánto por m². Al cotizar, la
+            cantidad de este material se ingresa en m² y la mano de obra se suma sola.
+          </p>
+        </div>
 
         <div className="space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
           <label className="flex items-start gap-2 cursor-pointer">

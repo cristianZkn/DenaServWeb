@@ -72,6 +72,9 @@ class CatalogoTipo(models.Model):
     ultimo_error = models.CharField(max_length=300, blank=True, default='')  # por qué falló la última lectura
     etapa_obra = models.CharField(max_length=50, blank=True, default='')
     rendimiento_m2 = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    # Mano de obra por m² instalado que se paga a cada trabajador por este material (ej.: OSB Smartside Lap = 2.000).
+    # 0 = el material no paga mano de obra aparte. La cantidad de estos materiales se ingresa en m².
+    mano_obra_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     activo = models.BooleanField(default=True)
 
     class Meta:
@@ -125,6 +128,14 @@ class Cotizacion(models.Model):
     costo_nivelacion = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     # True = el valor sale de la lista (materiales + maestros) y no de tarifas por m²; las cotizaciones antiguas son False.
     modo_lista = models.BooleanField(default=False)
+    # Cotizaciones nuevas: mano de obra por tarifa por m² x trabajadores y traslado por combustible
+    # (ver calculo._por_tarifas). Las anteriores (False) siguen calculándose como antes.
+    modo_tarifas = models.BooleanField(default=False)
+    n_trabajadores = models.PositiveSmallIntegerField(default=0)
+    dias_obra = models.PositiveSmallIntegerField(default=0)  # días de construcción, sin los 4 de fabricación del radier
+    lleva_radier = models.BooleanField(default=False)  # la casa lleva radier o base: suma 4 días y su mano de obra
+    tarifa_radier_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=35000)  # 35.000 o 38.000 por trabajador
+    precio_litro = models.DecimalField(max_digits=10, decimal_places=2, default=1650)  # precio de la bencina
     fecha_creacion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(
         Usuario,

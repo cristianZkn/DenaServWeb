@@ -32,11 +32,11 @@ class ErrorExtraccion(Exception):
 
 
 def tienda_de(url: str) -> str:
-    host = urlsplit(url or "").netloc.lower()
-    for tienda, dominio in (("easy", "easy.cl"), ("sodimac", "sodimac.cl"), ("mct", "mct.cl")):
+    host = (urlsplit(url or "").hostname or "").lower()
+    for tienda, dominio in (("easy", "easy.cl"), ("sodimac", "sodimac.cl"), ("mct", "mct.cl"), ("ferrelan", "ferrelan.cl")):
         if host == dominio or host.endswith("." + dominio):
             return tienda
-    raise ErrorExtraccion("La dirección no es de una tienda conocida (Easy, Sodimac o MCT).")
+    raise ErrorExtraccion("La dirección no es de una tienda conocida (Easy, Sodimac, MCT o Ferrelan).")
 
 
 @lru_cache(maxsize=1)
@@ -137,8 +137,43 @@ def parsear_mct(html: str, url: str = "") -> dict:
             "precio": _precio(precio.get_text())}
 
 
+def _precio_meta(valor) -> Decimal | None:
+    """Precio de un metadato HTML. Entiende '13190.0', '28.907' (miles chilenos) y '28,907.00' (miles con coma)."""
+    s = str(valor or "").strip().replace("$", "").strip()
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+(,\d+)?", s):
+        s = s.replace(".", "").split(",")[0]
+    elif re.fullmatch(r"\d{1,3}(,\d{3})+(\.\d+)?", s):
+        s = s.replace(",", "")
+    return _precio(s)
+
+
+def parsear_meta(html: str) -> dict:
+    """Ficha de tiendas Jumpseller (Ferrelan): el precio vigente va en los metadatos `product:price:amount` y el
+    nombre en `og:title`; `og:id` es el código interno del producto (sirve como SKU)."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    def meta(*claves):
+        for c in claves:
+            tag = soup.find("meta", attrs={"property": c}) or soup.find("meta", attrs={"name": c}) \
+                or soup.find("meta", attrs={"itemprop": c})
+            if tag and tag.get("content"):
+                return tag["content"].strip()
+        return ""
+
+    precio = _precio_meta(meta("product:price:amount", "og:price:amount"))
+    if not precio:
+        raise ErrorExtraccion("La ficha no muestra un precio legible (¿producto sin precio o agotado?).")
+    h1 = soup.select_one("h1")
+    nombre = meta("og:title") or (h1.get_text(strip=True) if h1 else "")
+    return {"nombre": html_lib.unescape(nombre), "sku": meta("product:retailer_item_id", "og:id"), "precio": precio}
+
+
 def extraer(url: str) -> dict:
     """{'nombre', 'sku', 'precio'(Decimal CLP)} de la ficha. Lanza ErrorExtraccion con un mensaje claro."""
     tienda = tienda_de(url)
     html = descargar(url)
-    return parsear_mct(html, url) if tienda == "mct" else parsear_json_ld(html)
+    if tienda == "mct":
+        return parsear_mct(html, url)
+    if tienda == "ferrelan":
+        return parsear_meta(html)
+    return parsear_json_ld(html)

@@ -60,7 +60,8 @@ def _calcular_desde_catalogo(data):
         if not it:
             raise ValueError("Uno de los materiales de la lista ya no está disponible en el catálogo.")
         adicionales.append({'id': it.id, 'nombre': it.nombre, 'unidad': it.unidad_medida,
-                            'cantidad': mat.cantidad, 'precio_neto': _neto(it), 'etapa': it.etapa_obra or 'ETAPA_1'})
+                            'cantidad': mat.cantidad, 'precio_neto': _neto(it), 'etapa': it.etapa_obra or 'ETAPA_1',
+                            'mano_obra_m2': it.mano_obra_m2})
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
     return calculo.calcular(
@@ -69,7 +70,9 @@ def _calcular_desde_catalogo(data):
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
         tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, adicionales=adicionales,
-        maestros=[m.dict() for m in data.maestros], modo_lista=data.modo_lista)
+        maestros=[m.dict() for m in data.maestros], modo_lista=data.modo_lista,
+        modo_tarifas=data.modo_tarifas, n_trabajadores=data.n_trabajadores, dias_obra=data.dias_obra,
+        lleva_radier=data.lleva_radier, tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro)
 
 
 def _repartir_en_hitos(cot, delta) -> bool:
@@ -241,6 +244,7 @@ def listar_insumos(request, categoria: Optional[str] = None, activo: Optional[bo
             "proveedor": it.proveedor.razon_social if it.proveedor else None, "unidad_medida": it.unidad_medida,
             "url": it.fuente_url, "sku": it.sku, "precio_base_unitario": it.precio_base_unitario, "precio_lista": lista, "descuento_pct": desc, "costo_neto": neto,
             "m2_por_unidad": m2, "neto_por_m2": float(_neto(it)) if m2 > 0 else None,
+            "mano_obra_m2": float(it.mano_obra_m2 or 0),
             "actualizado_en": it.precio_actualizado_en, "verificado": it.verificado, "activo": it.activo,
             "ultimo_error": it.ultimo_error,
         })
@@ -348,7 +352,9 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 base_terreno_id=data.base_terreno_id, revestimiento_id=data.revestimiento_id,
                 ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista,
                 tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales,
-                maestros=data.maestros, modo_lista=data.modo_lista))
+                maestros=data.maestros, modo_lista=data.modo_lista, modo_tarifas=data.modo_tarifas,
+                n_trabajadores=data.n_trabajadores, dias_obra=data.dias_obra, lleva_radier=data.lleva_radier,
+                tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -370,6 +376,12 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 m2_vigas_vista=data.m2_vigas_vista,
                 radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.DEFAULTS["radier_m2"],
                 modo_lista=data.modo_lista,
+                modo_tarifas=data.modo_tarifas,
+                n_trabajadores=data.n_trabajadores,
+                dias_obra=data.dias_obra,
+                lleva_radier=data.lleva_radier or data.tipo_proyecto == "SOLO_RADIER",
+                tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.DEFAULTS["mo_radier_m2"],
+                precio_litro=data.precio_litro if data.precio_litro is not None else calculo.DEFAULTS["precio_litro"],
                 usuario=request.auth
             )
 
@@ -483,8 +495,10 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
 
 ESTADOS_COTIZACION = {"BORRADOR", "ACEPTADA", "FINALIZADA"}
 _CAMPOS_PRECIO = {"superficie_m2", "distancia_flete_km", "base_terreno_id", "revestimiento_id",
-                  "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
-_CAMPOS_DECIMAL = {"superficie_m2", "distancia_flete_km", "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto"}
+                  "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto",
+                  "n_trabajadores", "dias_obra", "lleva_radier", "tarifa_radier_m2", "precio_litro"}
+_CAMPOS_DECIMAL = {"superficie_m2", "distancia_flete_km", "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto",
+                   "tarifa_radier_m2", "precio_litro"}
 
 
 @router.patch("/cotizaciones/{cotizacion_id}/", response={200: dict, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
@@ -511,7 +525,9 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 materiales=[MaterialAdicionalInSchema(catalogo_id=d.catalogo_tipo_id, cantidad=float(d.cantidad_calculada))
                             for d in cot.detalles_insumo.filter(es_adicional=True)],
                 maestros=[ManoObraInSchema(cantidad=l.cantidad, cobro=float(l.cobro)) for l in cot.mano_obra.all()],
-                modo_lista=cot.modo_lista))
+                modo_lista=cot.modo_lista, modo_tarifas=cot.modo_tarifas, n_trabajadores=cot.n_trabajadores,
+                dias_obra=cot.dias_obra, lleva_radier=cot.lleva_radier,
+                tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro)))
         except ValueError as e:
             return 400, {"message": str(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (

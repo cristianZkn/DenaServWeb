@@ -797,3 +797,121 @@ class ModoListaTests(TestCase):
     def test_maestros_invalidos(self):
         self.assertEqual(self.calcular(maestros=[{"cantidad": 0, "cobro": 1000}]).status_code, 422)
         self.assertEqual(self.calcular(maestros=[{"cantidad": 1, "cobro": -5}]).status_code, 422)
+
+
+class TarifasCalculoTests(TestCase):
+    """Cotización por tarifas: traslado por combustible y mano de obra por m² x trabajadores."""
+
+    OSB = [{"id": 1, "nombre": "OSB Smartside Lap", "unidad": "M2", "cantidad": 40, "precio_neto": 9881,
+            "etapa": "ETAPA_1", "mano_obra_m2": 2000}]
+
+    def test_traslado_ejemplo_de_la_empresa(self):
+        # 50 km (ida y vuelta) = 5 litros por día; 25 días = 125 litros a $1.650
+        t = calculo.traslado_combustible(50, 25, D(1650), D(10))
+        self.assertEqual((t["litros"], t["costo"]), (D("125.00"), 206250))
+
+    def test_casa_sin_radier(self):
+        r = calculo.calcular(50, 50, modo_tarifas=True, n_trabajadores=2, dias_obra=25, m2_vigas_vista=10, adicionales=self.OSB)
+        mo = {l["concepto"]: l["subtotal"] for l in r["mano_obra_detalle"]}
+        self.assertEqual(mo, {"Casa": 2500000, "Vigas a la vista": 160000, "Instalación de OSB Smartside Lap": 160000})
+        self.assertEqual((r["costo_mano_obra"], r["costo_flete"], r["dias_total"]), (2820000, 206250, 25))
+        self.assertEqual(r["total"], 40 * 9881 + 2820000 + 206250 + 50 * 30000)
+        self.assertEqual(r["neto"] + r["iva"], r["total"])
+        self.assertEqual(sum(h["monto"] for h in r["hitos"]), r["total"])
+
+    def test_radier_suma_cuatro_dias_y_su_mano_de_obra(self):
+        r = calculo.calcular(50, 50, modo_tarifas=True, n_trabajadores=2, dias_obra=25, lleva_radier=True, tarifa_radier_m2=38000)
+        self.assertEqual((r["dias_total"], r["costo_flete"]), (29, 239250))
+        self.assertEqual(r["costo_mano_obra"], 50 * 25000 * 2 + 50 * 38000 * 2)
+
+    def test_solo_radier_paga_solo_la_tarifa_del_radier(self):
+        r = calculo.calcular(20, 30, modo_tarifas=True, n_trabajadores=2, tipo_proyecto="SOLO_RADIER", m2_vigas_vista=9)
+        self.assertEqual([l["concepto"] for l in r["mano_obra_detalle"]], ["Radier / base"])
+        self.assertEqual((r["costo_mano_obra"], r["dias_total"], r["costo_flete"]), (1400000, 4, 19800))
+
+    def test_precio_del_litro_es_editable_y_los_modos_antiguos_no_cambian(self):
+        self.assertEqual(calculo.calcular(50, 50, modo_tarifas=True, n_trabajadores=1, dias_obra=10, precio_litro=1800)["costo_flete"], 90000)
+        self.assertEqual(calculo.calcular(10, 20, 0, 0)["costo_flete"], 50000)
+        self.assertEqual(calculo.calcular(10, 20, modo_lista=True)["costo_flete"], 50000)
+
+
+class CotizacionTarifasApiTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="4-4", nombre_completo="Tarifas", email="tarifas@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        prov = Proveedor.objects.create(rut_empresa="PROV-T", razon_social="Prov T", descuento_pct=0)
+        self.osb = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="LP Smartside Lap Siding", unidad_medida="M2",
+                                               precio_base_unitario=10000, proveedor=prov, mano_obra_m2=2000)
+        self.cot = self.c.post("/api/cotizaciones/", {
+            "cliente_nombre": "Cliente Tarifas", "direccion_terreno": "Calle Tres 3", "superficie_m2": 50,
+            "distancia_flete_km": 50, "modo_lista": True, "modo_tarifas": True, "n_trabajadores": 2, "dias_obra": 25,
+            "m2_vigas_vista": 10, "materiales": [{"catalogo_id": self.osb.id, "cantidad": 40}],
+        }, content_type="application/json", **self.h).json()
+        self.url = f"/api/cotizaciones/{self.cot['id']}/"
+
+    def patch(self, body):
+        return self.c.patch(self.url, body, content_type="application/json", **self.h).json()
+
+    def test_se_guarda_con_traslado_por_combustible_y_mano_de_obra_por_tarifa(self):
+        self.assertEqual((self.cot["costo_mano_obra"], self.cot["costo_flete"]), (2820000, 206250))
+        self.assertEqual(self.cot["costo_total"], 400000 + 2820000 + 206250 + 50 * 30000)
+        self.assertEqual((self.cot["modo_tarifas"], self.cot["n_trabajadores"], self.cot["dias_obra"], self.cot["precio_litro"]),
+                         (True, 2, 25, 1650))
+
+    def test_calcular_devuelve_el_detalle_para_la_pantalla(self):
+        r = self.c.post("/api/cotizaciones/calcular", {
+            "superficie_m2": 50, "distancia_km": 50, "modo_tarifas": True, "n_trabajadores": 2, "dias_obra": 25,
+            "lleva_radier": True, "tarifa_radier_m2": 38000,
+        }, content_type="application/json", **self.h).json()
+        self.assertEqual((r["dias_total"], float(r["traslado"]["litros"])), (29, 145.0))
+        self.assertIn("Radier / base", [l["concepto"] for l in r["mano_obra_detalle"]])
+
+    def test_reajustar_dias_y_radier_recalcula(self):
+        self.assertEqual(float(self.patch({"dias_obra": 30})["diferencia"]), 41250)          # 5 L x 5 días más x $1.650
+        r = self.patch({"lleva_radier": True, "tarifa_radier_m2": 38000})
+        self.assertEqual(float(r["diferencia"]), 33000 + 3800000)                             # +4 días de traslado + mano de obra del radier
+        self.assertEqual(float(self.patch({"aplicar": False})["diferencia"]), 0)              # sin cambios, el valor se conserva
+
+    def test_cotizacion_antigua_sigue_con_sus_tarifas(self):
+        antigua = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Antiguo", "direccion_terreno": "Calle Cuatro 4",
+                              "superficie_m2": 10, "distancia_flete_km": 20, "modo_lista": True},
+                              content_type="application/json", **self.h).json()
+        self.assertEqual((antigua["modo_tarifas"], antigua["costo_flete"]), (False, 50000))  # tramo por m², no combustible
+
+
+class FerrelanTests(TestCase):
+    def test_lee_la_ficha_jumpseller(self):
+        from . import scraper
+        html = ('<meta property="og:title" content="OSB APA Protec Nacional 9.5mm 1.22x2.44 mts"><meta property="og:id" content="8070032">'
+                '<meta property="product:price:amount" content="13190.0"><meta property="product:original_price:amount" content="13990.0">')
+        r = scraper.parsear_meta(html)
+        self.assertEqual((r["sku"], r["precio"]), ("8070032", 13190))
+        with self.assertRaises(scraper.ErrorExtraccion):
+            scraper.parsear_meta("<head></head>")
+
+    def test_tienda_y_proveedor(self):
+        from . import scraper, precios
+        self.assertEqual(scraper.tienda_de("https://www.ferrelan.cl/osb-apa-protec-nacional-95mm-122x244-mts"), "ferrelan")
+        with self.assertRaises(scraper.ErrorExtraccion):
+            scraper.tienda_de("https://www.ferrelan.cl.malo.com/x")
+        self.assertEqual(precios.proveedor_de("https://www.ferrelan.cl/x").razon_social, "Ferrelan")
+
+    def test_alta_de_material_por_url_asigna_a_ferrelan(self):
+        from unittest import mock
+        u = Usuario.objects.create(rut="3-3", nombre_completo="F", email="f@d.cl")
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        ficha = {"nombre": "Terciado Ranurado Clásico 9mm", "sku": "123", "precio": D(15790)}
+        with mock.patch("core.precios.scraper.extraer", return_value=ficha):
+            r = Client().post("/api/catalogo-tipos/", {"categoria": "TABIQUERIA", "fuente_url": "https://www.ferrelan.cl/terciado-ranurado-clasico-9mm-1"},
+                              content_type="application/json", **h)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["proveedor"]["razon_social"], r.json()["precio_lista"]), ("Ferrelan", 15790))
+
+    def test_comando_configura_osb_y_proveedor_una_sola_vez(self):
+        from django.core.management import call_command
+        osb = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="LP Smartside Lap Tradicional 9.5MMX4.88MTS", unidad_medida="M2")
+        otro = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="OSB Panel R8", unidad_medida="M2")
+        call_command("configurar_tarifas"); call_command("configurar_tarifas")
+        osb.refresh_from_db(); otro.refresh_from_db()
+        self.assertEqual((osb.mano_obra_m2, otro.mano_obra_m2), (2000, 0))
+        self.assertEqual(Proveedor.objects.filter(rut_empresa="FERRELAN-WEB").count(), 1)

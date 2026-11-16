@@ -4,7 +4,7 @@
  * Nueva cotización.
  *
  * El valor de la obra se arma exclusivamente con la lista:
- *   materiales + mano de obra + traslado (según la distancia) + vigas a la vista + ganancia por defecto.
+ *   materiales + mano de obra (tarifa por m² x trabajadores) + traslado (combustible según km y días) + ganancia.
  * Cada vez que cambia un dato, el servidor recalcula el presupuesto (`/api/cotizaciones/calcular`) y esta
  * pantalla solo lo muestra; el mismo cálculo se repite al guardar, por lo que nunca se confía en montos del navegador.
  */
@@ -25,9 +25,6 @@ interface CatalogoItem {
 /** Material de la lista, tal como lo edita el usuario (la cantidad se guarda como texto mientras se escribe). */
 interface MaterialLista { catalogo_id: number; cantidad: string }
 
-/** Una línea de mano de obra: `cantidad` de trabajadores que cobran el mismo monto cada uno. */
-interface LineaManoObra { cantidad: string; cobro: string }
-
 /** Respuesta del servidor ya convertida a números. */
 interface Presupuesto {
   materiales: number;
@@ -40,7 +37,9 @@ interface Presupuesto {
   total: number;
   hitos: { fase: string; porcentaje: number; monto: number }[];
   materialesLinea: { id: number; nombre: string; unidad: string; cantidad: number; precioNeto: number; subtotal: number }[];
-  manoObraLinea: { cantidad: number; cobro: number; subtotal: number }[];
+  manoObraDetalle: { concepto: string; m2: number; tarifa: number; trabajadores: number; subtotal: number }[];
+  traslado: { km: number; dias: number; litros: number; precioLitro: number; costo: number };
+  diasTotal: number;
 }
 
 // ---------------------------------------------------------------- constantes y utilidades
@@ -136,7 +135,12 @@ export default function CotizadorPage() {
     superficie_m2: "54",
     distancia_flete_km: "25",
     m2_vigas_vista: "",
+    dias_obra: "",
   });
+  const [llevaRadier, setLlevaRadier] = useState(false);
+  const [tarifaRadier, setTarifaRadier] = useState("35000");
+  const [precioLitro, setPrecioLitro] = useState("1650");
+  const [nTrabajadores, setNTrabajadores] = useState("");
   const setCampo = (name: string, value: string) => setFormData((prev) => ({ ...prev, [name]: value }));
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setCampo(e.target.name, e.target.value);
   const esCasa = formData.tipo_proyecto === "CASA";
@@ -160,24 +164,11 @@ export default function CotizadorPage() {
     setCantidadElegida("1");
   };
 
-  // ---- Mano de obra: un solo monto para todos, o pagos diferenciados (una línea por cada monto distinto)
-  const [pagosDiferenciados, setPagosDiferenciados] = useState(false);
-  const [manoObraIgual, setManoObraIgual] = useState<LineaManoObra>({ cantidad: "", cobro: "" });
-  const [manoObraLineas, setManoObraLineas] = useState<LineaManoObra[]>([{ cantidad: "1", cobro: "" }]);
-  const actualizarLinea = (i: number, campo: keyof LineaManoObra, valor: string) =>
-    setManoObraLineas((prev) => prev.map((l, k) => (k === i ? { ...l, [campo]: valor } : l)));
-
   // ---- Lo que se envía al servidor (solo datos completos y válidos)
   const materialesValidos = useMemo(
     () => materiales.filter((m) => num(m.cantidad) > 0).map((m) => ({ catalogo_id: m.catalogo_id, cantidad: num(m.cantidad) })),
     [materiales]
   );
-  const manoObraValida = useMemo(() => {
-    const lineas = pagosDiferenciados ? manoObraLineas : [manoObraIgual];
-    return lineas
-      .filter((l) => num(l.cantidad) >= 1 && l.cobro !== "" && num(l.cobro) >= 0)
-      .map((l) => ({ cantidad: Math.floor(num(l.cantidad)), cobro: num(l.cobro) }));
-  }, [pagosDiferenciados, manoObraIgual, manoObraLineas]);
 
   // Carga del catálogo de materiales activos.
   useEffect(() => {
@@ -196,8 +187,18 @@ export default function CotizadorPage() {
     cargar();
   }, [router]);
 
+  // Parámetros de tarifas que se envían tanto al calcular como al guardar. El radier suma 4 días de fabricación.
+  const parametrosTarifas = {
+    modo_tarifas: true,
+    n_trabajadores: Math.floor(num(nTrabajadores)),
+    dias_obra: Math.floor(num(formData.dias_obra)),
+    lleva_radier: !esCasa || llevaRadier,
+    tarifa_radier_m2: num(tarifaRadier),
+    precio_litro: num(precioLitro) || 1650,
+  };
+
   // Recalcula el presupuesto en el servidor 300 ms después del último cambio.
-  const claveLista = JSON.stringify([materialesValidos, manoObraValida]);
+  const claveLista = JSON.stringify([materialesValidos]);
   useEffect(() => {
     if (cargandoCatalogo) return;
     const temporizador = setTimeout(async () => {
@@ -213,7 +214,7 @@ export default function CotizadorPage() {
             tipo_proyecto: formData.tipo_proyecto,
             modo_lista: true,
             materiales: materialesValidos,
-            maestros: manoObraValida, // el servidor llama «maestros» a las líneas de mano de obra
+            ...parametrosTarifas,
           }),
         });
         const r = await res.json().catch(() => ({}));
@@ -236,7 +237,14 @@ export default function CotizadorPage() {
             id: a.id, nombre: a.nombre, unidad: a.unidad, cantidad: Number(a.cantidad),
             precioNeto: Number(a.precio_neto), subtotal: Number(a.subtotal),
           })),
-          manoObraLinea: (r.mano_obra_lineas || []).map((m: any) => ({ cantidad: Number(m.cantidad), cobro: Number(m.cobro), subtotal: Number(m.subtotal) })),
+          manoObraDetalle: (r.mano_obra_detalle || []).map((m: any) => ({
+            concepto: m.concepto, m2: Number(m.m2), tarifa: Number(m.tarifa), trabajadores: Number(m.trabajadores), subtotal: Number(m.subtotal),
+          })),
+          traslado: {
+            km: Number(r.traslado?.km || 0), dias: Number(r.traslado?.dias || 0), litros: Number(r.traslado?.litros || 0),
+            precioLitro: Number(r.traslado?.precio_litro || 0), costo: Number(r.traslado?.costo || 0),
+          },
+          diasTotal: Number(r.dias_total || 0),
         });
       } catch {
         setErrorCalculo("Sin conexión con el servidor. El valor se actualizará al restablecerse.");
@@ -246,7 +254,8 @@ export default function CotizadorPage() {
     }, 300);
     return () => clearTimeout(temporizador);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargandoCatalogo, formData.superficie_m2, formData.distancia_flete_km, formData.m2_vigas_vista, formData.tipo_proyecto, claveLista]);
+  }, [cargandoCatalogo, formData.superficie_m2, formData.distancia_flete_km, formData.m2_vigas_vista, formData.tipo_proyecto, formData.dias_obra,
+      llevaRadier, tarifaRadier, precioLitro, nTrabajadores, claveLista]);
 
   // Guarda la cotización: el servidor vuelve a calcular todo con estos mismos datos.
   const guardar = async (e: React.FormEvent) => {
@@ -259,8 +268,9 @@ export default function CotizadorPage() {
     });
     if (errorDatos) return setError(errorDatos);
     if (num(formData.superficie_m2) <= 0) return setError("Los metros cuadrados deben ser mayores a 0.");
-    if (materialesValidos.length === 0 && manoObraValida.length === 0) {
-      return setError("Agregue al menos un material o mano de obra: de lo contrario, el valor de la obra queda en cero.");
+    if (num(nTrabajadores) < 1) return setError("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.");
+    if (num(formData.distancia_flete_km) > 0 && parametrosTarifas.dias_obra + (parametrosTarifas.lleva_radier ? 4 : 0) < 1) {
+      return setError("Indique los días de construcción para calcular el traslado.");
     }
     if (!presupuesto) return setError("Espere a que se calcule el valor de la obra antes de guardar.");
 
@@ -276,7 +286,7 @@ export default function CotizadorPage() {
           m2_vigas_vista: num(formData.m2_vigas_vista),
           modo_lista: true,
           materiales: materialesValidos,
-          maestros: manoObraValida,
+          ...parametrosTarifas,
         }),
       });
       if (res.ok) return router.push("/dashboard");
@@ -292,7 +302,7 @@ export default function CotizadorPage() {
   if (cargandoCatalogo) return <div className="p-8 text-center text-slate-500 font-bold">Cargando información...</div>;
 
   const categorias = Array.from(new Set(catalogo.map((c) => c.categoria)));
-  const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraLinea.length : 0;
+  const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
   return (
     <form onSubmit={guardar} className="max-w-6xl mx-auto pb-28 lg:pb-0">
@@ -365,14 +375,57 @@ export default function CotizadorPage() {
             <div className="grid sm:grid-cols-2 gap-5">
               <NumberField label="Superficie" name="superficie_m2" value={formData.superficie_m2} onChange={setCampo}
                 step="0.5" suffix="m²" required max={10000} />
-              <NumberField label="Distancia hasta el terreno" name="distancia_flete_km" value={formData.distancia_flete_km}
-                onChange={setCampo} suffix="km" required max={3000} help="Determina el costo de traslado." />
+              <NumberField label="Días de construcción" name="dias_obra" value={formData.dias_obra} onChange={setCampo}
+                step="1" suffix="días" max={365}
+                help={esCasa ? "Días que se irá a trabajar al terreno. Determina el combustible del traslado." : "Opcional. El radier ya suma 4 días de fabricación."} />
+            </div>
+
+            {/* Radier o base: suma 4 días y su mano de obra */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              {esCasa ? (
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" className="!w-5 !min-h-0 mt-1" checked={llevaRadier} onChange={(e) => setLlevaRadier(e.target.checked)} />
+                  <span>
+                    <strong className="text-slate-900">La casa lleva radier o base</strong>
+                    <span className="block text-sm text-slate-600">Suma 4 días de fabricación al traslado y se paga su mano de obra por m².</span>
+                  </span>
+                </label>
+              ) : (
+                <p className="text-sm text-slate-700"><strong>Radier:</strong> la fabricación toma 4 días, que ya se suman al traslado.</p>
+              )}
+              {(llevaRadier || !esCasa) && (
+                <div className="max-w-xs">
+                  <label htmlFor="tarifa_radier" className={labelCls}>Mano de obra del radier (por trabajador)</label>
+                  <select id="tarifa_radier" value={tarifaRadier} onChange={(e) => setTarifaRadier(e.target.value)} className={inputCls}>
+                    <option value="35000">$35.000 por m²</option>
+                    <option value="38000">$38.000 por m²</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Traslado: 1 litro rinde 10 km */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+              <h3 className="font-bold text-slate-900">Traslado</h3>
+              <div className="grid sm:grid-cols-2 gap-5">
+                <NumberField label="Distancia total (ida y vuelta)" name="distancia_flete_km" value={formData.distancia_flete_km}
+                  onChange={setCampo} suffix="km" required max={3000} help="Kilómetros que se recorren en total cada día." />
+                <NumberField label="Precio de la bencina" name="precio_litro" value={precioLitro} onChange={(_, v) => setPrecioLitro(v)}
+                  step="10" suffix="$/L" help="1 litro rinde 10 km." />
+              </div>
+              {presupuesto && (
+                <p className="text-sm text-slate-700">
+                  {presupuesto.traslado.litros.toLocaleString("es-CL")} litros ({presupuesto.diasTotal} {presupuesto.diasTotal === 1 ? "día" : "días"}
+                  {parametrosTarifas.lleva_radier ? ", incluye 4 de fabricación del radier" : ""}) × {clp(presupuesto.traslado.precioLitro)} ={" "}
+                  <strong>{clp(presupuesto.traslado.costo)}</strong>
+                </p>
+              )}
             </div>
 
             {esCasa && (
               <>
                 <NumberField label="Superficie con vigas a la vista" name="m2_vigas_vista" value={formData.m2_vigas_vista}
-                  onChange={setCampo} suffix="m²" max={10000} help="Se suman $65.000 por cada m² con vigas a la vista." />
+                  onChange={setCampo} suffix="m²" max={10000} help="Se pagan $8.000 por cada m² con vigas a la vista, a cada trabajador." />
                 <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
                   El relleno de estabilizado no se incluye en esta etapa: se mide durante la visita al terreno y se agrega
                   posteriormente desde el listado de cotizaciones.
@@ -447,42 +500,27 @@ export default function CotizadorPage() {
           {/* 4. Mano de obra */}
           <Seccion titulo="Mano de obra">
             <p className="text-slate-600 -mt-2">
-              Indique la cantidad de trabajadores y el monto que cobrará cada uno por la totalidad de la obra.
+              A cada trabajador se le paga por m²: casa $25.000, vigas a la vista $8.000, radier o base $35.000 o $38.000, y $2.000
+              por m² de OSB Smartside Lap. Indique cuántos trabajadores participan.
             </p>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" className="!w-5 !min-h-0" checked={pagosDiferenciados}
-                onChange={(e) => setPagosDiferenciados(e.target.checked)} />
-              <span className="font-semibold text-slate-800">Los trabajadores cobran montos distintos (pagos diferenciados)</span>
-            </label>
-
-            {!pagosDiferenciados ? (
-              <div className="grid sm:grid-cols-2 gap-5">
-                <NumberField label="Cantidad de trabajadores" name="mo_cantidad" value={manoObraIgual.cantidad}
-                  onChange={(_, v) => setManoObraIgual({ ...manoObraIgual, cantidad: v })} step="1" max={100} />
-                <NumberField label="Cobro por trabajador" name="mo_cobro" value={manoObraIgual.cobro}
-                  onChange={(_, v) => setManoObraIgual({ ...manoObraIgual, cobro: v })} step="1000" suffix="$" />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {manoObraLineas.map((l, i) => (
-                  <div key={i} className="grid grid-cols-2 sm:grid-cols-[8rem_12rem_1fr_auto] gap-3 items-end">
-                    <NumberField label="Cantidad" name={`mo_cantidad_${i}`} value={l.cantidad}
-                      onChange={(_, v) => actualizarLinea(i, "cantidad", v)} step="1" max={100} />
-                    <NumberField label="Cobro por trabajador" name={`mo_cobro_${i}`} value={l.cobro}
-                      onChange={(_, v) => actualizarLinea(i, "cobro", v)} step="1000" suffix="$" />
-                    <div className="col-span-2 sm:contents flex items-center justify-between gap-3 border-b border-slate-100 pb-3 sm:border-0 sm:pb-0">
-                      <span className="sm:h-12 flex items-center sm:justify-end font-bold tabular-nums">
-                        {clp(Math.floor(num(l.cantidad)) * num(l.cobro))}
-                      </span>
-                      <button type="button" disabled={manoObraLineas.length === 1} aria-label={`Quitar línea ${i + 1}`}
-                        onClick={() => setManoObraLineas((prev) => prev.filter((_, k) => k !== i))}
-                        className="sm:h-12 px-2 text-red-700 font-semibold hover:underline cursor-pointer disabled:opacity-40">Quitar</button>
+            <div className="grid sm:grid-cols-2 gap-5">
+              <NumberField label="Cantidad de trabajadores" name="n_trabajadores" value={nTrabajadores}
+                onChange={(_, v) => setNTrabajadores(v)} step="1" max={100} required />
+            </div>
+            {presupuesto && presupuesto.manoObraDetalle.length > 0 && (
+              <ul className="divide-y divide-slate-200 border border-slate-200 rounded-xl text-base">
+                {presupuesto.manoObraDetalle.map((m, i) => (
+                  <li key={i} className="p-3 flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">{m.concepto}</div>
+                      <div className="text-sm text-slate-500">
+                        {m.m2.toLocaleString("es-CL")} m² × {clp(m.tarifa)} × {m.trabajadores} {m.trabajadores === 1 ? "trabajador" : "trabajadores"}
+                      </div>
                     </div>
-                  </div>
+                    <span className="font-bold tabular-nums whitespace-nowrap">{clp(m.subtotal)}</span>
+                  </li>
                 ))}
-                <button type="button" onClick={() => setManoObraLineas((prev) => [...prev, { cantidad: "1", cobro: "" }])}
-                  className="font-semibold text-blue-800 hover:underline cursor-pointer">+ Agregar otro monto</button>
-              </div>
+              </ul>
             )}
             <p className="flex justify-between border-t border-slate-200 pt-3 font-bold">
               <span>Total de mano de obra</span>
@@ -527,14 +565,14 @@ export default function CotizadorPage() {
                       <span className="text-sm text-slate-500 shrink-0">{totalLineas} {totalLineas === 1 ? "partida" : "partidas"}</span>
                     </div>
                     {totalLineas === 0 ? (
-                      <p className="py-3 text-sm text-slate-500">Agregue materiales y mano de obra para conformar el valor de la obra.</p>
+                      <p className="py-3 text-sm text-slate-500">Indique los trabajadores y agregue materiales para conformar el valor de la obra.</p>
                     ) : (
                       <ul className="mt-2 max-h-72 overflow-y-auto divide-y divide-slate-100 text-sm pr-1">
-                        {presupuesto.manoObraLinea.map((m, i) => (
+                        {presupuesto.manoObraDetalle.map((m, i) => (
                           <li key={`mo-${i}`} className="py-2 flex items-start justify-between gap-3">
                             <div>
-                              <div className="font-semibold text-slate-800">Mano de obra</div>
-                              <div className="text-slate-500">{m.cantidad} {m.cantidad === 1 ? "trabajador" : "trabajadores"} × {clp(m.cobro)}</div>
+                              <div className="font-semibold text-slate-800">{m.concepto}</div>
+                              <div className="text-slate-500">{m.m2.toLocaleString("es-CL")} m² × {clp(m.tarifa)} × {m.trabajadores} trab.</div>
                             </div>
                             <span className="font-bold tabular-nums whitespace-nowrap">{clp(m.subtotal)}</span>
                           </li>

@@ -16,6 +16,12 @@ DEFAULTS = {
     "radier_m2": D("37500"),       # radier solo (material + mano de obra): $35.000-$40.000/m², punto medio
     "materiales_ref_m2": D("135000"),  # referencia de materiales (~$135.000/m²) mientras el BOM esté incompleto
     "tabique_factor_muros": D("1.5"),  # muros totales = perímetro x factor
+    # Cotizaciones por tarifa (modo_tarifas): cada trabajador cobra por m² y el traslado se calcula con combustible.
+    "mo_viga_vista_m2": D("8000"),      # por trabajador, por m² con vigas a la vista
+    "mo_radier_m2": D("35000"),         # por trabajador, por m² de radier o base (la empresa paga 35.000 o 38.000)
+    "precio_litro": D("1650"),          # bencina, CLP por litro
+    "km_por_litro": D("10"),            # rendimiento: 1 litro = 10 km
+    "dias_fabricacion_radier": D("4"),  # días que toma fabricar el radier o la base
 }
 
 
@@ -83,6 +89,69 @@ def lineas_mano_obra(maestros) -> list:
              "subtotal": _clp(D(str(m["cantidad"])) * D(str(m["cobro"])))} for m in maestros]
 
 
+def traslado_combustible(km, dias, precio_litro, km_por_litro) -> dict:
+    """Traslado por combustible. `km` es el recorrido total de cada día (ida y vuelta): litros = km / 10 x días.
+    Ej.: 50 km, 25 días, $1.650 el litro -> 5 L por día x 25 = 125 L -> $206.250."""
+    km, dias = D(str(km)), D(str(dias))
+    litros_dia = km / km_por_litro
+    litros = litros_dia * dias
+    return {"km": km, "dias": int(dias), "litros_por_dia": litros_dia.quantize(D("0.01")),
+            "litros": litros.quantize(D("0.01")), "precio_litro": precio_litro, "costo": _clp(litros * precio_litro)}
+
+
+def lineas_mano_obra_tarifas(m2, n_trabajadores, vigas_m2, tipo_proyecto, adicionales, lleva_radier, tarifa_radier, p) -> list:
+    """Mano de obra por tarifa. Cada trabajador cobra: casa $25.000/m², vigas a la vista $8.000/m², radier o base
+    $35.000-$38.000/m² y, por cada material que lo indique (p. ej. OSB Smartside Lap), $2.000 por m² instalado.
+    subtotal = m² x tarifa x cantidad de trabajadores."""
+    n = D(int(n_trabajadores))
+    lineas = []
+
+    def agregar(concepto, m2_, tarifa):
+        m2_, tarifa = D(str(m2_)), D(str(tarifa))
+        lineas.append({"concepto": concepto, "m2": m2_, "tarifa": tarifa, "trabajadores": int(n), "subtotal": _clp(m2_ * tarifa * n)})
+
+    if tipo_proyecto == "CASA":
+        agregar("Casa", m2, p["mano_obra_m2"])
+        if D(str(vigas_m2)) > 0:
+            agregar("Vigas a la vista", vigas_m2, p["mo_viga_vista_m2"])
+    for a in adicionales:  # la cantidad de estos materiales se ingresa en m²
+        tarifa = D(str(a.get("mano_obra_m2") or 0))
+        if tarifa > 0:
+            agregar(f"Instalación de {a['nombre']}", a["cantidad"], tarifa)
+    if lleva_radier:
+        agregar("Radier / base", m2, tarifa_radier)
+    return lineas
+
+
+def _por_tarifas(m2: D, km: D, p, adicionales, vigas_m2, tipo_proyecto, separacion_cm, n_trabajadores, dias_obra,
+                 lleva_radier, tarifa_radier) -> dict:
+    """Cotización por tarifas (modo vigente).
+
+    Valor = materiales de la lista + mano de obra por tarifa + traslado por combustible + ganancia por m².
+    Los montos se tratan como IVA incluido y el IVA se desglosa. Un radier suma 4 días de fabricación."""
+    lleva_radier = lleva_radier or tipo_proyecto == "SOLO_RADIER"
+    mat = lineas_adicionales(adicionales)
+    materiales = sum((l["subtotal"] for l in mat), D(0))
+    mo = lineas_mano_obra_tarifas(m2, n_trabajadores, vigas_m2, tipo_proyecto, mat, lleva_radier, tarifa_radier, p)
+    mano_obra = sum((l["subtotal"] for l in mo), D(0))
+    dias_total = int(dias_obra) + (int(p["dias_fabricacion_radier"]) if lleva_radier else 0)
+    traslado = traslado_combustible(km, dias_total, p["precio_litro"], p["km_por_litro"])
+    ganancia = m2 * p["ganancia_m2"]
+    directos = materiales + mano_obra + traslado["costo"]
+    pv = precio_venta(directos + ganancia)
+    return {
+        "modo": "TARIFAS", "tipo_proyecto": tipo_proyecto,
+        "costo_materiales": _clp(materiales), "sobre_economico": D(0), "costo_materiales_total": _clp(materiales),
+        "costo_flete": traslado["costo"], "costo_mano_obra": _clp(mano_obra), "costo_insumos": D(0),
+        "costo_vigas_vista": D(0), "ganancia": _clp(ganancia), "insumos": [],
+        "adicionales": mat, "costo_adicionales": _clp(materiales), "mano_obra_lineas": [], "mano_obra_detalle": mo,
+        "traslado": traslado, "dias_total": dias_total, "lleva_radier": lleva_radier,
+        "costos_directos": _clp(directos), **pv,
+        "tabiqueria": tabiqueria(m2, separacion_cm, p) if tipo_proyecto == "CASA" else {},
+        "hitos": [{"fase": f, "porcentaje": pc, "monto": m} for f, pc, m in hitos(pv["total"])],
+    }
+
+
 def _por_lista(m2: D, km: D, p, adicionales, maestros, vigas_m2, tipo_proyecto, separacion_cm) -> dict:
     """Cotización por lista (modo vigente).
 
@@ -133,7 +202,8 @@ def nivelacion(m2, espesor_cm, arido_empresa=True, p=DEFAULTS) -> dict:
 
 def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, revest_min_m2=None,
              separacion_cm=40, insumos=(), m2_vigas_vista=0, tipo_proyecto="CASA", adicionales=(), maestros=(),
-             modo_lista=False, **over) -> dict:
+             modo_lista=False, modo_tarifas=False, n_trabajadores=0, dias_obra=0, lleva_radier=False,
+             tarifa_radier_m2=None, precio_litro=None, **over) -> dict:
     """Punto de entrada del motor de cálculo.
 
     modo_lista=True: cotización por lista (materiales + maestros), ver `_por_lista`.
@@ -144,6 +214,12 @@ def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, rev
     m2, km = D(str(m2)), D(str(km))
     if tipo_proyecto not in ("CASA", "SOLO_RADIER"):
         raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")
+    if modo_tarifas:
+        if precio_litro is not None:
+            p["precio_litro"] = D(str(precio_litro))
+        tarifa = D(str(tarifa_radier_m2)) if tarifa_radier_m2 is not None else p["mo_radier_m2"]
+        return _por_tarifas(m2, km, p, adicionales, m2_vigas_vista, tipo_proyecto, separacion_cm,
+                            n_trabajadores, dias_obra, lleva_radier, tarifa)
     if modo_lista:
         return _por_lista(m2, km, p, adicionales, maestros, m2_vigas_vista, tipo_proyecto, separacion_cm)
     if tipo_proyecto == "SOLO_RADIER":
