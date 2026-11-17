@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
 
 // ---------------------------------------------------------------- tipos
 
@@ -20,6 +21,10 @@ interface CatalogoItem {
   categoria: string;
   nombre: string;
   unidad_medida: string;
+  proveedor?: { razon_social: string } | null;
+  precio_neto: number;
+  m2_por_unidad: number;
+  mano_obra_m2: number;
 }
 
 /** Material de la lista, tal como lo edita el usuario (la cantidad se guarda como texto mientras se escribe). */
@@ -301,7 +306,7 @@ export default function CotizadorPage() {
 
   if (cargandoCatalogo) return <div className="p-8 text-center text-slate-500 font-bold">Cargando información...</div>;
 
-  const categorias = Array.from(new Set(catalogo.map((c) => c.categoria)));
+  const elegido = catalogo.find((c) => String(c.id) === materialElegido);
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
   return (
@@ -440,22 +445,25 @@ export default function CotizadorPage() {
               Agregue todos los materiales de la obra: base, revestimiento, madera, cemento, arena, entre otros. Cada uno se
               valoriza al precio con descuento del proveedor.
             </p>
+            <SelectorMaterial
+              catalogo={catalogo}
+              etiquetasCategoria={ETIQUETA_CATEGORIA}
+              seleccionado={materialElegido}
+              enLista={materiales.map((m) => m.catalogo_id)}
+              onSeleccionar={setMaterialElegido}
+            />
             <div className="grid sm:grid-cols-[1fr_8rem_auto] gap-3 items-end">
+              <p className="text-slate-700 sm:min-h-[2.75rem] sm:flex sm:items-center">
+                {elegido ? (
+                  <span>
+                    <strong>{elegido.nombre}</strong> · {elegido.proveedor?.razon_social ?? "Sin proveedor"} · {clp(elegido.precio_neto)} por {unidadDe(elegido)}
+                  </span>
+                ) : (
+                  <span className="text-slate-500">Elija un material de la lista para agregarlo.</span>
+                )}
+              </p>
               <div>
-                <label htmlFor="material" className={labelCls}>Material</label>
-                <select id="material" value={materialElegido} onChange={(e) => setMaterialElegido(e.target.value)} className={inputCls}>
-                  <option value="">Seleccione un material</option>
-                  {categorias.map((cat) => (
-                    <optgroup key={cat} label={ETIQUETA_CATEGORIA[cat] || cat}>
-                      {catalogo.filter((c) => c.categoria === cat).map((c) => (
-                        <option key={c.id} value={c.id}>{c.nombre} ({c.unidad_medida.toLowerCase()})</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="cantidad_material" className={labelCls}>Cantidad</label>
+                <label htmlFor="cantidad_material" className={labelCls}>Cantidad{elegido ? ` (${unidadDe(elegido)})` : ""}</label>
                 <input id="cantidad_material" type="number" inputMode="decimal" min="0" step="any" value={cantidadElegida}
                   onFocus={(e) => e.target.select()} onChange={(e) => setCantidadElegida(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarMaterial(); } }} className={inputCls} />
@@ -472,12 +480,13 @@ export default function CotizadorPage() {
               <ul className="divide-y divide-slate-200 border border-slate-200 rounded-xl">
                 {materiales.map((m) => {
                   const nombre = catalogo.find((c) => c.id === m.catalogo_id)?.nombre ?? `Material ${m.catalogo_id}`;
+                  const proveedor = catalogo.find((c) => c.id === m.catalogo_id)?.proveedor?.razon_social;
                   const linea = presupuesto?.materialesLinea.find((a) => a.id === m.catalogo_id);
                   return (
                     <li key={m.catalogo_id} className="p-3 flex flex-wrap items-center gap-3">
                       <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[10rem]">
                         <div className="font-semibold text-slate-900">{nombre}</div>
-                        <div className="text-sm text-slate-500">{linea ? `${clp(linea.precioNeto)} por unidad (con descuento)` : "Calculando…"}</div>
+                        <div className="text-sm text-slate-500">{linea ? `${proveedor ? `${proveedor} · ` : ""}${clp(linea.precioNeto)} por unidad (con descuento)` : "Calculando…"}</div>
                       </div>
                       <input type="number" inputMode="decimal" min="0" step="any" value={m.cantidad} aria-label={`Cantidad de ${nombre}`}
                         onFocus={(e) => e.target.select()}

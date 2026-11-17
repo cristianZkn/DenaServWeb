@@ -49,7 +49,23 @@ interface Cambio {
   total_nuevo: number;
   motivo: string;
 }
-type Panel = "datos" | "valor" | "avance";
+type Panel = "datos" | "valor" | "materiales" | "avance";
+
+interface LineaMaterial {
+  id: number;
+  etapa_obra: string;
+  cantidad_calculada: number;
+  subtotal_costo: number;
+  es_adicional?: boolean;
+  catalogo_tipo?: {
+    nombre: string;
+    unidad_medida: string;
+    m2_por_unidad?: number;
+    fuente_url?: string;
+    proveedor?: { razon_social: string } | null;
+  } | null;
+}
+const ETAPA: Record<string, string> = { ETAPA_1: "Etapa 1", ETAPA_2: "Etapa 2" };
 
 const clp = (n: number | string) => "$" + Math.round(Number(n)).toLocaleString("es-CL");
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
@@ -63,6 +79,95 @@ const NOMBRE_HITO: Record<string, string> = {
 const campo = "block text-base font-semibold text-slate-800 mb-1";
 const ayuda = "text-sm text-slate-500 mt-1";
 const botonGrande = "px-6 py-3 rounded-xl text-lg font-bold shadow cursor-pointer disabled:opacity-50";
+
+/** Materiales con los que se trabaja el proyecto: desglose por etapa y materiales agregados al cotizar. */
+function MaterialesProyecto({ cot }: { cot: Detalle }) {
+  const lineas = (cot.detalles_insumo ?? []) as unknown as LineaMaterial[];
+  const obra = cot as unknown as { modo_tarifas?: boolean; n_trabajadores?: number; dias_obra?: number; lleva_radier?: boolean };
+  const agregados = lineas.filter((l) => l.es_adicional);
+  const desglose = lineas.filter((l) => !l.es_adicional);
+  const etapas = Array.from(new Set(desglose.map((l) => l.etapa_obra || "ETAPA_1"))).sort();
+  const suma = (ls: LineaMaterial[]) => ls.reduce((t, l) => t + Number(l.subtotal_costo), 0);
+  const unidad = (l: LineaMaterial) => {
+    const u = (l.catalogo_tipo?.unidad_medida ?? "").toLowerCase();
+    return (l.catalogo_tipo?.m2_por_unidad ?? 0) > 0 || u === "m2" ? "m²" : u;
+  };
+  const cantidad = (l: LineaMaterial) => `${Number(l.cantidad_calculada).toLocaleString("es-CL", { maximumFractionDigits: 2 })} ${unidad(l)}`;
+
+  const tabla = (ls: LineaMaterial[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[34rem] text-left text-base">
+        <thead>
+          <tr className="text-sm font-semibold text-slate-500 border-b border-slate-200">
+            <th className="py-2 pr-3">Material</th>
+            <th className="py-2 pr-3">Proveedor</th>
+            <th className="py-2 pr-3 text-right">Cantidad</th>
+            <th className="py-2 text-right">Costo</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {ls.map((l) => (
+            <tr key={l.id}>
+              <td className="py-2 pr-3 font-semibold text-slate-900">
+                {l.catalogo_tipo?.fuente_url ? (
+                  <a href={l.catalogo_tipo.fuente_url} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
+                ) : (
+                  l.catalogo_tipo?.nombre ?? "Material eliminado"
+                )}
+              </td>
+              <td className="py-2 pr-3 text-slate-600">{l.catalogo_tipo?.proveedor?.razon_social ?? "—"}</td>
+              <td className="py-2 pr-3 text-right tabular-nums">{cantidad(l)}</td>
+              <td className="py-2 text-right tabular-nums font-bold">{clp(l.subtotal_costo)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const bloque = (titulo: string, ayuda: string, ls: LineaMaterial[]) => (
+    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-xl font-black text-slate-900">{titulo}</h3>
+          <p className="text-sm text-slate-500">{ayuda}</p>
+        </div>
+        <div className="text-base text-slate-600">
+          Subtotal: <strong className="text-slate-900">{clp(suma(ls))}</strong>
+        </div>
+      </div>
+      {tabla(ls)}
+    </div>
+  );
+
+  return (
+    <section className="space-y-5">
+      {(cot.revestimiento || cot.base_terreno || obra.modo_tarifas) && (
+        <div className="flex flex-wrap gap-2 text-base">
+          {cot.revestimiento && <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-100">Material exterior: <strong>{cot.revestimiento.nombre}</strong></span>}
+          {cot.base_terreno && <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-100">Base: <strong>{cot.base_terreno.nombre}</strong></span>}
+          {obra.modo_tarifas && (
+            <span className="px-3 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
+              <strong>{obra.n_trabajadores ?? 0}</strong> {obra.n_trabajadores === 1 ? "trabajador" : "trabajadores"} · <strong>{obra.dias_obra ?? 0}</strong> días de construcción{obra.lleva_radier ? " · lleva radier o base" : ""}
+            </span>
+          )}
+        </div>
+      )}
+
+      {lineas.length === 0 && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center text-slate-500 text-lg">
+          Este proyecto no tiene una lista de materiales registrada.
+        </div>
+      )}
+
+      {etapas.map((e) =>
+        bloque(`Materiales de la obra · ${ETAPA[e] ?? e}`, "Desglose calculado según los m² de la casa, para organizar las compras.", desglose.filter((l) => (l.etapa_obra || "ETAPA_1") === e))
+      )}
+
+      {agregados.length > 0 && bloque("Materiales de la cotización", "Los que se eligieron al cotizar: suman al valor de la obra.", agregados)}
+    </section>
+  );
+}
 
 export default function ProyectoInternoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -283,6 +388,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       <div className="flex flex-col sm:flex-row gap-2">
         {pestana("valor", "Modificar valor")}
         {pestana("datos", "Datos del cliente")}
+        {pestana("materiales", "Materiales")}
         {pestana("avance", "Avance y pagos")}
       </div>
 
@@ -414,6 +520,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </button>
         </section>
       )}
+
+      {panel === "materiales" && <MaterialesProyecto cot={cot} />}
 
       {panel === "avance" && (
         <section className="space-y-6">

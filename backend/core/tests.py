@@ -915,3 +915,32 @@ class FerrelanTests(TestCase):
         osb.refresh_from_db(); otro.refresh_from_db()
         self.assertEqual((osb.mano_obra_m2, otro.mano_obra_m2), (2000, 0))
         self.assertEqual(Proveedor.objects.filter(rut_empresa="FERRELAN-WEB").count(), 1)
+
+
+class SelectorMaterialesApiTests(TestCase):
+    """Datos que necesita el selector de materiales y la pestaña de materiales del proyecto."""
+
+    def setUp(self):
+        u = Usuario.objects.create(rut="5-6", nombre_completo="Selector", email="selector@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.prov = Proveedor.objects.create(rut_empresa="PROV-S", razon_social="Maderas SpA", descuento_pct=10)
+
+    def test_catalogo_trae_proveedor_y_precio_neto_con_descuento(self):
+        CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4", unidad_medida="UN", precio_base_unitario=10000, proveedor=self.prov)
+        CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4 sin convenio", unidad_medida="UN", precio_base_unitario=5000)
+        filas = {f["nombre"]: f for f in self.c.get("/api/catalogo-tipos/?activo=true", **self.h).json()}
+        self.assertEqual((filas["Pino 2x4"]["proveedor"]["razon_social"], filas["Pino 2x4"]["precio_neto"]), ("Maderas SpA", 9000))
+        self.assertEqual((filas["Pino 2x4 sin convenio"]["proveedor"], filas["Pino 2x4 sin convenio"]["precio_neto"]), (None, 5000))
+
+    def test_detalle_del_proyecto_muestra_los_materiales_con_su_proveedor(self):
+        item = CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4", unidad_medida="UN",
+                                           precio_base_unitario=1000, proveedor=self.prov)
+        cot = self.c.post("/api/cotizaciones/", {
+            "cliente_nombre": "Cliente Materiales", "direccion_terreno": "Calle Dos 2", "superficie_m2": 40, "modo_lista": True,
+            "materiales": [{"catalogo_id": item.id, "cantidad": 3}],
+        }, content_type="application/json", **self.h).json()
+        det = self.c.get(f"/api/cotizaciones/{cot['id']}/", **self.h).json()
+        mats = [d for d in det["detalles_insumo"] if d["es_adicional"]]
+        self.assertEqual(len(mats), 1)
+        self.assertEqual((mats[0]["catalogo_tipo"]["nombre"], mats[0]["catalogo_tipo"]["proveedor"]["razon_social"], float(mats[0]["cantidad_calculada"])),
+                         ("Pino 2x4", "Maderas SpA", 3.0))

@@ -6,6 +6,7 @@ from urllib.parse import quote
 from django.conf import settings
 from decimal import Decimal
 from pydantic import Field, field_validator
+from . import calculo
 from . import validadores as v
 
 
@@ -133,6 +134,12 @@ class CatalogoTipoSchema(Schema):
     verificado: bool = False
     ultimo_error: str = ''
     activo: bool
+    precio_neto: float = 0  # lo que cuesta al cotizar: precio unitario menos el descuento del proveedor
+
+    @staticmethod
+    def resolve_precio_neto(obj):
+        descuento = obj.proveedor.descuento_pct if obj.proveedor else 0
+        return float(calculo.costo_neto(obj.precio_base_unitario, descuento))
 
 class CatalogoTipoInSchema(Schema):
     categoria: str
