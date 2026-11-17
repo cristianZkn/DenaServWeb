@@ -307,6 +307,7 @@ export default function CotizadorPage() {
   if (cargandoCatalogo) return <div className="p-8 text-center text-slate-500 font-bold">Cargando información...</div>;
 
   const elegido = catalogo.find((c) => String(c.id) === materialElegido);
+  const categorias = Array.from(new Set(catalogo.map((c) => c.categoria)));
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
   return (
