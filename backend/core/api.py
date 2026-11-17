@@ -438,7 +438,7 @@ def obtener_cotizacion_detalle(request, cotizacion_id: int):
         cotizacion = Cotizacion.objects.select_related(
             "base_terreno", "revestimiento", "usuario"
         ).prefetch_related(
-            "hitos_pago", "detalles_insumo__catalogo_tipo", "obras_ejecucion"
+            "hitos_pago", "detalles_insumo__catalogo_tipo__proveedor", "obras_ejecucion"
         ).get(id=cotizacion_id)
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
@@ -563,7 +563,7 @@ def obtener_cotizacion_publica(request, token: uuid.UUID):
         cotizacion = Cotizacion.objects.select_related(
             "base_terreno", "revestimiento", "usuario"
         ).prefetch_related(
-            "hitos_pago", "detalles_insumo__catalogo_tipo", "obras_ejecucion"
+            "hitos_pago", "detalles_insumo__catalogo_tipo__proveedor", "obras_ejecucion"
         ).get(token_publico=token)
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
