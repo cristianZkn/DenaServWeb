@@ -1,0 +1,597 @@
+[
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Hormigón",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1012000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Cadenas",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 140000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Malla ACMA",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Polietileno (60 m²)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "PVC 110mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 14000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "PVC 50mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 27000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Codos 110mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 4500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Codos 50mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 4500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Pegamento",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 6000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Madera 1x4 (Tableros)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 90000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_CASA",
+  "nombre": "Tornillos",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 6000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Hormigón",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 942300,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Cadenas",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 112000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Malla ACMA",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Polietileno",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 32000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "PVC 110mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 14000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "PVC 50mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 18000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Codos 110mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 4500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Codos 50mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 4500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Pegamento",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 6000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Madera 1x4 (Tableros)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 54000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "RADIER_ADICIONAL",
+  "nombre": "Tornillos",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 7200,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Madera 2x4 IPV",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1189000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Madera 2x3 IPV",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 899000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Madera 2x4 D. Solera",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 90200,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Madera 2x3 D. Solera",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 68200,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Madera 2x3 Encuentros",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 31000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "TABIQUES",
+  "nombre": "Clavos 4\" (Caja 25 kg)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Madera 1x4",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 352800,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Madera 1x4 Enctdo.",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 82800,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Madera 1x4 Sn. Andres",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 15000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Clavos 2 ½\" (Caja 25 kg)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Zinc Acanalado (0.35 x 366)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 403000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Zinc Acanalado (0.35 x 300)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 96000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Tornillos de Techo 2 ½\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 117000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Caballetes (0.35 x 300)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 75000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Lima Olla (0.35 x 300)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 54000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Membrana Hidrófuga",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Silicona para Techo",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 24000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Cubre Zinc 3m",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 210000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ESTRUCTURA_TECHO",
+  "nombre": "Zinc forma de Teja (0.40 x 366)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1012000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Planchas Smart Panel",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1088000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Tiras Siding Fibrocemento",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 838500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Tiras Smart Lap Siding",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1140000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Tiras Metal Siding",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1268000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Planchas OSB 9mm Estructural",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 510000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Tornillos 6x1 5/8",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 60000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Membrana Hidrófuga",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 72000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Corchetes",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 20000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Pintura Esmalte al Agua / Siding",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 240000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Rodillos y Brochas",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 28000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Esquineros",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 30000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Pernos Anclaje 10",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 84000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Puntillas 2 ½\" y Tornillos Lenteja 1 ½\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 30000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_EXTERIOR",
+  "nombre": "Vigas de Pino Bruto",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 22000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Madera 1 ½x8 (4 metros)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 84000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Madera 1 ½x4 (4 metros)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 15000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Internit 5mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 69000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Celosías",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 18000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Pintura (Esmalte Sintético y al Agua)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 70000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Silicona Pintable",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 19000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "ALEROS",
+  "nombre": "Tornillos 3\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 2400,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Volcanita 15mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 168000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Terciado Ranurado 9mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 216000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Terciado Ranurado 12mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 282000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Tornillos 6x1 5/8 Zincados y Clavos Trupán 2\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 48000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Marco de Ventanas 2x6",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 93600,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Guardapolvos IPV",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 39200,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Tornillos 3\" y Puntillas 2 ½\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 22800,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Siliconas Sellos",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 30400,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Internit 5mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 11500,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Planchas Fibrocemento 6mm",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 18000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "FORRO_INTERIOR",
+  "nombre": "Planchas Smart Panel",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 64000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Ventana a piso (1500x2000)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 500000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Ventanas estándar (1000x1000, 1200x800, Baño 600x600)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 350000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Ventana Termopanel a piso (1500x2000)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 1000000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Ventanas Termopanel (1000x1000, 1200x800, Baño 600x600)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 700000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Puertas (Principal y Servicio - Enchape Metálico)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 210000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Chapas de Puertas (Principal y Servicio)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 120000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Juego de Bisagras 3\"",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 6000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "VENTANAS_PUERTAS",
+  "nombre": "Marcos de Puerta IPV",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 44000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "SERVICIOS",
+  "nombre": "Arriendo Compactadora (Radier)",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 40000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "SERVICIOS",
+  "nombre": "Flete Camión",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 120000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "SERVICIOS",
+  "nombre": "Traslado Maestros",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 240000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ },
+ {
+  "categoria": "SERVICIOS",
+  "nombre": "Traslado de Materiales y varios",
+  "unidad_medida": "GL",
+  "precio_base_unitario": 360000,
+  "descripcion": "Partida del presupuesto de referencia (casa de 60 m²). Reemplace por el producto y la cantidad reales."
+ }
+]

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDialogo } from "@/components/ConfirmDialog";
+import { reducirImagen } from "@/lib/imagenes";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -16,28 +17,6 @@ interface Proyecto {
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 const jsonAuth = () => ({ "Content-Type": "application/json", ...auth() });
 const MAX_IMAGENES = 10;
-
-/** Reduce la foto a 1280 px de ancho máximo y la guarda como JPEG: pesa poco y sube rápido aunque venga de un celular. */
-function reducirImagen(archivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(archivo);
-    const img = new Image();
-    img.onload = () => {
-      const escala = Math.min(1, 1280 / img.width);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * escala);
-      canvas.height = Math.round(img.height * escala);
-      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`«${archivo.name}» no es una imagen válida.`));
-    };
-    img.src = url;
-  });
-}
 
 export default function PortafolioAdminPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);

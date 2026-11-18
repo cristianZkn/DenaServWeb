@@ -207,10 +207,13 @@ class GananciasWhatsappTests(TestCase):
         cot = c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 50},
                      content_type="application/json", **h).json()
         obra = ObraEjecucion.objects.get(cotizacion_id=cot["id"])
-        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55},
-                content_type="application/json", **h)
+        self.assertEqual(c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55},
+                                 content_type="application/json", **h).status_code, 409)  # sin pagos no hay avance
+        for hito in HitoPago.objects.filter(cotizacion_id=cot["id"]).order_by("id")[:2]:
+            c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **h)
+        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55}, content_type="application/json", **h)
         g = c.get(f"/api/cotizaciones/{cot['id']}/ganancias/", **h).json()
-        self.assertTrue(g["hito_avance_exigible"])
+        self.assertEqual((g["avance_real"], g["avance_minimo"], g["avance_maximo"]), (55, 50, 99))
         self.assertNotIn("gasto_real", g)
         self.assertEqual(g["ganancia_estimada"], g["neto_cobrado"] - g["costo_presupuestado"])
         from .models import PortafolioProyecto
@@ -548,8 +551,10 @@ class EdicionCotizacionTests(TestCase):
     def test_vista_publica_no_expone_datos_internos(self):
         self.assertEqual(self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").status_code, 422)  # el folio ya no abre la ficha
         pub = self.c.get(f"/api/cotizaciones/public/{self.cot['token_publico']}").json()
-        for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):
+        for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto", "detalles_insumo", "base_terreno",
+                  "revestimiento", "costo_materiales", "costo_mano_obra", "costo_flete", "distancia_flete_km"):
             self.assertNotIn(k, pub)
+        self.assertEqual(pub["avance"], 0)
 
 
 class MapeoCatalogoTests(TestCase):
@@ -623,26 +628,102 @@ class PagosEstadosPortafolioTests(TestCase):
         self.assertEqual(self.pagar(h, pago_completo=False, monto_abonado=float(h.monto_pago) + 1).status_code, 400)
         self.assertEqual(self.pagar(h, pago_completo=False).status_code, 400)
 
-    def test_no_finaliza_con_pagos_pendientes_ni_sin_ejecucion(self):
-        self.assertEqual(self.estado("FINALIZADA").status_code, 409)       # aún borrador
-        self.assertEqual(self.estado("ACEPTADA").status_code, 200)
-        r = self.estado("FINALIZADA")
-        self.assertEqual(r.status_code, 409)                                 # pagos pendientes
-        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "ACEPTADA")
-        for h in self.hitos[:-1]:
-            self.pagar(h, pago_completo=True)
-        self.pagar(self.hitos[-1], pago_completo=False, monto_abonado=1)    # un abono no basta
+    def estado_actual(self):
+        return Cotizacion.objects.get(id=self.cot["id"]).estado
+
+    def avance(self):
+        return float(ObraEjecucion.objects.get(cotizacion_id=self.cot["id"]).porcentaje_avance_real)
+
+    def test_estado_automatico_segun_pagos(self):
+        self.assertEqual(self.cot["estado"], "BORRADOR")                       # al crearse: Cotizado
+        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=1)        # primer pago (aunque sea parcial)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # En ejecución
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # faltan pagos: sigue en ejecución
+        self.pagar(self.hitos[2], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "FINALIZADA")                   # todos pagados: Obra terminada
+        self.assertEqual(self.avance(), 100)
+
+    def test_el_estado_no_se_cambia_a_mano(self):
         self.assertEqual(self.estado("FINALIZADA").status_code, 409)
-        self.pagar(self.hitos[-1], pago_completo=True)
-        self.assertEqual(self.estado("FINALIZADA").status_code, 200)
+        self.assertEqual(self.estado("ACEPTADA").status_code, 409)
+        self.assertEqual(self.estado("BORRADOR").status_code, 200)             # el que ya corresponde se acepta
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.estado("ACEPTADA").status_code, 200)
+        self.assertEqual(self.estado("FINALIZADA").status_code, 409)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")
+
+    def test_anular_pagos_devuelve_el_estado(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.pagar(self.hitos[0], estado="PENDIENTE")
+        self.assertEqual(self.estado_actual(), "BORRADOR")
 
     def test_progreso_solo_obras_en_ejecucion(self):
         self.assertEqual(self.c.get("/api/cotizaciones/progreso/", **self.h).json(), [])
-        self.estado("ACEPTADA")
+        self.pagar(self.hitos[0], pago_completo=True)
         obra = ObraEjecucion.objects.get(cotizacion_id=self.cot["id"])
         self.c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 35}, content_type="application/json", **self.h)
         p = self.c.get("/api/cotizaciones/progreso/", **self.h).json()
         self.assertEqual([(x["id"], x["avance"]) for x in p], [(self.cot["id"], 35)])
+
+    # ---- bitácora y coherencia entre pagos y avance
+    def bitacora(self, pct, comentario="Avance de radier", **extra):
+        return self.c.post(f"/api/cotizaciones/{self.cot['id']}/bitacora/", {"porcentaje": pct, "comentario": comentario, **extra},
+                           content_type="application/json", **self.h)
+
+    def test_sin_pagos_no_hay_avance(self):
+        r = self.bitacora(10)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("primer pago", r.json()["message"])
+
+    def test_avance_limitado_por_los_pagos(self):
+        self.pagar(self.hitos[0], pago_completo=True)                           # solo el anticipo (40 %)
+        self.assertEqual(self.bitacora(50).status_code, 409)                   # 50 % exige el 2.º pago
+        self.assertEqual(self.bitacora(30).status_code, 200)
+        self.assertEqual(self.avance(), 30)
+        self.assertEqual(self.bitacora(20).status_code, 409)                   # no retrocede
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.assertEqual(self.avance(), 50)                                    # el 2.º pago sube el avance al 50 %
+        self.assertEqual(self.bitacora(99).status_code, 200)
+        self.assertEqual(self.bitacora(100).status_code, 409)                  # 100 % exige el último pago
+        self.pagar(self.hitos[2], pago_completo=True)
+        self.assertEqual(self.avance(), 100)
+
+    def test_no_se_anula_un_pago_que_respalda_el_avance(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.bitacora(70)
+        r = self.pagar(self.hitos[1], estado="PENDIENTE")
+        self.assertEqual(r.status_code, 409)
+        self.hitos[1].refresh_from_db()
+        self.assertEqual((self.hitos[1].estado, self.avance()), ("PAGADO", 70))   # nada cambió
+
+    def test_bitacora_con_fotos_historial_y_eliminacion(self):
+        import base64
+        png = "data:image/png;base64," + base64.b64encode(b"PNG-fake" + b"0" * 20).decode()
+        self.pagar(self.hitos[0], pago_completo=True)
+        b1 = self.bitacora(20, "Avance de radier", imagenes=[png]).json()
+        b2 = self.bitacora(35, "Levantamiento de vigas").json()
+        self.assertEqual((len(b1["fotos"]), b2["porcentaje"]), (1, 35))
+        self.assertEqual(self.c.patch(f"/api/bitacora/{b2['id']}/", {"agregar_imagenes": [png, png]},
+                                      content_type="application/json", **self.h).json()["fotos"].__len__(), 2)
+        hist = self.c.get(f"/api/cotizaciones/{self.cot['id']}/bitacora/", **self.h).json()
+        self.assertEqual([x["porcentaje"] for x in hist], [35, 20])          # la más reciente primero
+        self.assertEqual(self.c.get(hist[1]["fotos"][0], **self.h).status_code, 200)
+        self.assertEqual(Client().get(hist[1]["fotos"][0]).status_code, 401)  # las fotos no son públicas
+        self.c.delete(f"/api/bitacora/{b2['id']}/", **self.h)
+        self.assertEqual(self.avance(), 20)                                     # vuelve al registro anterior
+
+    def test_bitacora_exige_comentario(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.bitacora(10, "").status_code, 422)
+
+    def test_desglose_para_la_ficha_de_la_empresa(self):
+        r = self.c.get(f"/api/cotizaciones/{self.cot['id']}/desglose/", **self.h).json()
+        self.assertEqual(r["total"], self.cot["costo_total"])
+        self.assertEqual(r["neto"] + r["iva"], round(r["total"]))
+        self.assertEqual(self.c.get(f"/api/cotizaciones/{self.cot['id']}/desglose/").status_code, 401)
 
     def test_portafolio_con_varias_imagenes(self):
         import base64
@@ -699,6 +780,17 @@ class CargarMaterialesTests(TestCase):
         call_command("cargar_materiales", str(archivo))
         self.assertEqual(CatalogoTipo.objects.filter(categoria="INSUMO").count(), 2)
         self.assertEqual(Proveedor.objects.filter(razon_social="Homecenter").count(), 1)
+
+    def test_presupuesto_de_referencia_carga_las_categorias_nuevas(self):
+        from django.core.management import call_command
+        from pathlib import Path
+        archivo = Path(__file__).parent / "fixtures" / "materiales_presupuesto.json"
+        call_command("cargar_materiales", str(archivo))
+        call_command("cargar_materiales", str(archivo))  # repetible
+        cats = set(CatalogoTipo.objects.values_list("categoria", flat=True))
+        self.assertTrue({"RADIER_CASA", "TABIQUES", "ESTRUCTURA_TECHO", "FORRO_EXTERIOR", "ALEROS", "FORRO_INTERIOR",
+                         "VENTANAS_PUERTAS", "SERVICIOS"} <= cats)
+        self.assertEqual(CatalogoTipo.objects.filter(categoria="RADIER_CASA", nombre="Hormigón").get().precio_base_unitario, 1012000)
 
 
 class MaterialesAdicionalesTests(TestCase):

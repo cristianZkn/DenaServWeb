@@ -414,32 +414,60 @@ class GananciasSchema(Schema):
     costo_presupuestado: float
     ganancia_estimada: float
     avance_real: float
-    hito_avance_exigible: bool
+    avance_minimo: int  # límites de avance que permiten los pagos registrados
+    avance_maximo: int
 
 
 # --- Vista pública (sin datos internos: usuario, ganancia, ajustes, observaciones de obra) ---
 class CotizacionPublicaSchema(Schema):
+    """Lo que ve el cliente: resumen general del proyecto. No incluye materiales ni el desglose de costos de la empresa."""
     id: int
     codigo_cotizacion: str
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     direccion_terreno: str
     superficie_m2: float
-    distancia_flete_km: float
-    base_terreno: Optional[CatalogoTipoSchema] = None
-    revestimiento: Optional[CatalogoTipoSchema] = None
-    costo_materiales: float
-    costo_mano_obra: float
-    costo_flete: float
     costo_total: float
     estado: str
     tipo_proyecto: str = "CASA"
     nivelacion_modalidad: str = ""
     nivelacion_m3: float = 0
-    costo_nivelacion: float = 0
     fecha_creacion: datetime
     hitos_pago: List[HitoPagoSchema] = []
-    detalles_insumo: List[DetalleCotizacionInsumoSchema] = []
+    avance: float = 0  # % de avance de la obra
+
+    @staticmethod
+    def resolve_avance(obj):
+        obra = obj.obras_ejecucion.all()[0] if obj.obras_ejecucion.all() else None
+        return float(obra.porcentaje_avance_real) if obra else 0
+
+
+# --- Bitácora de avance de obra ---
+class BitacoraInSchema(Schema):
+    porcentaje: float = Field(ge=0, le=100)
+    comentario: str = Field(min_length=3, max_length=1000)
+    imagenes: List[str] = Field([], max_length=2)  # data URL; si hay más fotos se agregan después con PATCH
+
+
+class BitacoraFotosInSchema(Schema):
+    agregar_imagenes: List[str] = Field(max_length=2)
+
+
+class BitacoraSchema(Schema):
+    id: int
+    porcentaje: float
+    comentario: str
+    fecha: datetime
+    usuario: Optional[str] = None
+    fotos: List[str] = []
+
+    @staticmethod
+    def resolve_usuario(obj):
+        return obj.usuario.nombre_completo if obj.usuario else None
+
+    @staticmethod
+    def resolve_fotos(obj):
+        return [f"/api/bitacora/fotos/{f.id}/" for f in obj.fotos.all()]
 
 
 # --- Edición / reajuste de una cotización emitida ---

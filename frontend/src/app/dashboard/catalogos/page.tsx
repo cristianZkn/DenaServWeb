@@ -1,6 +1,7 @@
 "use client";
 
 import { useDialogo } from "@/components/ConfirmDialog";
+import { CATEGORIAS } from "@/lib/categorias";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -34,14 +35,8 @@ interface Estado {
 }
 
 // Las cuatro primeras son obligatorias: siempre debe haber al menos un producto verificado en cada una.
-const GRUPOS = [
-  { key: "TECHUMBRE", label: "Techumbre", obligatorio: true },
-  { key: "REVESTIMIENTO", label: "Revestimiento", obligatorio: true },
-  { key: "TABIQUERIA", label: "Tabiquería", obligatorio: true },
-  { key: "BASE_RADIER", label: "Base / Radier", obligatorio: true },
-  { key: "INSUMO", label: "Otros insumos", obligatorio: false },
-  { key: "BASE_TERRENO", label: "Bases (precio manual)", obligatorio: false },
-];
+const OBLIGATORIOS = ["TECHUMBRE", "REVESTIMIENTO", "TABIQUERIA", "BASE_RADIER"]; // deben tener un precio leído de su ficha
+const GRUPOS = CATEGORIAS.map((c) => ({ ...c, obligatorio: OBLIGATORIOS.includes(c.key) }));
 
 const clp = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
@@ -181,6 +176,7 @@ export default function CatalogosPage() {
           {[{ key: "TODOS", label: "Todos", obligatorio: false }, ...GRUPOS].map((g) => {
             const n = items.filter((i) => i.activo && (g.key === "TODOS" || i.categoria === g.key)).length;
             const falta = g.obligatorio && sinCobertura.some((s) => s.codigo === g.key);
+            if (g.key !== "TODOS" && n === 0 && !g.obligatorio) return null; // categorías sin materiales no ocupan espacio
             return (
               <button
                 key={g.key}

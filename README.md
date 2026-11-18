@@ -15,9 +15,10 @@ Plataforma web de **DenaServ**, empresa de construcción de casas prefabricadas 
 |---|---|
 | **Cotizador** | Se ingresan los datos del cliente y del terreno, y se arma una **lista de materiales** y la **mano de obra** (cantidad de trabajadores y cobro, con opción de pagos diferenciados). El valor se calcula en vivo. |
 | **Cálculo del valor** | `materiales + mano de obra + traslado (por distancia y m²) + vigas a la vista (solo casas) + margen de la empresa ($30.000 por m²)`. Los montos se tratan como IVA incluido y el IVA se desglosa. |
-| **Cotizaciones** | Estados: *En preparación*, *En ejecución* y *Obra terminada*. Solo se puede terminar una obra en ejecución con todos sus pagos saldados. Se puede modificar el valor con motivo (queda historial) o cancelar la cotización. |
+| **Proyectos** | El estado cambia solo con los pagos: *Cotizado* al crearse, *En ejecución* al registrarse el primer pago y *Obra terminada* cuando todos están pagados. Se puede modificar el valor con motivo (queda historial) o eliminar el proyecto. |
 | **Pagos** | Tres pagos por contrato (anticipo 40 %, avance 30 %, entrega 30 %), con registro de **abonos parciales**. |
-| **Avance de obras** | Gráfico de barras en el panel principal con el avance de cada obra en ejecución. |
+| **Avance y bitácora** | Cada registro de la bitácora guarda el % de obra, un comentario y fotos opcionales. El avance debe ser coherente con los pagos (por ejemplo, 50 % exige el 2.º pago cobrado). El panel principal muestra el avance de las obras en ejecución. |
+| **Fichas** | La ficha del cliente es un resumen general (sin materiales). La ficha de la empresa (PDF) incluye el desglose completo de materiales, mano de obra, traslado, ganancia, pagos y bitácora con fotos. |
 | **Materiales y precios** | Catálogo con proveedor, precio de lista, descuento y costo neto. Los precios se actualizan solos cada lunes desde las fichas de las tiendas. |
 | **Proveedores** | Mantenedor de empresas proveedoras con su descuento comercial. |
 | **Portafolio** | Obras finalizadas con hasta 10 fotos, que se pueden publicar u ocultar de la web. |
@@ -117,6 +118,8 @@ La API queda en `http://127.0.0.1:8000/api/`.
 ```powershell
 python manage.py cargar_materiales core/fixtures/materiales_ejemplo.json
 ```
+
+Para cargar las partidas del presupuesto de referencia (radier, tabiques, techumbre, forros, ventanas y servicios) usa `core/fixtures/materiales_presupuesto.json` con el mismo comando. Se cargan como partidas globales (unidad `GL`) sin ficha en línea; para que sus precios se actualicen solos, edita cada material en «Materiales y precios» y agrega la dirección de su ficha en la tienda.
 
 **Primer usuario:** solo ingresan correos registrados en la tabla `usuario`. Crea el tuyo desde `python manage.py shell` o pídele al administrador que lo registre. Si en tu `.env` no defines `GOOGLE_CLIENT_ID` y `DJANGO_DEBUG=1`, el login funciona en modo simulado con el correo registrado.
 

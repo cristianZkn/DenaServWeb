@@ -275,6 +275,29 @@ class PortafolioImagen(models.Model):
         ordering = ['orden', 'id']
 
 
+# 8c. bitácora de avance: cada registro deja el % de obra alcanzado, un comentario y fotos opcionales
+class BitacoraAvance(models.Model):
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='bitacoras')
+    porcentaje = models.DecimalField(max_digits=5, decimal_places=2)
+    comentario = models.TextField(max_length=1000)
+    fecha = models.DateTimeField(default=timezone.now)
+    usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='bitacoras')
+
+    class Meta:
+        db_table = 'bitacora_avance'
+        ordering = ['-fecha', '-id']
+
+
+class BitacoraFoto(models.Model):
+    bitacora = models.ForeignKey(BitacoraAvance, on_delete=models.CASCADE, related_name='fotos')
+    contenido = models.BinaryField()
+    tipo_mime = models.CharField(max_length=30, default='image/jpeg')
+
+    class Meta:
+        db_table = 'bitacora_foto'
+        ordering = ['id']
+
+
 # 9. cambio_cotizacion: historial de reajustes del monto total
 class CambioCotizacion(models.Model):
     cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='cambios')

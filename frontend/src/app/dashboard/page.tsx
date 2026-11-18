@@ -5,6 +5,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ESTADOS_PROYECTO, claseEstado, etiquetaEstado } from "@/lib/estados";
 import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, NOMBRE_HITO, clp, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 
 interface CatalogoTipo {
@@ -40,6 +41,8 @@ interface Cotizacion {
   revestimiento?: CatalogoTipo | null;
   hitos_pago?: HitoPago[];
 }
+
+const POR_PAGINA = 8;
 
 export default function DashboardPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
@@ -100,6 +103,8 @@ export default function DashboardPage() {
   };
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
+  const [filtro, setFiltro] = useState("TODOS"); // estado del proyecto
+  const [pagina, setPagina] = useState(1);
   const { preguntar, dialogo } = useDialogo();
 
   const fetchCotizaciones = async () => {
@@ -124,7 +129,7 @@ export default function DashboardPage() {
         localStorage.removeItem("token");
         router.push("/login");
       } else {
-        setError("Error al obtener la lista de cotizaciones.");
+        setError("No fue posible obtener la lista de proyectos.");
       }
     } catch (err) {
       setError("Error de red al conectar con el servidor backend.");
@@ -136,35 +141,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchCotizaciones();
   }, []);
-
-  const handleCambiarEstadoCotizacion = async (cotizacionId: number, nuevoEstado: string) => {
-    setError("");
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/cotizaciones/${cotizacionId}/estado`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ estado: nuevoEstado }),
-      });
-
-      if (res.ok) {
-        setCotizaciones((prev) =>
-          prev.map((c) => (c.id === cotizacionId ? { ...c, estado: nuevoEstado } : c))
-        );
-        fetchCotizaciones();
-      } else {
-        // El servidor explica por qué no se pudo (por ejemplo, pagos pendientes); la obra sigue en su estado anterior.
-        const data = await res.json().catch(() => ({}));
-        setError(data.message || "No se pudo cambiar el estado de la cotización.");
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    } catch (e) {
-      setError("No hay conexión con el servidor. Intente de nuevo.");
-    }
-  };
 
   const abrirGestionHitos = async (cotizacion: Cotizacion) => {
     setSelectedCotizacion(cotizacion);
@@ -189,17 +165,23 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="text-xl p-12 text-center text-slate-500 font-semibold">
-        Cargando cotizaciones...
+        Cargando proyectos...
       </div>
     );
   }
 
   const q = busqueda.trim().toLowerCase();
+  const porEstado = filtro === "TODOS" ? cotizaciones : cotizaciones.filter((c) => c.estado === filtro);
   const visibles = q
-    ? cotizaciones.filter((c) =>
+    ? porEstado.filter((c) =>
         `${c.codigo_cotizacion} ${c.cliente_nombre} ${c.direccion_terreno} ${c.cliente_telefono || ""} ${c.cliente_rut || ""}`.toLowerCase().includes(q)
       )
-    : cotizaciones;
+    : porEstado;
+  // Paginación: la lista nunca crece más allá de POR_PAGINA filas, así la página mantiene su forma con muchas obras.
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const filas = visibles.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
+  const cuenta = (estado: string) => (estado === "TODOS" ? cotizaciones.length : cotizaciones.filter((c) => c.estado === estado).length);
 
   return (
     <div className="space-y-4">
@@ -207,22 +189,39 @@ export default function DashboardPage() {
       {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 w-full sm:w-auto sm:mr-auto">
-          Cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
+          Proyectos <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
         </h1>
         <input
           type="search"
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
+          onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
           placeholder="Buscar cliente, código o dirección"
-          aria-label="Buscar cotización"
+          aria-label="Buscar proyecto"
           className="flex-1 min-w-0 sm:!w-80 sm:flex-none"
         />
         <Link
           href="/dashboard/cotizador"
           className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 sm:px-5 h-11 inline-flex items-center justify-center rounded-lg shadow-sm transition whitespace-nowrap"
         >
-          + Nueva cotización
+          + Nuevo proyecto
         </Link>
+      </div>
+
+      {/* Filtro por estado del proyecto */}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar proyectos por estado">
+        {[{ key: "TODOS", label: "Todos" }, ...ESTADOS_PROYECTO.map((e) => ({ key: e.key as string, label: e.plural }))].map((e) => (
+          <button
+            key={e.key}
+            type="button"
+            aria-pressed={filtro === e.key}
+            onClick={() => { setFiltro(e.key); setPagina(1); }}
+            className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
+              filtro === e.key ? "bg-blue-900 text-white" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
+            }`}
+          >
+            {e.label} <span className="opacity-70">{cuenta(e.key)}</span>
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -236,7 +235,7 @@ export default function DashboardPage() {
         <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
         {progreso.length === 0 ? (
           <p className="text-slate-500 text-sm mt-1">
-            No existen obras en ejecución. Al pasar una cotización al estado «En ejecución», su avance se mostrará en este gráfico.
+            No existen obras en ejecución. Cuando se registre el primer pago de un proyecto, pasará a «En ejecución» y su avance se mostrará aquí.
           </p>
         ) : (
           <>
@@ -281,12 +280,12 @@ export default function DashboardPage() {
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-slate-500">
                     {cotizaciones.length === 0
-                      ? "No existen cotizaciones registradas. Cree la primera mediante «Nueva cotización»."
-                      : "Ninguna cotización coincide con la búsqueda."}
+                      ? "No existen proyectos registrados. Cree el primero mediante «Nuevo proyecto»."
+                      : "Ningún proyecto coincide con el filtro o la búsqueda."}
                   </td>
                 </tr>
               ) : (
-                visibles.map((cotizacion) => (
+                filas.map((cotizacion) => (
                   <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors block md:table-row p-2 md:p-0">
                     <td className="px-4 py-2 md:py-3 block md:table-cell">
                       <div className="font-bold text-slate-900">{cotizacion.cliente_nombre}</div>
@@ -307,22 +306,9 @@ export default function DashboardPage() {
                       ${Number(cotizacion.costo_total).toLocaleString("es-CL")}
                     </td>
                     <td className="px-4 py-2 md:py-3 block md:table-cell">
-                      <select
-                        value={cotizacion.estado}
-                        onChange={(e) => handleCambiarEstadoCotizacion(cotizacion.id, e.target.value)}
-                        aria-label="Estado de la cotización"
-                        className={`!min-h-0 !w-auto text-sm font-semibold !px-2 !py-1 rounded-md border cursor-pointer ${
-                          cotizacion.estado === "ACEPTADA"
-                            ? "bg-green-50 text-green-800 border-green-300"
-                            : cotizacion.estado === "FINALIZADA"
-                            ? "bg-blue-50 text-blue-800 border-blue-300"
-                            : "bg-amber-50 text-amber-800 border-amber-300"
-                        }`}
-                      >
-                        <option value="BORRADOR">En preparación</option>
-                        <option value="ACEPTADA">En ejecución</option>
-                        <option value="FINALIZADA">Obra terminada</option>
-                      </select>
+                      <span className={`inline-block text-sm font-semibold px-2.5 py-1 rounded-md border ${claseEstado(cotizacion.estado)}`}>
+                        {etiquetaEstado(cotizacion.estado)}
+                      </span>
                       {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
                         <button
                           onClick={() => abrirVisita(cotizacion)}
@@ -350,13 +336,13 @@ export default function DashboardPage() {
                           className="text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition"
                           title="Abrir la ficha que ve el cliente"
                         >
-                          Ver ficha del cliente
+                          Ficha del cliente
                         </Link>
                         <Link
                           href={`/dashboard/proyecto/${cotizacion.id}`}
                           className="bg-blue-900 hover:bg-blue-800 text-white font-semibold text-sm px-4 py-1.5 rounded-lg transition"
                         >
-                          Ver proyecto
+                          Editar
                         </Link>
                       </div>
                     </td>
@@ -366,6 +352,24 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+        {visibles.length > POR_PAGINA && (
+          <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm" aria-label="Paginación de proyectos">
+            <span className="text-slate-600">
+              Mostrando {(paginaActual - 1) * POR_PAGINA + 1}–{Math.min(paginaActual * POR_PAGINA, visibles.length)} de {visibles.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={paginaActual === 1} onClick={() => setPagina(paginaActual - 1)}
+                className="!min-h-0 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold disabled:opacity-40">
+                Anterior
+              </button>
+              <span className="font-semibold text-slate-700 tabular-nums">Página {paginaActual} de {totalPaginas}</span>
+              <button type="button" disabled={paginaActual === totalPaginas} onClick={() => setPagina(paginaActual + 1)}
+                className="!min-h-0 px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold disabled:opacity-40">
+                Siguiente
+              </button>
+            </div>
+          </nav>
+        )}
       </div>
 
       {/* Modal de visita técnica (estabilizado) */}

@@ -6,6 +6,9 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
+import { claseEstado, etiquetaEstado } from "@/lib/estados";
+import { fotoPrivadaADataUrl } from "@/lib/imagenes";
 import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 import type { FichaData } from "@/app/cotizacion/[uuid]/FichaPdf";
 
@@ -22,6 +25,8 @@ interface Obra {
 interface Detalle extends FichaData {
   modo_lista?: boolean;
   cliente_rut?: string | null;
+  distancia_flete_km: number;
+  token_publico?: string;
   id: number;
   estado: string;
   tipo_proyecto: string;
@@ -39,7 +44,8 @@ interface Ganancias {
   costo_presupuestado: number;
   ganancia_estimada: number;
   avance_real: number;
-  hito_avance_exigible: boolean;
+  avance_minimo: number;
+  avance_maximo: number;
 }
 interface Cambio {
   id: number;
@@ -184,6 +190,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const [motivo, setMotivo] = useState("");
   const [previa, setPrevia] = useState<{ total_anterior: string; total_nuevo: string; diferencia: string } | null>(null);
   const [avance, setAvance] = useState(0);
+  const [bitacora, setBitacora] = useState<RegistroBitacora[]>([]);
 
   const cargar = useCallback(async () => {
     try {
@@ -192,7 +199,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         fetch(`/api/cotizaciones/${id}/ganancias`, { headers: auth() }),
         fetch(`/api/cotizaciones/${id}/cambios`, { headers: auth() }),
       ]);
-      if (!rc.ok) throw new Error("No se encontró la cotización.");
+      if (!rc.ok) throw new Error("No se encontró el proyecto.");
       const c: Detalle = await rc.json();
       setCot(c);
       setGan(rg.ok ? await rg.json() : null);
@@ -291,18 +298,6 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     cargar();
   };
 
-  const guardarObra = async () => {
-    const obra = cot?.obras_ejecucion?.[0];
-    if (!obra) return;
-    const res = await fetch(`/api/obras/${obra.id}`, {
-      method: "PATCH",
-      headers: jsonAuth(),
-      body: JSON.stringify({ porcentaje_avance_real: avance }),
-    });
-    avisar(res.ok ? "Listo: el avance de la obra quedó guardado." : "No se pudo guardar el avance.", !res.ok);
-    cargar();
-  };
-
   const [pagando, setPagando] = useState<Hito | null>(null);
   const router = useRouter();
 
@@ -310,24 +305,34 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     if (!cot) return;
     const conPagos = cot.hitos_pago.some((h) => h.estado !== "PENDIENTE");
     const ok = await preguntar({
-      titulo: "¿Seguro que desea eliminar esta cotización?",
-      mensaje: `Se eliminarán «${cot.codigo_cotizacion}» de ${cot.cliente_nombre}, su lista, su avance y sus pagos${conPagos ? " (incluidos los pagos ya registrados)" : ""}. Esta acción no se puede deshacer.`,
+      titulo: "¿Seguro que desea eliminar este proyecto?",
+      mensaje: `Se eliminarán «${cot.codigo_cotizacion}» de ${cot.cliente_nombre}, su lista, su bitácora, su avance y sus pagos${conPagos ? " (incluidos los pagos ya registrados)" : ""}. Esta acción no se puede deshacer.`,
       peligro: true,
     });
     if (!ok) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "DELETE", headers: jsonAuth() });
-    if (!res.ok) return avisar("No se pudo eliminar la cotización.", true);
+    if (!res.ok) return avisar("No se pudo eliminar el proyecto.", true);
     router.push("/dashboard");
   };
   const { preguntar, dialogo } = useDialogo();
 
+  // La ficha de la empresa es el documento detallado: todos los materiales, la mano de obra, el traslado y la bitácora con fotos.
   const descargarPdf = async () => {
     if (!cot || !gan) return;
-    const [{ pdf }, { default: FichaPdf }] = await Promise.all([import("@react-pdf/renderer"), import("@/app/cotizacion/[uuid]/FichaPdf")]);
-    const blob = await pdf(<FichaPdf c={cot} interno={gan} />).toBlob();
+    const [rd, { pdf }, { default: FichaEmpresaPdf }] = await Promise.all([
+      fetch(`/api/cotizaciones/${id}/desglose`, { headers: auth() }),
+      import("@react-pdf/renderer"),
+      import("@/app/cotizacion/[uuid]/FichaEmpresaPdf"),
+    ]);
+    if (!rd.ok) return avisar("No se pudo preparar la ficha de la empresa.", true);
+    const desglose = await rd.json();
+    const registros = await Promise.all(
+      bitacora.map(async (b) => ({ ...b, fotos: (await Promise.all(b.fotos.slice(0, 3).map(fotoPrivadaADataUrl))).filter((f): f is string => !!f) }))
+    );
+    const blob = await pdf(<FichaEmpresaPdf c={cot} desglose={desglose} interno={gan} bitacora={registros} />).toBlob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${cot.codigo_cotizacion}-interno.pdf`;
+    a.download = `${cot.codigo_cotizacion}-empresa.pdf`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -355,13 +360,16 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
       <aside className="lg:sticky lg:top-20 space-y-3">
         <Link href="/dashboard" className="inline-block text-base font-semibold text-blue-800 hover:underline">
-          ← Cotizaciones
+          ← Proyectos
         </Link>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <div>
             <h1 className="text-2xl font-black text-slate-900 leading-tight">{cot.cliente_nombre}</h1>
             <p className="text-base text-slate-600 mt-1">{cot.direccion_terreno}</p>
             <p className="text-sm text-slate-500">{cot.superficie_m2} m² · {cot.codigo_cotizacion}</p>
+            <span className={`inline-block mt-2 text-sm font-semibold px-2.5 py-1 rounded-md border ${claseEstado(cot.estado)}`}>
+              {etiquetaEstado(cot.estado)}
+            </span>
           </div>
           <div className="bg-blue-900 text-white rounded-xl p-4">
             <div className="text-sm text-blue-200">Valor total, IVA incluido</div>
@@ -369,13 +377,13 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
           <div className="grid gap-2">
             <Link href={`/cotizacion/${(cot as any).token_publico}`} className="px-4 py-2.5 text-center text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50">
-              Ver ficha del cliente
+              Ficha del cliente
             </Link>
             <button onClick={descargarPdf} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">
               Descargar ficha de la empresa (PDF)
             </button>
             <button onClick={cancelarCotizacion} className="px-4 py-2.5 text-base font-semibold text-red-700 border border-red-200 rounded-xl hover:bg-red-50 cursor-pointer">
-              Cancelar obra o cotización
+              Eliminar proyecto
             </button>
           </div>
         </div>
@@ -551,23 +559,16 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
                 </button>
               </div>
             ))}
-            {gan?.hito_avance_exigible && (
-              <p className="text-lg text-amber-900 bg-amber-50 border-2 border-amber-300 rounded-xl p-3 font-semibold">
-                La obra ya va en el 50 %: corresponde cobrar el 2.º pago.
-              </p>
-            )}
           </div>
 
-          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-2xl font-black">Avance de la obra</h3>
-            <div>
-              <label className={campo}>Avance de la obra (%)</label>
-              <input type="number" min="0" max="100" value={avance} onChange={(e) => setAvance(parseFloat(e.target.value) || 0)} />
-            </div>
-            <button onClick={guardarObra} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
-              Guardar avance
-            </button>
-          </div>
+          <BitacoraAvance
+            cotizacionId={cot.id}
+            avanceActual={avance}
+            minimo={gan?.avance_minimo ?? 0}
+            maximo={gan?.avance_maximo ?? 0}
+            onCambio={cargar}
+            onRegistros={setBitacora}
+          />
 
           {gan && (
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">
@@ -579,12 +580,12 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: el pago quedó registrado."); cargar(); }} />}
+      {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: el pago quedó registrado. El estado y el avance se actualizaron según los pagos."); cargar(); }} />}
 
       <details className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <summary className="text-xl font-bold cursor-pointer">Historial de modificaciones del valor ({cambios.length})</summary>
         {cambios.length === 0 ? (
-          <p className="text-base text-slate-500 pt-3">Esta cotización no registra modificaciones de valor.</p>
+          <p className="text-base text-slate-500 pt-3">Este proyecto no registra modificaciones de valor.</p>
         ) : (
           <ul className="divide-y divide-slate-200 pt-3">
             {cambios.map((c) => (

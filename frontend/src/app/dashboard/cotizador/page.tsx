@@ -12,7 +12,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
+<<<<<<< Updated upstream
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
+=======
+import { etiquetaCategoria } from "@/lib/categorias";
+>>>>>>> Stashed changes
 
 // ---------------------------------------------------------------- tipos
 
@@ -52,11 +56,10 @@ interface Presupuesto {
 const ETIQUETA_CATEGORIA: Record<string, string> = {
   BASE_TERRENO: "Bases (cantidad en m²)",
   REVESTIMIENTO: "Revestimientos (cantidad en m²)",
-  TECHUMBRE: "Techumbre",
-  TABIQUERIA: "Tabiquería",
   BASE_RADIER: "Base y radier",
   INSUMO: "Otros materiales",
 };
+const etiquetaCat = (key: string) => ETIQUETA_CATEGORIA[key] || etiquetaCategoria(key);
 const FASES: Record<string, string> = { ANTICIPO_40: "Anticipo", AVANCE_30: "Avance de obra", ENTREGA_30: "Entrega" };
 
 const clp = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`;
@@ -135,7 +138,6 @@ export default function CotizadorPage() {
     cliente_telefono: "",
     cliente_rut: "",
     direccion_terreno: "",
-    estado: "BORRADOR",
     tipo_proyecto: "CASA",
     superficie_m2: "54",
     distancia_flete_km: "25",
@@ -296,7 +298,7 @@ export default function CotizadorPage() {
       });
       if (res.ok) return router.push("/dashboard");
       const detalle = await res.json().catch(() => ({}));
-      setError(`No fue posible guardar la cotización: ${detalle.message || JSON.stringify(detalle)}`);
+      setError(`No fue posible guardar el proyecto: ${detalle.message || JSON.stringify(detalle)}`);
     } catch {
       setError("Sin conexión con el servidor. Intente nuevamente.");
     } finally {
@@ -308,21 +310,26 @@ export default function CotizadorPage() {
 
   const elegido = catalogo.find((c) => String(c.id) === materialElegido);
   const categorias = Array.from(new Set(catalogo.map((c) => c.categoria)));
+  // Datos de los que depende el valor y que todavía no se han ingresado
+  const pendientes = [
+    ...(num(nTrabajadores) < 1 ? ["la cantidad de trabajadores"] : []),
+    ...(parametrosTarifas.dias_obra + (parametrosTarifas.lleva_radier ? 4 : 0) < 1 && num(formData.distancia_flete_km) > 0 ? ["los días de construcción"] : []),
+  ];
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
   return (
     <form onSubmit={guardar} className="max-w-6xl mx-auto pb-28 lg:pb-0">
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Nueva cotización</h1>
-        <p className="text-slate-600 mt-1">Complete la información solicitada. El valor de la obra se actualiza en el panel lateral.</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Nuevo proyecto</h1>
+        <p className="text-slate-600 mt-1">Complete los datos en el orden indicado: cada paso alimenta al siguiente y el valor de la obra se actualiza en el panel lateral.</p>
       </div>
 
       {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 mb-6 rounded-r-md">{error}</div>}
 
       <div className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start">
         <div className="space-y-6">
-          {/* 1. Cliente y terreno */}
-          <Seccion titulo="Datos del cliente y del terreno">
+          {/* Paso 1: cliente y terreno */}
+          <Seccion titulo="1. Datos del cliente y del terreno">
             <div className="grid sm:grid-cols-2 gap-5">
               <div>
                 <label htmlFor="cliente_nombre" className={labelCls}>Nombre del cliente</label>
@@ -342,24 +349,15 @@ export default function CotizadorPage() {
                   placeholder="+56 9 8765 4321" maxLength={16} className={inputCls} />
               </div>
             </div>
-            <div className="grid sm:grid-cols-[1fr_12rem] gap-5">
-              <div>
-                <label htmlFor="direccion_terreno" className={labelCls}>Dirección del terreno</label>
-                <input id="direccion_terreno" name="direccion_terreno" value={formData.direccion_terreno} onChange={handleChange}
-                  placeholder="Ej.: Parcela 14, Camino Los Boldos, Limache" className={inputCls} required minLength={5} maxLength={255} />
-              </div>
-              <div>
-                <label htmlFor="estado" className={labelCls}>Estado inicial</label>
-                <select id="estado" name="estado" value={formData.estado} onChange={handleChange} className={inputCls}>
-                  <option value="BORRADOR">En preparación</option>
-                  <option value="ACEPTADA">En ejecución</option>
-                </select>
-              </div>
+            <div>
+              <label htmlFor="direccion_terreno" className={labelCls}>Dirección del terreno</label>
+              <input id="direccion_terreno" name="direccion_terreno" value={formData.direccion_terreno} onChange={handleChange}
+                placeholder="Ej.: Parcela 14, Camino Los Boldos, Limache" className={inputCls} required minLength={5} maxLength={255} />
             </div>
           </Seccion>
 
-          {/* 2. Características generales de la obra */}
-          <Seccion titulo="Características de la obra">
+          {/* Paso 2: tipo de obra y superficie (definen todas las tarifas por m²) */}
+          <Seccion titulo="2. Tipo de obra y superficie">
             <div className="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Tipo de proyecto">
               {[
                 { v: "CASA", t: "Casa", d: "Vivienda prefabricada completa" },
@@ -380,10 +378,11 @@ export default function CotizadorPage() {
 
             <div className="grid sm:grid-cols-2 gap-5">
               <NumberField label="Superficie" name="superficie_m2" value={formData.superficie_m2} onChange={setCampo}
-                step="0.5" suffix="m²" required max={10000} />
-              <NumberField label="Días de construcción" name="dias_obra" value={formData.dias_obra} onChange={setCampo}
-                step="1" suffix="días" max={365}
-                help={esCasa ? "Días que se irá a trabajar al terreno. Determina el combustible del traslado." : "Opcional. El radier ya suma 4 días de fabricación."} />
+                step="0.5" suffix="m²" required max={10000} help="Con la superficie se calculan la mano de obra y el margen de la empresa." />
+              {esCasa && (
+                <NumberField label="Superficie con vigas a la vista" name="m2_vigas_vista" value={formData.m2_vigas_vista}
+                  onChange={setCampo} suffix="m²" max={10000} help="Se pagan $8.000 por cada m² con vigas a la vista, a cada trabajador." />
+              )}
             </div>
 
             {/* Radier o base: suma 4 días y su mano de obra */}
@@ -409,39 +408,72 @@ export default function CotizadorPage() {
                 </div>
               )}
             </div>
-
-            {/* Traslado: 1 litro rinde 10 km */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-              <h3 className="font-bold text-slate-900">Traslado</h3>
-              <div className="grid sm:grid-cols-2 gap-5">
-                <NumberField label="Distancia total (ida y vuelta)" name="distancia_flete_km" value={formData.distancia_flete_km}
-                  onChange={setCampo} suffix="km" required max={3000} help="Kilómetros que se recorren en total cada día." />
-                <NumberField label="Precio de la bencina" name="precio_litro" value={precioLitro} onChange={(_, v) => setPrecioLitro(v)}
-                  step="10" suffix="$/L" help="1 litro rinde 10 km." />
-              </div>
-              {presupuesto && (
-                <p className="text-sm text-slate-700">
-                  {presupuesto.traslado.litros.toLocaleString("es-CL")} litros ({presupuesto.diasTotal} {presupuesto.diasTotal === 1 ? "día" : "días"}
-                  {parametrosTarifas.lleva_radier ? ", incluye 4 de fabricación del radier" : ""}) × {clp(presupuesto.traslado.precioLitro)} ={" "}
-                  <strong>{clp(presupuesto.traslado.costo)}</strong>
-                </p>
-              )}
-            </div>
-
             {esCasa && (
-              <>
-                <NumberField label="Superficie con vigas a la vista" name="m2_vigas_vista" value={formData.m2_vigas_vista}
-                  onChange={setCampo} suffix="m²" max={10000} help="Se pagan $8.000 por cada m² con vigas a la vista, a cada trabajador." />
-                <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  El relleno de estabilizado no se incluye en esta etapa: se mide durante la visita al terreno y se agrega
-                  posteriormente desde el listado de cotizaciones.
-                </p>
-              </>
+              <p className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                El relleno de estabilizado no se incluye en esta etapa: se mide durante la visita al terreno y se agrega
+                posteriormente desde el listado de proyectos.
+              </p>
             )}
           </Seccion>
 
-          {/* 3. Materiales */}
-          <Seccion titulo="Materiales">
+          {/* Paso 3: trabajadores y días (la mano de obra depende de la superficie y del radier ya indicados) */}
+          <Seccion titulo="3. Mano de obra y plazos">
+            <p className="text-slate-600 -mt-2">
+              A cada trabajador se le paga por m²: casa $25.000, vigas a la vista $8.000, radier o base $35.000 o $38.000, y $2.000
+              por m² de OSB Smartside Lap. Sin la cantidad de trabajadores no se puede calcular la mano de obra.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-5">
+              <NumberField label="Cantidad de trabajadores" name="n_trabajadores" value={nTrabajadores}
+                onChange={(_, v) => setNTrabajadores(v)} step="1" max={100} required />
+              <NumberField label="Días de construcción" name="dias_obra" value={formData.dias_obra} onChange={setCampo}
+                step="1" suffix="días" max={365}
+                help={esCasa ? "Días que se irá a trabajar al terreno. Determinan el combustible del traslado (siguiente paso)." : "Opcional. El radier ya suma 4 días de fabricación."} />
+            </div>
+            {presupuesto && presupuesto.manoObraDetalle.length > 0 && (
+              <ul className="divide-y divide-slate-200 border border-slate-200 rounded-xl text-base">
+                {presupuesto.manoObraDetalle.map((m, i) => (
+                  <li key={i} className="p-3 flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-900">{m.concepto}</div>
+                      <div className="text-sm text-slate-500">
+                        {m.m2.toLocaleString("es-CL")} m² × {clp(m.tarifa)} × {m.trabajadores} {m.trabajadores === 1 ? "trabajador" : "trabajadores"}
+                      </div>
+                    </div>
+                    <span className="font-bold tabular-nums whitespace-nowrap">{clp(m.subtotal)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="flex justify-between border-t border-slate-200 pt-3 font-bold">
+              <span>Total de mano de obra</span>
+              <span className="tabular-nums">{presupuesto ? clp(presupuesto.manoObra) : "—"}</span>
+            </p>
+          </Seccion>
+
+          {/* Paso 4: traslado (combustible = km ÷ 10 × días: necesita los días del paso anterior) */}
+          <Seccion titulo="4. Traslado">
+            <p className="text-slate-600 -mt-2">El combustible se calcula con la distancia, los días de trabajo del paso anterior y el precio de la bencina.</p>
+            <div className="grid sm:grid-cols-2 gap-5">
+              <NumberField label="Distancia total (ida y vuelta)" name="distancia_flete_km" value={formData.distancia_flete_km}
+                onChange={setCampo} suffix="km" required max={3000} help="Kilómetros que se recorren en total cada día." />
+              <NumberField label="Precio de la bencina" name="precio_litro" value={precioLitro} onChange={(_, v) => setPrecioLitro(v)}
+                step="10" suffix="$/L" help="1 litro rinde 10 km." />
+            </div>
+            {presupuesto && presupuesto.diasTotal > 0 ? (
+              <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                {presupuesto.traslado.litros.toLocaleString("es-CL")} litros ({presupuesto.diasTotal} {presupuesto.diasTotal === 1 ? "día" : "días"}
+                {parametrosTarifas.lleva_radier ? ", incluye 4 de fabricación del radier" : ""}) × {clp(presupuesto.traslado.precioLitro)} ={" "}
+                <strong>{clp(presupuesto.traslado.costo)}</strong>
+              </p>
+            ) : (
+              <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                El traslado queda en $0 hasta indicar los días de construcción en el paso 3.
+              </p>
+            )}
+          </Seccion>
+
+          {/* Paso 5: materiales */}
+          <Seccion titulo="5. Materiales">
             <p className="text-slate-600 -mt-2">
               Agregue todos los materiales de la obra: base, revestimiento, madera, cemento, arena, entre otros. Cada uno se
               valoriza al precio con descuento del proveedor.
@@ -464,7 +496,24 @@ export default function CotizadorPage() {
                 )}
               </p>
               <div>
+<<<<<<< Updated upstream
                 <label htmlFor="cantidad_material" className={labelCls}>Cantidad{elegido ? ` (${unidadDe(elegido)})` : ""}</label>
+=======
+                <label htmlFor="material" className={labelCls}>Material</label>
+                <select id="material" value={materialElegido} onChange={(e) => setMaterialElegido(e.target.value)} className={inputCls}>
+                  <option value="">Seleccione un material</option>
+                  {categorias.map((cat) => (
+                    <optgroup key={cat} label={etiquetaCat(cat)}>
+                      {catalogo.filter((c) => c.categoria === cat).map((c) => (
+                        <option key={c.id} value={c.id}>{c.nombre} ({c.unidad_medida.toLowerCase()})</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="cantidad_material" className={labelCls}>Cantidad</label>
+>>>>>>> Stashed changes
                 <input id="cantidad_material" type="number" inputMode="decimal" min="0" step="any" value={cantidadElegida}
                   onFocus={(e) => e.target.select()} onChange={(e) => setCantidadElegida(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarMaterial(); } }} className={inputCls} />
@@ -507,36 +556,6 @@ export default function CotizadorPage() {
             )}
           </Seccion>
 
-          {/* 4. Mano de obra */}
-          <Seccion titulo="Mano de obra">
-            <p className="text-slate-600 -mt-2">
-              A cada trabajador se le paga por m²: casa $25.000, vigas a la vista $8.000, radier o base $35.000 o $38.000, y $2.000
-              por m² de OSB Smartside Lap. Indique cuántos trabajadores participan.
-            </p>
-            <div className="grid sm:grid-cols-2 gap-5">
-              <NumberField label="Cantidad de trabajadores" name="n_trabajadores" value={nTrabajadores}
-                onChange={(_, v) => setNTrabajadores(v)} step="1" max={100} required />
-            </div>
-            {presupuesto && presupuesto.manoObraDetalle.length > 0 && (
-              <ul className="divide-y divide-slate-200 border border-slate-200 rounded-xl text-base">
-                {presupuesto.manoObraDetalle.map((m, i) => (
-                  <li key={i} className="p-3 flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-slate-900">{m.concepto}</div>
-                      <div className="text-sm text-slate-500">
-                        {m.m2.toLocaleString("es-CL")} m² × {clp(m.tarifa)} × {m.trabajadores} {m.trabajadores === 1 ? "trabajador" : "trabajadores"}
-                      </div>
-                    </div>
-                    <span className="font-bold tabular-nums whitespace-nowrap">{clp(m.subtotal)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="flex justify-between border-t border-slate-200 pt-3 font-bold">
-              <span>Total de mano de obra</span>
-              <span className="tabular-nums">{presupuesto ? clp(presupuesto.manoObra) : "—"}</span>
-            </p>
-          </Seccion>
         </div>
 
         {/* Panel lateral: presupuesto en vivo */}
@@ -548,6 +567,11 @@ export default function CotizadorPage() {
                 {presupuesto ? clp(presupuesto.total) : "—"}
               </p>
               <p className="text-sm text-blue-200 mt-1 h-5">{calculando ? "Calculando…" : ""}</p>
+              {pendientes.length > 0 && (
+                <p className="mt-2 text-sm bg-white/10 rounded-lg p-2.5 text-blue-50">
+                  Aún falta indicar: <strong>{pendientes.join(" y ")}</strong>. Mientras tanto el valor es parcial.
+                </p>
+              )}
             </div>
 
             <div className="px-4 sm:px-6 py-5 space-y-5">
@@ -624,7 +648,7 @@ export default function CotizadorPage() {
               </button>
               <button type="submit" disabled={guardando || !presupuesto}
                 className="flex-1 h-12 font-bold text-lg text-white bg-blue-900 hover:bg-blue-800 rounded-lg cursor-pointer disabled:opacity-50 transition focus:outline-none focus:ring-4 focus:ring-blue-900/25">
-                {guardando ? "Guardando…" : "Guardar cotización"}
+                {guardando ? "Guardando…" : "Guardar proyecto"}
               </button>
             </div>
           </div>
