@@ -27,6 +27,9 @@ interface Detalle extends FichaData {
   cliente_rut?: string | null;
   distancia_flete_km: number;
   token_publico?: string;
+  base_terreno?: { nombre: string } | null;
+  revestimiento?: { nombre: string } | null;
+  detalles_insumo?: { id: number; etapa_obra: string; es_adicional?: boolean; subtotal_costo: number; cantidad_calculada: number }[];
   id: number;
   estado: string;
   tipo_proyecto: string;

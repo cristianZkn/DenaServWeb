@@ -12,11 +12,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
-<<<<<<< Updated upstream
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
-=======
-import { etiquetaCategoria } from "@/lib/categorias";
->>>>>>> Stashed changes
+import { CATEGORIAS } from "@/lib/categorias";
 
 // ---------------------------------------------------------------- tipos
 
@@ -53,13 +50,14 @@ interface Presupuesto {
 
 // ---------------------------------------------------------------- constantes y utilidades
 
+// Nombres de las categorías para el selector: los generales más los matices propios del cotizador.
 const ETIQUETA_CATEGORIA: Record<string, string> = {
+  ...Object.fromEntries(CATEGORIAS.map((c) => [c.key, c.label])),
   BASE_TERRENO: "Bases (cantidad en m²)",
   REVESTIMIENTO: "Revestimientos (cantidad en m²)",
   BASE_RADIER: "Base y radier",
   INSUMO: "Otros materiales",
 };
-const etiquetaCat = (key: string) => ETIQUETA_CATEGORIA[key] || etiquetaCategoria(key);
 const FASES: Record<string, string> = { ANTICIPO_40: "Anticipo", AVANCE_30: "Avance de obra", ENTREGA_30: "Entrega" };
 
 const clp = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`;
@@ -309,7 +307,6 @@ export default function CotizadorPage() {
   if (cargandoCatalogo) return <div className="p-8 text-center text-slate-500 font-bold">Cargando información...</div>;
 
   const elegido = catalogo.find((c) => String(c.id) === materialElegido);
-  const categorias = Array.from(new Set(catalogo.map((c) => c.categoria)));
   // Datos de los que depende el valor y que todavía no se han ingresado
   const pendientes = [
     ...(num(nTrabajadores) < 1 ? ["la cantidad de trabajadores"] : []),
@@ -496,24 +493,7 @@ export default function CotizadorPage() {
                 )}
               </p>
               <div>
-<<<<<<< Updated upstream
                 <label htmlFor="cantidad_material" className={labelCls}>Cantidad{elegido ? ` (${unidadDe(elegido)})` : ""}</label>
-=======
-                <label htmlFor="material" className={labelCls}>Material</label>
-                <select id="material" value={materialElegido} onChange={(e) => setMaterialElegido(e.target.value)} className={inputCls}>
-                  <option value="">Seleccione un material</option>
-                  {categorias.map((cat) => (
-                    <optgroup key={cat} label={etiquetaCat(cat)}>
-                      {catalogo.filter((c) => c.categoria === cat).map((c) => (
-                        <option key={c.id} value={c.id}>{c.nombre} ({c.unidad_medida.toLowerCase()})</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="cantidad_material" className={labelCls}>Cantidad</label>
->>>>>>> Stashed changes
                 <input id="cantidad_material" type="number" inputMode="decimal" min="0" step="any" value={cantidadElegida}
                   onFocus={(e) => e.target.select()} onChange={(e) => setCantidadElegida(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarMaterial(); } }} className={inputCls} />
