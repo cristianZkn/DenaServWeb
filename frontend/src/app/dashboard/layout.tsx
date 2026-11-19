@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const NAV = [
-  { href: "/dashboard", label: "Proyectos" },
+  { href: "/dashboard", label: "Inicio" },
+  { href: "/dashboard/proyectos", label: "Proyectos" },
   { href: "/dashboard/catalogos", label: "Materiales y precios" },
   { href: "/dashboard/proveedores", label: "Proveedores" },
   { href: "/dashboard/portafolio", label: "Portafolio" },

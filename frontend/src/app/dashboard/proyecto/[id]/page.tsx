@@ -315,7 +315,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     if (!ok) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "DELETE", headers: jsonAuth() });
     if (!res.ok) return avisar("No se pudo eliminar el proyecto.", true);
-    router.push("/dashboard");
+    router.push("/dashboard/proyectos");
   };
   const { preguntar, dialogo } = useDialogo();
 
@@ -362,7 +362,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {dialogo}
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
       <aside className="lg:sticky lg:top-20 space-y-3">
-        <Link href="/dashboard" className="inline-block text-base font-semibold text-blue-800 hover:underline">
+        <Link href="/dashboard/proyectos" className="inline-block text-base font-semibold text-blue-800 hover:underline">
           ← Proyectos
         </Link>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">

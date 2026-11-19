@@ -294,7 +294,7 @@ export default function CotizadorPage() {
           ...parametrosTarifas,
         }),
       });
-      if (res.ok) return router.push("/dashboard");
+      if (res.ok) return router.push("/dashboard/proyectos");
       const detalle = await res.json().catch(() => ({}));
       setError(`No fue posible guardar el proyecto: ${detalle.message || JSON.stringify(detalle)}`);
     } catch {
@@ -622,7 +622,7 @@ export default function CotizadorPage() {
             </div>
 
             <div className="hidden lg:flex gap-3 px-6 pb-6">
-              <button type="button" onClick={() => router.push("/dashboard")}
+              <button type="button" onClick={() => router.push("/dashboard/proyectos")}
                 className="px-5 h-12 font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition">
                 Cancelar
               </button>
