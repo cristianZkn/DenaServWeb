@@ -1442,3 +1442,26 @@ class SeguridadTests(TestCase):
         r = self.client.post("/api/portafolio/", {"titulo": "Casa uno", "imagen_url": "javascript:alert(1)"},
                              content_type="application/json", **self.h)
         self.assertEqual(r.status_code, 422)
+
+
+class MapeoPresupuestoTests(TestCase):
+    def test_las_fichas_del_presupuesto_son_de_tiendas_conocidas_y_no_se_repiten(self):
+        from . import scraper
+        from .catalogo_mapeo import MAPEO_PRESUPUESTO
+        categorias = {"RADIER_CASA", "TABIQUES", "ESTRUCTURA_TECHO", "FORRO_EXTERIOR", "ALEROS", "FORRO_INTERIOR", "VENTANAS_PUERTAS"}
+        for cat, url, nombre, etapa, ok in MAPEO_PRESUPUESTO:
+            self.assertIn(cat, categorias)
+            scraper.tienda_de(url)  # lanza si no es Easy, Sodimac, MCT o Ferrelan
+        pares = [(c, u) for c, u, *_ in MAPEO_PRESUPUESTO]
+        self.assertEqual(len(pares), len(set(pares)))
+
+    def test_mapear_agrega_los_materiales_y_es_repetible_sin_mover_los_insumos(self):
+        from .catalogo_mapeo import MAPEO, MAPEO_PRESUPUESTO, mapear
+        mapear()
+        total = CatalogoTipo.objects.count()
+        self.assertEqual(total, len(MAPEO) + len(MAPEO_PRESUPUESTO))
+        self.assertEqual(mapear()["creados"], 0)                       # repetirlo no crea ni mueve nada
+        self.assertEqual(CatalogoTipo.objects.count(), total)
+        self.assertTrue(CatalogoTipo.objects.filter(categoria="INSUMO", fuente_url__contains="296449").exists())  # sigue como insumo
+        self.assertTrue(CatalogoTipo.objects.filter(categoria="TABIQUES", fuente_url__contains="296449").exists())
+        self.assertFalse(CatalogoTipo.objects.filter(categoria="VENTANAS_PUERTAS", fuente_url="").exists())

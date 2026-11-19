@@ -122,7 +122,7 @@ La API queda en `http://127.0.0.1:8000/api/`.
 python manage.py cargar_materiales core/fixtures/materiales_ejemplo.json
 ```
 
-Para cargar las partidas del presupuesto de referencia (radier, tabiques, techumbre, forros, ventanas y servicios) usa `core/fixtures/materiales_presupuesto.json` con el mismo comando. Se cargan como partidas globales (unidad `GL`) sin ficha en línea; para que sus precios se actualicen solos, edita cada material en «Materiales y precios» y agrega la dirección de su ficha en la tienda.
+**Materiales del presupuesto de referencia (casa de 60 m²):** `python manage.py mapear_catalogo` agrega los materiales del listado (radier, tabiques, techumbre, forro exterior e interior, aleros, ventanas y puertas) con la ficha de su tienda (Easy, Sodimac, MCT o Ferrelan), y luego `python manage.py actualizar_precios_mercado` lee sus precios; después se refrescan solos cada lunes. Cada material es un producto con su precio unitario (la cantidad se indica al cotizar). Quedan sin ficha los servicios y traslados (se calculan en el paso de traslado del cotizador). Las partidas globales de `core/fixtures/materiales_presupuesto.json` (unidad `GL`, sin ficha) son solo de referencia y no hace falta cargarlas.
 
 **Primer usuario:** solo ingresan correos registrados en la tabla `usuario`. Crea el tuyo desde `python manage.py shell` o pídele al administrador que lo registre. Si en tu `.env` no defines `GOOGLE_CLIENT_ID` y `DJANGO_DEBUG=1`, el login funciona en modo simulado con el correo registrado.
 
