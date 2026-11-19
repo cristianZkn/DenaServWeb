@@ -78,24 +78,29 @@ def _calcular_desde_catalogo(data):
         lleva_radier=data.lleva_radier, tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro)
 
 
-def _repartir_en_hitos(cot, delta) -> bool:
+def _repartir_en_hitos(cot, delta):
     """Reparte `delta` entre los hitos aún PENDIENTES en proporción a su porcentaje (el último absorbe el redondeo).
-    False si hay diferencia pero no queda ningún hito pendiente."""
+    Devuelve None si se pudo, o el motivo si no: no queda ningún hito sin pagar, o la rebaja dejaría un hito por
+    debajo de lo que ya se cobró en él. No guarda nada hasta validar todos los hitos."""
     if not delta:
-        return True
+        return None
     pendientes = list(cot.hitos_pago.exclude(estado="PAGADO").order_by("id"))
     if not pendientes:
-        return False
+        return "Todos los hitos están pagados: no se puede cambiar el monto."
     pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
-    asignado = Decimal(0)
+    asignado, nuevos = Decimal(0), []
     for i, h in enumerate(pendientes):
         parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
-        h.monto_pago += parte
         asignado += parte
-        if h.monto_abonado >= h.monto_pago:  # el ajuste bajó el monto por debajo de lo ya abonado
-            h.monto_abonado, h.estado = h.monto_pago, "PAGADO"
-        h.save(update_fields=["monto_pago", "monto_abonado", "estado"])
-    return True
+        nuevos.append(h.monto_pago + parte)
+        if nuevos[-1] < h.monto_abonado:
+            return (f"La rebaja deja el pago «{h.fase}» en ${int(nuevos[-1]):,}, por debajo de los ${int(h.monto_abonado):,} que ya se cobraron. "
+                    "Anule antes el abono que corresponda.").replace(",", ".")
+    for h, monto in zip(pendientes, nuevos):
+        h.monto_pago = monto
+        h.estado = "PAGADO" if h.monto_abonado >= monto else h.estado
+        h.save(update_fields=["monto_pago", "estado"])
+    return None
 
 
 # --- Estado y avance de la obra: se derivan de los pagos para que nunca se contradigan ---
@@ -625,8 +630,9 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
     if not data.aplicar:
         return 200, resultado
     with transaction.atomic():
-        if not _repartir_en_hitos(cot, delta):
-            return 409, {"message": "Todos los hitos están pagados: no se puede ajustar el valor."}
+        error = _repartir_en_hitos(cot, delta)
+        if error:
+            return 409, {"message": error}
         cot.nivelacion_modalidad, cot.nivelacion_m3, cot.costo_nivelacion = n["modalidad"], n["m3"], n["costo"]
         cot.costo_total += delta
         cot.save(update_fields=["nivelacion_modalidad", "nivelacion_m3", "costo_nivelacion", "costo_total"])
@@ -681,8 +687,9 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
     if delta and not motivo:
         return 400, {"message": "Indique el motivo del reajuste del monto."}
     with transaction.atomic():
-        if not _repartir_en_hitos(cot, delta):
-            return 409, {"message": "Todos los hitos están pagados: no se puede reajustar el monto."}
+        error = _repartir_en_hitos(cot, delta)
+        if error:
+            return 409, {"message": error}
         cot.costo_total = nuevo_total
         cot.save()
         _reconciliar(cot)
@@ -780,13 +787,9 @@ def _leer_comprobante(data_url: str):
 @router.post("/hitos-pago/{hito_id}/registros/", response={200: HitoPagoSchema, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
     """Anota un abono en el libro de pagos. El monto es lo pagado ahora; no puede superar lo que falta del hito."""
-    hito = HitoPago.objects.select_related("cotizacion").filter(id=hito_id).first()
-    if not hito:
+    if not HitoPago.objects.filter(id=hito_id).exists():
         return 404, {"message": "Hito de pago no encontrado"}
     monto = Decimal(str(data.monto)).quantize(Decimal("1"))
-    pendiente = hito.monto_pago - hito.monto_abonado
-    if monto <= 0 or monto > pendiente:
-        return 400, {"message": f"El monto debe estar entre $1 y lo que falta por pagar (${int(pendiente):,}).".replace(",", ".")}
     mime, contenido = "", None
     if data.comprobante:
         try:
@@ -794,6 +797,11 @@ def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
         except ValueError as e:
             return 400, {"message": str(e)}
     with transaction.atomic():
+        # Se bloquea el hito y se lee su saldo dentro de la transacción: dos abonos simultáneos no pueden pasarse del total.
+        hito = HitoPago.objects.select_for_update().select_related("cotizacion").get(id=hito_id)
+        pendiente = hito.monto_pago - hito.monto_abonado
+        if monto <= 0 or monto > pendiente:
+            return 400, {"message": f"El monto debe estar entre $1 y lo que falta por pagar (${int(pendiente):,}).".replace(",", ".")}
         DetalleRegistro.objects.create(hito=hito, monto=monto, metodo=data.metodo, fecha=data.fecha or date.today(), nota=data.nota.strip(),
                                        comprobante=contenido, comprobante_mime=mime, comprobante_nombre=data.comprobante_nombre if contenido else "",
                                        usuario=request.auth)

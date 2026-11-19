@@ -1169,3 +1169,63 @@ class LibroDePagosTests(TestCase):
         reg = self.abonar(2000).json()["registros"][1]
         r = self.client.delete(f"/api/registros-pago/{reg['id']}/", **self.h).json()
         self.assertEqual((r["monto_abonado"], r["estado"], len(r["registros"])), (1000, "ABONADO", 1))
+
+
+class ConteoDePagosTests(TestCase):
+    """Recorrido completo: abonos parciales en los tres hitos, ajuste de valor y anulaciones; los números siempre cuadran."""
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="Cajero", email="c@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Pagos", "direccion_terreno": "Calle Uno 1",
+                                    "superficie_m2": 40}, content_type="application/json", **self.h).json()
+
+    def hitos(self):
+        return self.client.get(f"/api/cotizaciones/{self.cot['id']}/hitos/", **self.h).json()
+
+    def abonar(self, hito, monto, metodo="EFECTIVO"):
+        return self.client.post(f"/api/hitos-pago/{hito['id']}/registros/", {"monto": monto, "metodo": metodo}, content_type="application/json", **self.h)
+
+    def test_cada_hito_cuadra_con_su_libro(self):
+        for h in self.hitos():
+            tercio = int(h["monto_pago"]) // 3
+            for _ in range(2):
+                self.assertEqual(self.abonar(h, tercio).status_code, 200)
+        for h in self.hitos():
+            filas = h["registros"]
+            self.assertEqual(h["monto_abonado"], sum(r["monto"] for r in filas))
+            self.assertEqual(h["monto_pendiente"], h["monto_pago"] - h["monto_abonado"])
+            self.assertEqual((h["estado"], filas[-1]["saldo"]), ("ABONADO", h["monto_pendiente"]))
+        ult = self.hitos()[0]
+        self.abonar(ult, int(ult["monto_pendiente"]))
+        self.assertEqual(self.hitos()[0]["estado"], "PAGADO")
+        self.assertEqual(self.hitos()[0]["monto_pendiente"], 0)
+
+    def test_el_ajuste_de_valor_solo_toca_lo_pendiente(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, 1000)
+        self.client.patch(f"/api/cotizaciones/{self.cot['id']}/", {"ajuste_monto": 100000, "aplicar": True, "motivo": "alza"},
+                          content_type="application/json", **self.h)
+        nuevos = self.hitos()
+        self.assertEqual(nuevos[0]["monto_abonado"], 1000)                       # lo cobrado no cambia
+        self.assertGreater(nuevos[0]["monto_pago"], h0["monto_pago"])            # el aumento se reparte entre los hitos pendientes
+        self.assertEqual(nuevos[0]["monto_pendiente"], nuevos[0]["monto_pago"] - 1000)
+        self.assertEqual(sum(x["monto_pago"] for x in nuevos), float(Cotizacion.objects.get(id=self.cot["id"]).costo_total))
+
+    def test_anular_todos_los_abonos_deja_el_hito_pendiente(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, 1000)
+        self.abonar(h0, 2000)
+        for r in self.hitos()[0]["registros"]:
+            self.client.delete(f"/api/registros-pago/{r['id']}/", **self.h)
+        h0 = self.hitos()[0]
+        self.assertEqual((h0["estado"], h0["monto_abonado"], h0["fecha_pago"], h0["registros"]), ("PENDIENTE", 0, None, []))
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "BORRADOR")
+
+    def test_una_rebaja_no_puede_dejar_un_hito_bajo_lo_ya_cobrado(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, int(h0["monto_pago"]) - 1000)                            # casi todo el anticipo cobrado
+        r = self.client.patch(f"/api/cotizaciones/{self.cot['id']}/", {"ajuste_monto": -3_000_000, "aplicar": True, "motivo": "rebaja"},
+                              content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("ya se cobraron", r.json()["message"])
+        self.assertEqual([h["monto_pago"] for h in self.hitos()][0], h0["monto_pago"])   # nada cambió
