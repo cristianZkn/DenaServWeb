@@ -5,6 +5,8 @@ import { reducirImagen } from "@/lib/imagenes";
 
 import { useCallback, useEffect, useState } from "react";
 
+const JSON_HDR = { "Content-Type": "application/json" };
+
 interface Proyecto {
   id: number;
   titulo: string;
@@ -13,9 +15,6 @@ interface Proyecto {
   publicado: boolean;
   imagenes: string[];
 }
-
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
-const jsonAuth = () => ({ "Content-Type": "application/json", ...auth() });
 const MAX_IMAGENES = 10;
 
 export default function PortafolioAdminPage() {
@@ -28,7 +27,7 @@ export default function PortafolioAdminPage() {
 
   const cargar = useCallback(async () => {
     try {
-      const r = await fetch("/api/portafolio/admin", { headers: auth() });
+      const r = await fetch("/api/portafolio/admin");
       if (r.ok) setProyectos(await r.json());
       else setError("No se pudo cargar el portafolio.");
     } catch {
@@ -43,7 +42,7 @@ export default function PortafolioAdminPage() {
   }, [cargar]);
 
   const alternarPublicado = async (p: Proyecto) => {
-    const r = await fetch(`/api/portafolio/${p.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ publicado: !p.publicado }) });
+    const r = await fetch(`/api/portafolio/${p.id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ publicado: !p.publicado }) });
     if (r.ok) {
       setAviso(p.publicado ? "El proyecto se ocultó de la página pública." : "El proyecto ya se ve en la página pública.");
       cargar();
@@ -52,7 +51,7 @@ export default function PortafolioAdminPage() {
 
   const eliminar = async (p: Proyecto) => {
     if (!(await preguntar({ titulo: "¿Seguro que desea eliminar este proyecto?", mensaje: `«${p.titulo}» y sus fotos se eliminarán de forma definitiva.`, peligro: true }))) return;
-    const r = await fetch(`/api/portafolio/${p.id}`, { method: "DELETE", headers: auth() });
+    const r = await fetch(`/api/portafolio/${p.id}`, { method: "DELETE" });
     if (r.ok) {
       setAviso("Proyecto eliminado.");
       cargar();
@@ -169,13 +168,13 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
       const base = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, ubicacion_comuna: comuna.trim() || null, publicado };
       // Las fotos suben de a pocas por vez: así ninguna solicitud supera el límite de tamaño del servidor.
       const r = proyecto
-        ? await fetch(`/api/portafolio/${proyecto.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ ...base, quitar_imagenes: quitar, quitar_portada: quitarPortada }) })
-        : await fetch("/api/portafolio", { method: "POST", headers: jsonAuth(), body: JSON.stringify(base) });
+        ? await fetch(`/api/portafolio/${proyecto.id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ ...base, quitar_imagenes: quitar, quitar_portada: quitarPortada }) })
+        : await fetch("/api/portafolio", { method: "POST", headers: JSON_HDR, body: JSON.stringify(base) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.message || "No se pudo guardar el proyecto.");
       const id = data.id as number;
       for (let i = 0; i < nuevas.length; i += 2) {
-        const rf = await fetch(`/api/portafolio/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ agregar_imagenes: nuevas.slice(i, i + 2) }) });
+        const rf = await fetch(`/api/portafolio/${id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ agregar_imagenes: nuevas.slice(i, i + 2) }) });
         if (!rf.ok) {
           const d = await rf.json().catch(() => ({}));
           return setError(`La obra se guardó, pero una foto falló: ${d.message || "intente subirla de nuevo editando la obra."}`);

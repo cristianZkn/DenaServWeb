@@ -5,8 +5,9 @@ import { useDialogo } from "./ConfirmDialog";
 
 import { useState } from "react";
 
+const JSON_HDR = { "Content-Type": "application/json" };
+
 const MAX_COMPROBANTE = 2_500_000;
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
 const hoy = () => new Date().toLocaleDateString("en-CA"); // AAAA-MM-DD en hora local
 
 export interface HitoPago {
@@ -93,7 +94,7 @@ export default function PagoModal({
   const valor = Number(monto) || 0;
 
   const verComprobante = async (r: RegistroPago) => {
-    const res = await fetch(`/api/registros-pago/${r.id}/comprobante/`, { headers: auth() });
+    const res = await fetch(`/api/registros-pago/${r.id}/comprobante/`);
     if (!res.ok) return setError("No se pudo abrir el comprobante.");
     window.open(URL.createObjectURL(await res.blob()), "_blank");
   };
@@ -113,7 +114,7 @@ export default function PagoModal({
         : undefined;
       const res = await fetch(`/api/hitos-pago/${actual.id}/registros/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...auth() },
+        headers: JSON_HDR,
         body: JSON.stringify({ monto: valor, metodo, fecha, nota, comprobante, comprobante_nombre: archivo?.name ?? "" }),
       });
       const data = await res.json().catch(() => ({}));
@@ -129,7 +130,7 @@ export default function PagoModal({
 
   const anular = async (r: RegistroPago) => {
     if (!(await preguntar({ titulo: "¿Anular este pago?", mensaje: `Se quitará el pago de ${clp(r.monto)} (${r.metodo_etiqueta}) y el saldo del hito se recalculará.`, peligro: true, textoConfirmar: "Anular" }))) return;
-    const res = await fetch(`/api/registros-pago/${r.id}/`, { method: "DELETE", headers: auth() });
+    const res = await fetch(`/api/registros-pago/${r.id}/`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setError(data.message || "No se pudo anular el pago.");
     setError("");

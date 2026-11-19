@@ -17,9 +17,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return void router.push("/login");
-    fetch("/api/cotizaciones/progreso", { headers: { Authorization: `Bearer ${token}` } })
+    fetch("/api/cotizaciones/progreso")
       .then((r) => (r.ok ? r.json() : []))
       .then(setProgreso)
       .catch(() => setProgreso([]))

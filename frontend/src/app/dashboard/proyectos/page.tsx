@@ -57,7 +57,7 @@ export default function ProyectosPage() {
   const llamarNivelacion = async (cot: Cotizacion, aplicar: boolean) => {
     const res = await fetch(`/api/cotizaciones/${cot.id}/nivelacion`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ espesor_cm: espesor, arido_empresa: aridoEmpresa, aplicar }),
     });
     const data = await res.json();
@@ -100,21 +100,13 @@ export default function ProyectosPage() {
   const { preguntar, dialogo } = useDialogo();
 
   const fetchCotizaciones = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const res = await fetch("/api/cotizaciones", { headers });
+      const res = await fetch("/api/cotizaciones");
 
       if (res.ok) {
         const data = await res.json();
         setCotizaciones(data);
       } else if (res.status === 401) {
-        localStorage.removeItem("token");
         router.push("/login");
       } else {
         setError("No fue posible obtener la lista de proyectos.");
@@ -136,9 +128,7 @@ export default function ProyectosPage() {
     setHitos([]);
     setHitosCargando(true);
     try {
-      const token = localStorage.getItem("token");
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/hitos`, {
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setHitos(await res.json());

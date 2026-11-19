@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useDialogo } from "@/components/ConfirmDialog";
 import { fotoPrivadaADataUrl, reducirImagen } from "@/lib/imagenes";
 
+const JSON_HDR = { "Content-Type": "application/json" };
+
 export interface RegistroBitacora {
   id: number;
   porcentaje: number;
@@ -14,8 +16,6 @@ export interface RegistroBitacora {
 }
 
 const MAX_FOTOS = 6;
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
-const jsonAuth = () => ({ "Content-Type": "application/json", ...auth() });
 const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
 
 /** Foto protegida: se descarga con la sesión y se muestra como imagen. */
@@ -49,7 +49,7 @@ export default function BitacoraAvance({
   const [error, setError] = useState("");
 
   const cargar = useCallback(async () => {
-    const r = await fetch(`/api/cotizaciones/${cotizacionId}/bitacora`, { headers: auth() });
+    const r = await fetch(`/api/cotizaciones/${cotizacionId}/bitacora`);
     if (r.ok) {
       const datos: RegistroBitacora[] = await r.json();
       setRegistros(datos);
@@ -83,13 +83,13 @@ export default function BitacoraAvance({
     try {
       // Las fotos suben de a dos para no superar el límite de tamaño de una solicitud.
       const r = await fetch(`/api/cotizaciones/${cotizacionId}/bitacora`, {
-        method: "POST", headers: jsonAuth(),
+        method: "POST", headers: JSON_HDR,
         body: JSON.stringify({ porcentaje: pct, comentario: comentario.trim(), imagenes: fotos.slice(0, 2) }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return setError(d.message || "No se pudo registrar el avance.");
       for (let i = 2; i < fotos.length; i += 2) {
-        const rf = await fetch(`/api/bitacora/${d.id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify({ agregar_imagenes: fotos.slice(i, i + 2) }) });
+        const rf = await fetch(`/api/bitacora/${d.id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ agregar_imagenes: fotos.slice(i, i + 2) }) });
         if (!rf.ok) {
           setError("El avance se registró, pero una foto no se pudo subir. Intente agregarla de nuevo.");
           break;
@@ -113,7 +113,7 @@ export default function BitacoraAvance({
       peligro: true,
     });
     if (!ok) return;
-    const r = await fetch(`/api/bitacora/${reg.id}`, { method: "DELETE", headers: auth() });
+    const r = await fetch(`/api/bitacora/${reg.id}`, { method: "DELETE" });
     if (!r.ok) return setError("No se pudo eliminar el registro.");
     await cargar();
     onCambio();

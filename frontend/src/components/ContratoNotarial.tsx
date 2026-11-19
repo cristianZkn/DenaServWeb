@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useDialogo } from "@/components/ConfirmDialog";
 
+const JSON_HDR = { "Content-Type": "application/json" };
+
 const MAX_MB = 3;
 
 /** Contrato notarial oficial del proyecto (PDF opcional). Se anexa al final de las fichas descargables. */
@@ -11,7 +13,6 @@ export default function ContratoNotarial({ cotizacionId, adjunto, onCambio }: { 
   const input = useRef<HTMLInputElement>(null);
   const [subiendo, setSubiendo] = useState(false);
   const aviso = (mensaje: string) => void preguntar({ titulo: "Contrato notarial", mensaje, soloAviso: true });
-  const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
   const url = `/api/cotizaciones/${cotizacionId}/contrato/`;
 
   const elegir = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,21 +23,21 @@ export default function ContratoNotarial({ cotizacionId, adjunto, onCambio }: { 
     if (f.size > MAX_MB * 1_000_000) return aviso(`El PDF puede pesar hasta ${MAX_MB} MB.`);
     setSubiendo(true);
     const pdf = await new Promise<string>((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.readAsDataURL(f); });
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...auth() }, body: JSON.stringify({ nombre_archivo: f.name, pdf }) });
+    const res = await fetch(url, { method: "POST", headers: JSON_HDR, body: JSON.stringify({ nombre_archivo: f.name, pdf }) });
     setSubiendo(false);
     if (!res.ok) return aviso((await res.json().catch(() => ({}))).message || "No se pudo adjuntar el contrato.");
     onCambio();
   };
 
   const ver = async () => {
-    const res = await fetch(url, { headers: auth() });
+    const res = await fetch(url);
     if (!res.ok) return aviso("No se pudo abrir el contrato.");
     window.open(URL.createObjectURL(await res.blob()), "_blank");
   };
 
   const quitar = async () => {
     if (!(await preguntar({ titulo: "¿Seguro que desea quitar el contrato?", mensaje: "El PDF dejará de mostrarse en las fichas.", peligro: true }))) return;
-    await fetch(url, { method: "DELETE", headers: auth() });
+    await fetch(url, { method: "DELETE" });
     onCambio();
   };
 

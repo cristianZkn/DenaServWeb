@@ -43,8 +43,7 @@ export default function LoginPage() {
           setError(data.message || `Error del servidor (${res.status})`);
           return;
         }
-        localStorage.setItem("token", data.token);
-        if (data.usuario) localStorage.setItem("usuario", JSON.stringify(data.usuario));
+        // El servidor dejó la sesión en una cookie httpOnly: aquí no se guarda ningún token.
         setSuccessMsg("Autenticación exitosa. Redirigiendo...");
         window.location.href = "/dashboard";
       } catch (err: any) {

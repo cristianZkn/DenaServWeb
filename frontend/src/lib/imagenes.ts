@@ -23,7 +23,7 @@ export function reducirImagen(archivo: File): Promise<string> {
 /** Descarga una foto protegida (requiere la sesión) y la devuelve como data URL, lista para mostrar o incluir en el PDF. */
 export async function fotoPrivadaADataUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+    const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve) => {

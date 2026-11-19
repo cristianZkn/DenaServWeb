@@ -37,9 +37,7 @@ export default function ProveedoresPage() {
 
   const fetchProveedores = async () => {
     try {
-      const token = localStorage.getItem("token");
       const res = await fetch("/api/proveedores", {
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setProveedores(await res.json());
@@ -59,7 +57,6 @@ export default function ProveedoresPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
 
     const rut = formData.rut_empresa.trim();
     const razon = formData.razon_social.trim();
@@ -88,8 +85,7 @@ export default function ProveedoresPage() {
       const res = await fetch(url, {
         method,
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload),
       });
@@ -123,10 +119,8 @@ export default function ProveedoresPage() {
   const handleDelete = async (id: number) => {
     if (!(await preguntar({ titulo: "¿Seguro que desea eliminar este proveedor?", mensaje: "Esta acción no se puede deshacer.", peligro: true }))) return;
     try {
-      const token = localStorage.getItem("token");
       const res = await fetch(`/api/proveedores/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         fetchProveedores();

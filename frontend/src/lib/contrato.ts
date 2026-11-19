@@ -8,8 +8,8 @@ export async function unirContrato(ficha: Blob, contrato: ArrayBuffer | null): P
   return new Blob([new Uint8Array(await salida.save())], { type: "application/pdf" });
 }
 
-/** Descarga el contrato adjunto, con la sesión del panel o con la URL pública de la ficha. Null si no existe. */
-export async function bajarContrato(url: string, conSesion: boolean): Promise<ArrayBuffer | null> {
-  const res = await fetch(url, conSesion ? { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } } : undefined);
+/** Descarga el contrato adjunto (la sesión viaja en una cookie). Null si no existe. */
+export async function bajarContrato(url: string): Promise<ArrayBuffer | null> {
+  const res = await fetch(url);
   return res.ok ? res.arrayBuffer() : null;
 }

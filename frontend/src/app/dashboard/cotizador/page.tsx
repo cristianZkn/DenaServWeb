@@ -166,7 +166,7 @@ export default function CotizadorPage() {
     setActualizandoCombustible(true);
     try {
       const res = await fetch(forzar ? "/api/combustibles/actualizar/" : "/api/combustibles/", {
-        method: forzar ? "POST" : "GET", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        method: forzar ? "POST" : "GET",
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) return setErrorCombustible(d?.message || "No se pudo obtener el precio del combustible.");
@@ -212,10 +212,8 @@ export default function CotizadorPage() {
   // Carga del catálogo de materiales activos.
   useEffect(() => {
     const cargar = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return router.push("/login");
       try {
-        const res = await fetch("/api/catalogo-tipos/?activo=true", { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch("/api/catalogo-tipos/?activo=true");
         if (res.ok) setCatalogo(await res.json());
       } catch {
         setError("No fue posible cargar los materiales. Recargue la página.");
@@ -246,7 +244,7 @@ export default function CotizadorPage() {
       try {
         const res = await fetch("/api/cotizaciones/calcular", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             superficie_m2: num(formData.superficie_m2),
             distancia_km: num(formData.distancia_flete_km),
@@ -320,7 +318,7 @@ export default function CotizadorPage() {
     try {
       const res = await fetch("/api/cotizaciones", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
           superficie_m2: num(formData.superficie_m2),

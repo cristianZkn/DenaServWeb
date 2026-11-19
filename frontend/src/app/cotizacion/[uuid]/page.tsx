@@ -31,7 +31,7 @@ async function descargarPdf(c: Cotizacion, token: string) {
   // react-pdf se carga solo al descargar (pesado y solo cliente).
   const [{ pdf }, { default: FichaPdf }] = await Promise.all([import("@react-pdf/renderer"), import("./FichaPdf")]);
   const ficha = await pdf(<FichaPdf c={c} />).toBlob();
-  const blob = await unirContrato(ficha, c.tiene_contrato ? await bajarContrato(`/api/cotizaciones/public/${token}/contrato`, false) : null);
+  const blob = await unirContrato(ficha, c.tiene_contrato ? await bajarContrato(`/api/cotizaciones/public/${token}/contrato`) : null);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${c.codigo_cotizacion}.pdf`;

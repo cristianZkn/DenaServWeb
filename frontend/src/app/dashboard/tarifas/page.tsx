@@ -3,6 +3,8 @@
 import { useDialogo } from "@/components/ConfirmDialog";
 import { useEffect, useState } from "react";
 
+const JSON_HDR = { "Content-Type": "application/json" };
+
 interface Tarifa {
   clave: string;
   grupo: string;
@@ -23,8 +25,6 @@ interface Combustible {
   fuente: string;
   actualizado_en: string | null;
 }
-
-const headers = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` });
 const fmt = (n: number) => n.toLocaleString("es-CL", { maximumFractionDigits: 2 });
 
 export default function TarifasPage() {
@@ -39,7 +39,7 @@ export default function TarifasPage() {
   const avisar = (mensaje: string) => void preguntar({ titulo: "No se pudo completar la acción", mensaje, soloAviso: true });
 
   useEffect(() => {
-    fetch("/api/tarifas/", { headers: headers() })
+    fetch("/api/tarifas/")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setTarifas)
       .catch(() => avisar("No se pudieron cargar las tarifas."))
@@ -49,8 +49,8 @@ export default function TarifasPage() {
   const cargarComb = async (forzar = false) => {
     setConsultando(true);
     try {
-      if (forzar) await fetch("/api/combustibles/actualizar/", { method: "POST", headers: headers() });
-      const res = await fetch("/api/combustibles/estado/", { headers: headers() });
+      if (forzar) await fetch("/api/combustibles/actualizar/", { method: "POST" });
+      const res = await fetch("/api/combustibles/estado/");
       if (res.ok) setComb(await res.json());
       else avisar("No se pudo cargar el precio del combustible.");
     } finally {
@@ -62,7 +62,7 @@ export default function TarifasPage() {
   const fijarComb = async (c: Combustible) => {
     const valor = Number(editandoComb[c.tipo]);
     if (!Number.isFinite(valor) || valor <= 0) return avisar("Ingrese el precio por litro, mayor que 0.");
-    const res = await fetch(`/api/combustibles/${c.tipo}`, { method: "PUT", headers: headers(), body: JSON.stringify({ valor }) });
+    const res = await fetch(`/api/combustibles/${c.tipo}`, { method: "PUT", headers: JSON_HDR, body: JSON.stringify({ valor }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return avisar(data.message || "No se pudo guardar el precio.");
     setComb(data);
@@ -70,7 +70,7 @@ export default function TarifasPage() {
   };
 
   const volverACne = async (c: Combustible) => {
-    const res = await fetch(`/api/combustibles/${c.tipo}`, { method: "DELETE", headers: headers() });
+    const res = await fetch(`/api/combustibles/${c.tipo}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return avisar(data.message || "No se pudo volver al precio de la CNE.");
     setComb(data);
@@ -86,7 +86,7 @@ export default function TarifasPage() {
     const valor = Number(texto);
     if (texto === undefined || texto.trim() === "" || !Number.isFinite(valor) || valor < 0) return avisar("Ingrese un valor numérico mayor o igual a 0.");
     setGuardando(t.clave);
-    const res = await fetch(`/api/tarifas/${t.clave}`, { method: "PUT", headers: headers(), body: JSON.stringify({ valor }) });
+    const res = await fetch(`/api/tarifas/${t.clave}`, { method: "PUT", headers: JSON_HDR, body: JSON.stringify({ valor }) });
     setGuardando("");
     if (!res.ok) return avisar((await res.json().catch(() => ({}))).message || "No se pudo guardar el valor.");
     reemplazar(await res.json());
@@ -94,7 +94,7 @@ export default function TarifasPage() {
 
   const restablecer = async (t: Tarifa) => {
     if (!(await preguntar({ titulo: `¿Volver «${t.nombre}» a su valor original?`, mensaje: `Quedará en ${fmt(t.valor_de_fabrica)} ${t.unidad}.`, peligro: true }))) return;
-    const res = await fetch(`/api/tarifas/${t.clave}`, { method: "DELETE", headers: headers() });
+    const res = await fetch(`/api/tarifas/${t.clave}`, { method: "DELETE" });
     if (!res.ok) return avisar("No se pudo restablecer el valor.");
     reemplazar(await res.json());
   };

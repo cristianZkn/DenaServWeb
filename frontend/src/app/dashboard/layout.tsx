@@ -25,41 +25,32 @@ export default function DashboardLayout({
   const [autorizado, setAutorizado] = useState(false);
 
   useEffect(() => {
-    // Guardia de sesión para todo el panel + cierre de sesión automático si la API responde 401 (token vencido).
-    if (!localStorage.getItem("token")) {
-      router.replace("/login");
-      return;
-    }
-    setAutorizado(true);
+    // Guardia de sesión del panel: la sesión es una cookie httpOnly que solo ve el servidor, así que se le pregunta
+    // al backend quién es el usuario. Además, si cualquier llamada responde 401 (sesión vencida) se vuelve al login.
+    let activo = true;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((u) => {
+        if (!activo) return;
+        setUserEmail(u.email || u.nombre_completo || "");
+        setAutorizado(true);
+      })
+      .catch(() => router.replace("/login"));
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
       const res = await originalFetch(...args);
       const url = String(args[0] instanceof Request ? args[0].url : args[0]);
-      if (res.status === 401 && url.includes("/api/") && !url.includes("/auth/")) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("usuario");
-        window.location.href = "/login";
-      }
+      if (res.status === 401 && url.includes("/api/") && !url.includes("/auth/")) window.location.href = "/login";
       return res;
     };
     return () => {
+      activo = false;
       window.fetch = originalFetch;
     };
   }, [router]);
 
-  useEffect(() => {
-    const rawUser = localStorage.getItem("usuario");
-    if (rawUser) {
-      try {
-        const u = JSON.parse(rawUser);
-        setUserEmail(u.email || u.nombre_completo || "");
-      } catch (e) {}
-    }
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("usuario");
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     router.push("/"); // al cerrar sesión se vuelve al portafolio público
   };
 

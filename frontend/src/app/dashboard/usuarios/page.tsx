@@ -12,6 +12,7 @@ interface Usuario {
   activo: boolean;
 }
 
+const JSON_HDR = { "Content-Type": "application/json" };
 const VACIO = { id: 0, rut: "", nombre_completo: "", email: "", activo: true };
 
 export default function UsuariosPage() {
@@ -21,11 +22,10 @@ export default function UsuariosPage() {
   const [editando, setEditando] = useState(false);
   const { preguntar, dialogo } = useDialogo();
   const avisar = (mensaje: string) => void preguntar({ titulo: "No se pudo completar la acción", mensaje, soloAviso: true });
-  const headers = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` });
 
   const cargar = async () => {
     try {
-      const res = await fetch("/api/usuarios/", { headers: headers() });
+      const res = await fetch("/api/usuarios/");
       if (res.ok) setUsuarios(await res.json());
       else avisar("No se pudo cargar la lista de usuarios.");
     } catch {
@@ -52,7 +52,7 @@ export default function UsuariosPage() {
     try {
       const res = await fetch(editando ? `/api/usuarios/${form.id}` : "/api/usuarios/", {
         method: editando ? "PUT" : "POST",
-        headers: headers(),
+        headers: JSON_HDR,
         body: JSON.stringify({ rut: form.rut, nombre_completo: form.nombre_completo, email: form.email.trim(), activo: form.activo }),
       });
       if (res.ok) {
@@ -68,7 +68,7 @@ export default function UsuariosPage() {
 
   const eliminar = async (u: Usuario) => {
     if (!(await preguntar({ titulo: `¿Seguro que desea eliminar a ${u.nombre_completo}?`, mensaje: "Ya no podrá ingresar al panel.", peligro: true }))) return;
-    const res = await fetch(`/api/usuarios/${u.id}`, { method: "DELETE", headers: headers() });
+    const res = await fetch(`/api/usuarios/${u.id}`, { method: "DELETE" });
     if (res.ok) cargar();
     else avisar((await res.json()).message || "No se pudo eliminar.");
   };

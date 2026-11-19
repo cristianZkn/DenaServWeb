@@ -1,6 +1,7 @@
 "use client";
 
 import { useDialogo } from "@/components/ConfirmDialog";
+import { urlSegura } from "@/lib/url";
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -13,6 +14,8 @@ import { claseEstado, etiquetaEstado } from "@/lib/estados";
 import { fotoPrivadaADataUrl } from "@/lib/imagenes";
 import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, textoBotonPago, type HitoPago } from "@/components/PagoModal";
 import type { FichaData } from "@/app/cotizacion/[uuid]/FichaPdf";
+
+const JSON_HDR = { "Content-Type": "application/json" };
 
 interface Item {
   id: number;
@@ -80,8 +83,6 @@ interface LineaMaterial {
 const ETAPA: Record<string, string> = { ETAPA_1: "Etapa 1", ETAPA_2: "Etapa 2" };
 
 const clp = (n: number | string) => "$" + Math.round(Number(n)).toLocaleString("es-CL");
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
-const jsonAuth = () => ({ "Content-Type": "application/json", ...auth() });
 const NOMBRE_HITO: Record<string, string> = {
   ANTICIPO_40: "1.º pago: anticipo (40 %)",
   AVANCE_30: "2.º pago: al llegar al 50 % de avance (30 %)",
@@ -122,7 +123,7 @@ function MaterialesProyecto({ cot }: { cot: Detalle }) {
             <tr key={l.id}>
               <td className="py-2 pr-3 font-semibold text-slate-900">
                 {l.catalogo_tipo?.fuente_url ? (
-                  <a href={l.catalogo_tipo.fuente_url} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
+                  <a href={urlSegura(l.catalogo_tipo.fuente_url)} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
                 ) : (
                   l.catalogo_tipo?.nombre ?? "Material eliminado"
                 )}
@@ -201,9 +202,9 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const cargar = useCallback(async () => {
     try {
       const [rc, rg, rh] = await Promise.all([
-        fetch(`/api/cotizaciones/${id}`, { headers: auth() }),
-        fetch(`/api/cotizaciones/${id}/ganancias`, { headers: auth() }),
-        fetch(`/api/cotizaciones/${id}/cambios`, { headers: auth() }),
+        fetch(`/api/cotizaciones/${id}`),
+        fetch(`/api/cotizaciones/${id}/ganancias`),
+        fetch(`/api/cotizaciones/${id}/cambios`),
       ]);
       if (!rc.ok) throw new Error("No se encontró el proyecto.");
       const c: Detalle = await rc.json();
@@ -234,8 +235,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     cargar();
     Promise.all([
-      fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO&activo=true", { headers: auth() }),
-      fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO&activo=true", { headers: auth() }),
+      fetch("/api/catalogo-tipos/?categoria=BASE_TERRENO&activo=true"),
+      fetch("/api/catalogo-tipos/?categoria=REVESTIMIENTO&activo=true"),
     ]).then(async ([a, b]) => {
       if (a.ok) setBases(await a.json());
       if (b.ok) setRevest(await b.json());
@@ -269,7 +270,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     if (!cot || panel !== "valor" || !form.superficie_m2) return;
     const t = setTimeout(async () => {
-      const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(false)) });
+      const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify(payload(false)) });
       setPrevia(res.ok ? await res.json() : null);
     }, 400);
     return () => clearTimeout(t);
@@ -287,7 +288,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     if (vacios.length) { marcarInvalido(...vacios); return avisar("Complete los campos obligatorios marcados en rojo.", true); }
     const err = errorDatosCliente({ nombre: form.cliente_nombre, telefono: form.cliente_telefono, rut: form.cliente_rut, direccion: form.direccion_terreno });
     if (err) return avisar(err, true);
-    const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true, true)) });
+    const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify(payload(true, true)) });
     if (!res.ok) return avisar((await res.json()).message || "No se pudo guardar.", true);
     avisar("Listo: los datos del cliente quedaron guardados.");
     cargar();
@@ -298,7 +299,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     if (dif !== 0 && !motivo.trim()) { marcarInvalido("pv-motivo"); return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true); }
     const texto = `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
     if (!(await preguntar({ titulo: dif === 0 ? "¿Guardar los cambios?" : "¿Confirma el cambio de valor?", mensaje: dif === 0 ? undefined : texto }))) return;
-    const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true)) });
+    const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify(payload(true)) });
     const data = await res.json();
     if (!res.ok) return avisar(data.message || "No se pudo guardar.", true);
     setMotivo("");
@@ -318,7 +319,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       peligro: true,
     });
     if (!ok) return;
-    const res = await fetch(`/api/cotizaciones/${id}`, { method: "DELETE", headers: jsonAuth() });
+    const res = await fetch(`/api/cotizaciones/${id}`, { method: "DELETE", headers: JSON_HDR });
     if (!res.ok) return avisar("No se pudo eliminar el proyecto.", true);
     router.push("/dashboard/proyectos");
   };
@@ -328,7 +329,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const descargarPdf = async () => {
     if (!cot || !gan) return;
     const [rd, { pdf }, { default: FichaEmpresaPdf }] = await Promise.all([
-      fetch(`/api/cotizaciones/${id}/desglose`, { headers: auth() }),
+      fetch(`/api/cotizaciones/${id}/desglose`),
       import("@react-pdf/renderer"),
       import("@/app/cotizacion/[uuid]/FichaEmpresaPdf"),
     ]);
@@ -338,7 +339,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       bitacora.map(async (b) => ({ ...b, fotos: (await Promise.all(b.fotos.slice(0, 3).map(fotoPrivadaADataUrl))).filter((f): f is string => !!f) }))
     );
     const ficha = await pdf(<FichaEmpresaPdf c={cot} desglose={desglose} interno={gan} bitacora={registros} />).toBlob();
-    const blob = await unirContrato(ficha, cot.tiene_contrato ? await bajarContrato(`/api/cotizaciones/${id}/contrato/`, true) : null);
+    const blob = await unirContrato(ficha, cot.tiene_contrato ? await bajarContrato(`/api/cotizaciones/${id}/contrato/`) : null);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${cot.codigo_cotizacion}-empresa.pdf`;

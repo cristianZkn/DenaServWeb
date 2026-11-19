@@ -1,9 +1,12 @@
 "use client";
 
 import { useDialogo } from "@/components/ConfirmDialog";
+import { urlSegura } from "@/lib/url";
 import { CATEGORIAS } from "@/lib/categorias";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+
+const JSON_HDR = { "Content-Type": "application/json" };
 
 interface Insumo {
   id: number;
@@ -47,8 +50,6 @@ function antiguedad(iso: string | null) {
   return { texto: dias <= 0 ? "Hoy" : dias === 1 ? "Ayer" : `Hace ${dias} días`, dias };
 }
 
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" });
-
 export default function CatalogosPage() {
   const [items, setItems] = useState<Insumo[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -65,9 +66,9 @@ export default function CatalogosPage() {
   const cargar = useCallback(async () => {
     try {
       const [ri, rp, re] = await Promise.all([
-        fetch("/api/insumos/", { headers: authHeaders() }),
-        fetch("/api/proveedores/", { headers: authHeaders() }),
-        fetch("/api/insumos/actualizar-precios/estado", { headers: authHeaders() }),
+        fetch("/api/insumos/"),
+        fetch("/api/proveedores/"),
+        fetch("/api/insumos/actualizar-precios/estado"),
       ]);
       if (ri.ok) setItems(await ri.json());
       if (rp.ok) setProveedores(await rp.json());
@@ -90,7 +91,7 @@ export default function CatalogosPage() {
   const vigilar = () => {
     if (sondeo.current) clearInterval(sondeo.current);
     sondeo.current = setInterval(async () => {
-      const r = await fetch("/api/insumos/actualizar-precios/estado", { headers: authHeaders() });
+      const r = await fetch("/api/insumos/actualizar-precios/estado");
       if (!r.ok) return;
       const e: Estado = await r.json();
       setEstado(e);
@@ -110,7 +111,7 @@ export default function CatalogosPage() {
 
   const sincronizar = async () => {
     setError(""); setAviso("");
-    const r = await fetch("/api/insumos/actualizar-precios", { method: "POST", headers: authHeaders() });
+    const r = await fetch("/api/insumos/actualizar-precios", { method: "POST" });
     if (r.status === 202 || r.status === 409) {
       setEstado((p) => ({ ...(p as Estado), estado: "running", resultado: null }));
       vigilar();
@@ -237,7 +238,7 @@ export default function CatalogosPage() {
                       <tr className={`hover:bg-slate-50 ${i.activo ? "" : "opacity-60"}`}>
                         <td className="px-4 py-2.5 max-w-sm">
                           <div className="font-semibold text-slate-900 truncate" title={i.nombre}>
-                            {i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre} ↗</a> : i.nombre}
+                            {i.url ? <a href={urlSegura(i.url)} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre} ↗</a> : i.nombre}
                           </div>
                           {!i.activo && <span className="text-xs font-semibold text-amber-700">{i.verificado ? "Desactivado" : "Por confirmar"}</span>}
                           {i.activo && !i.verificado && <span className="text-xs font-semibold text-amber-700">Sin verificar</span>}
@@ -331,7 +332,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     payload.mano_obra_m2 = Number(f.mano_obra_m2) || 0;
     try {
       const r = await fetch(item ? `/api/catalogo-tipos/${item.id}` : "/api/catalogo-tipos/", {
-        method: item ? "PUT" : "POST", headers: authHeaders(), body: JSON.stringify(payload),
+        method: item ? "PUT" : "POST", headers: JSON_HDR, body: JSON.stringify(payload),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) return setError(data.message || "No se pudo guardar.");
@@ -345,7 +346,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
 
   const eliminar = async () => {
     if (!item || !(await preguntar({ titulo: "¿Seguro que desea eliminar este material?", mensaje: `«${item.nombre}» se eliminará de forma definitiva.`, peligro: true }))) return;
-    const r = await fetch(`/api/catalogo-tipos/${item.id}`, { method: "DELETE", headers: authHeaders() });
+    const r = await fetch(`/api/catalogo-tipos/${item.id}`, { method: "DELETE" });
     if (r.ok) onGuardado("Material eliminado.");
     else setError((await r.json().catch(() => ({}))).message || "No se pudo eliminar (puede estar usado en una cotización). Desactívelo en su lugar.");
   };
