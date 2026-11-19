@@ -20,10 +20,10 @@ from ninja.security import APIKeyHeader, HttpBearer
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
     DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
-    BitacoraAvance, BitacoraFoto, ContratoNotarial
+    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa
 )
 from .schemas import (
-    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema,
+    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema, TarifaSchema, TarifaInSchema,
     ProveedorSchema, ProveedorInSchema,
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
@@ -290,6 +290,39 @@ def eliminar_usuario(request, usuario_id: int):
 
 
 # ==============================================================================
+# 1c. TARIFAS DEL CÁLCULO (valores fijos que la empresa puede cambiar sin tocar el código)
+# ==============================================================================
+def _tarifas_listadas():
+    actuales = calculo.vigentes()
+    return [{"clave": k, "grupo": g, "nombre": n, "unidad": u, "descripcion": d, "valor": float(actuales[k]),
+             "valor_de_fabrica": float(calculo.DEFAULTS[k]), "modificada": actuales[k] != calculo.DEFAULTS[k]}
+            for k, g, n, u, d in calculo.TARIFAS_META]
+
+
+@router.get("/tarifas/", response=List[TarifaSchema], auth=AuthBearer())
+def listar_tarifas(request):
+    return _tarifas_listadas()
+
+
+@router.put("/tarifas/{clave}", response={200: TarifaSchema, 404: MessageSchema}, auth=AuthBearer())
+def cambiar_tarifa(request, clave: str, data: TarifaInSchema):
+    """Nuevo valor de una tarifa: rige para las cotizaciones que se calculen desde ahora (las ya guardadas no cambian)."""
+    if clave not in calculo.DEFAULTS:
+        return 404, {"message": "Tarifa no encontrada"}
+    Tarifa.objects.update_or_create(clave=clave, defaults={"valor": data.valor, "usuario": request.auth, "actualizado_en": datetime.now(tz.utc)})
+    return 200, next(x for x in _tarifas_listadas() if x["clave"] == clave)
+
+
+@router.delete("/tarifas/{clave}", response={200: TarifaSchema, 404: MessageSchema}, auth=AuthBearer())
+def restablecer_tarifa(request, clave: str):
+    """Vuelve al valor de fábrica."""
+    if clave not in calculo.DEFAULTS:
+        return 404, {"message": "Tarifa no encontrada"}
+    Tarifa.objects.filter(clave=clave).delete()
+    return 200, next(x for x in _tarifas_listadas() if x["clave"] == clave)
+
+
+# ==============================================================================
 # 2. PROVEEDORES
 # ==============================================================================
 @router.get("/proveedores/", response=List[ProveedorSchema], auth=AuthBearer())
@@ -486,16 +519,16 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 costo_total=r["total"],
                 estado="BORRADOR",
                 tipo_proyecto=data.tipo_proyecto,
-                ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.DEFAULTS["ganancia_m2"],
+                ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.vigentes()["ganancia_m2"],
                 m2_vigas_vista=data.m2_vigas_vista,
-                radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.DEFAULTS["radier_m2"],
+                radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.vigentes()["radier_m2"],
                 modo_lista=data.modo_lista,
                 modo_tarifas=data.modo_tarifas,
                 n_trabajadores=data.n_trabajadores,
                 dias_obra=data.dias_obra,
                 lleva_radier=data.lleva_radier or data.tipo_proyecto == "SOLO_RADIER",
-                tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.DEFAULTS["mo_radier_m2"],
-                precio_litro=data.precio_litro if data.precio_litro is not None else calculo.DEFAULTS["precio_litro"],
+                tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.vigentes()["mo_radier_m2"],
+                precio_litro=data.precio_litro if data.precio_litro is not None else calculo.vigentes()["precio_litro"],
                 usuario=request.auth
             )
 
@@ -951,11 +984,11 @@ def desglose_cotizacion(request, cotizacion_id: int):
         adicionales = [{"nombre": d.catalogo_tipo.nombre, "cantidad": d.cantidad_calculada, "mano_obra_m2": d.catalogo_tipo.mano_obra_m2}
                        for d in detalles if d.es_adicional]
         lineas = calculo.lineas_mano_obra_tarifas(cot.superficie_m2, cot.n_trabajadores, cot.m2_vigas_vista, cot.tipo_proyecto,
-                                                  adicionales, cot.lleva_radier, cot.tarifa_radier_m2, calculo.DEFAULTS)
+                                                  adicionales, cot.lleva_radier, cot.tarifa_radier_m2, calculo.vigentes())
         mano_obra = [{"concepto": l["concepto"], "m2": float(l["m2"]), "tarifa": float(l["tarifa"]),
                       "trabajadores": l["trabajadores"], "subtotal": float(l["subtotal"])} for l in lineas]
-        dias = cot.dias_obra + (int(calculo.DEFAULTS["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
-        tr = calculo.traslado_combustible(cot.distancia_flete_km, dias, cot.precio_litro, calculo.DEFAULTS["km_por_litro"])
+        dias = cot.dias_obra + (int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+        tr = calculo.traslado_combustible(cot.distancia_flete_km, dias, cot.precio_litro, calculo.vigentes()["km_por_litro"])
         traslado = {"km": float(tr["km"]), "dias": tr["dias"], "litros": float(tr["litros"]),
                     "precio_litro": float(tr["precio_litro"]), "costo": float(tr["costo"])}
     else:

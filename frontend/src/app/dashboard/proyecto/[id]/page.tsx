@@ -486,7 +486,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
                   <div>
                     <label className={campo}>Metros con vigas a la vista</label>
                     <input type="number" min="0" value={form.m2_vigas_vista} onChange={set("m2_vigas_vista")} />
-                    <p className={ayuda}>Suma $65.000 por cada m².</p>
+                    <p className={ayuda}>Suma el adicional por m² vigente (ver Tarifas).</p>
                   </div>
                   <div>
                     <label className={campo}>Ganancia de la empresa por m² ($)</label>

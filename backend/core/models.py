@@ -301,6 +301,17 @@ class BitacoraFoto(models.Model):
         ordering = ['id']
 
 
+# Tarifas fijas del cálculo que la empresa cambió desde la web (las que no están aquí usan el valor de fábrica)
+class Tarifa(models.Model):
+    clave = models.CharField(max_length=50, unique=True)
+    valor = models.DecimalField(max_digits=14, decimal_places=2)
+    actualizado_en = models.DateTimeField(default=timezone.now)
+    usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        db_table = 'tarifa'
+
+
 # Contrato notarial oficial (PDF opcional) del proyecto
 class ContratoNotarial(models.Model):
     cotizacion = models.OneToOneField(Cotizacion, on_delete=models.CASCADE, related_name='contrato_notarial')

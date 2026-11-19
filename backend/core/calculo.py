@@ -4,7 +4,7 @@ from decimal import Decimal as D, ROUND_HALF_UP
 
 K_COMPACTACION = D("1.20")
 IVA = D("0.19")
-# shortcut: parámetros de negocio fijos por defecto, mover a tabla de configuración cuando el jefe los quiera editar.
+# Valores de fábrica. Los vigentes son estos más lo que la empresa cambie desde la web (tabla `tarifa`, ver `vigentes()`).
 DEFAULTS = {
     # Tarifas indicadas por la empresa (casa semi terminada económica ≈ $195.000/m²).
     "mano_obra_m2": D("25000"),    # maestros, CLP por m²
@@ -23,6 +23,31 @@ DEFAULTS = {
     "km_por_litro": D("10"),            # rendimiento: 1 litro = 10 km
     "dias_fabricacion_radier": D("4"),  # días que toma fabricar el radier o la base
 }
+
+
+# Cómo se muestra cada tarifa editable en la web: (clave, grupo, nombre, unidad, descripción)
+TARIFAS_META = [
+    ("mano_obra_m2", "Casa", "Mano de obra de maestros", "$/m²", "Valor fijo total para el equipo de maestros, por m² de casa."),
+    ("ganancia_m2", "Casa", "Ganancia de la empresa", "$/m²", "Margen de la empresa por m² construido."),
+    ("viga_vista_m2", "Casa", "Vigas a la vista", "$/m²", "Adicional por cada m² con vigas a la vista."),
+    ("materiales_ref_m2", "Casa", "Referencia de materiales", "$/m²", "Solo para cotizaciones antiguas sin lista de materiales."),
+    ("tabique_factor_muros", "Casa", "Factor de muros", "veces", "Metros de muro = perímetro × este factor (estima la tabiquería)."),
+    ("traslado_m2_hasta_35km", "Traslado", "Traslado hasta 35 km", "$/m²", "Maestros y materiales, para terrenos hasta 35 km."),
+    ("traslado_m2_hasta_100km", "Traslado", "Traslado hasta 100 km", "$/m²", "Terrenos entre 35 y 100 km (la empresa no trabaja a más distancia)."),
+    ("radier_m2", "Radier", "Radier solo (todo incluido)", "$/m²", "Material y mano de obra; entre $35.000 y $40.000 por m²."),
+    ("estabilizado_m3", "Radier", "Estabilizado puesto en obra", "$/m³", "Relleno de estabilizado (polvo de roca) con IVA incluido."),
+    ("mo_radier_m2", "Cotizaciones por trabajador", "Mano de obra del radier", "$/m²", "Por trabajador; la empresa paga $35.000 o $38.000."),
+    ("mo_viga_vista_m2", "Cotizaciones por trabajador", "Vigas a la vista", "$/m²", "Por trabajador y por m² con vigas a la vista."),
+    ("precio_litro", "Cotizaciones por trabajador", "Precio de la bencina", "$/L", "Para el traslado por combustible."),
+    ("km_por_litro", "Cotizaciones por trabajador", "Rendimiento del vehículo", "km/L", "Kilómetros que rinde un litro de bencina."),
+    ("dias_fabricacion_radier", "Cotizaciones por trabajador", "Días de fabricación del radier", "días", "Se suman a los días de traslado."),
+]
+
+
+def vigentes() -> dict:
+    """Tarifas en uso: valores de fábrica con los cambios hechos desde la web (tabla `tarifa`)."""
+    from .models import Tarifa  # import tardío: este módulo no depende de Django
+    return {**DEFAULTS, **{k: v for k, v in Tarifa.objects.values_list("clave", "valor")}}
 
 
 def _clp(x: D) -> D:
@@ -46,8 +71,9 @@ def costo_flete(m2, km, p) -> D:
     raise ValueError("Fuera del radio de servicio: máximo 100 km")
 
 
-def tabiqueria(m2: D, separacion_cm: int = 40, p=DEFAULTS) -> dict:
+def tabiqueria(m2: D, separacion_cm: int = 40, p=None) -> dict:
     """Piezas estimadas. Supuesto: casa cuadrada (valores en DEFAULTS)."""
+    p = p or vigentes()
     if separacion_cm not in (40, 60):
         raise ValueError("separacion_cm debe ser 40 o 60")
     largo_ml = D(4 * math.sqrt(float(m2))) * p["tabique_factor_muros"]
@@ -192,9 +218,10 @@ def _solo_radier(m2: D, km: D, p) -> dict:
     }
 
 
-def nivelacion(m2, espesor_cm, arido_empresa=True, p=DEFAULTS) -> dict:
+def nivelacion(m2, espesor_cm, arido_empresa=True, p=None) -> dict:
     """Relleno de estabilizado. NO va en la cotización inicial: se cubica en la visita al terreno y el cliente
     lo compra directamente o la empresa lo suma al valor ya informado."""
+    p = p or vigentes()
     m3 = volumen_estabilizado(D(str(m2)), D(str(espesor_cm)))
     costo = m3 * p["estabilizado_m3"] if arido_empresa else D(0)
     return {"m3": m3.quantize(D("0.01")), "costo": _clp(costo), "modalidad": "EMPRESA" if arido_empresa else "CLIENTE"}
@@ -210,7 +237,7 @@ def calcular(m2, km, precio_base_m2=0, precio_revest_m2=0, base_min_m2=None, rev
     modo_lista=False: modo antiguo por m², solo para reajustar cotizaciones emitidas antes de la lista. Allí los
     materiales = referencia ($135.000/m²) + diferencia de la base y el revestimiento elegidos respecto de los más
     económicos del catálogo, y la lista de insumos (BOM) solo desglosa esos materiales para las compras."""
-    p = {**DEFAULTS, **{k: D(str(v)) for k, v in over.items() if v is not None}}
+    p = {**vigentes(), **{k: D(str(v)) for k, v in over.items() if v is not None}}
     m2, km = D(str(m2)), D(str(km))
     if tipo_proyecto not in ("CASA", "SOLO_RADIER"):
         raise ValueError("tipo_proyecto debe ser CASA o SOLO_RADIER")

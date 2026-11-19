@@ -1107,3 +1107,23 @@ class ValidacionCrudsTests(TestCase):
         self.assertEqual(post(precio_base_unitario=-1).status_code, 422)
         self.assertEqual(post(fuente_url="ftp://x").status_code, 422)
         self.assertEqual(post(precio_base_unitario=1000).status_code, 200)
+
+
+class TarifasEditablesTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def test_cambiar_tarifa_modifica_el_calculo_y_se_restablece(self):
+        from . import calculo
+        base = calculo.calcular(50, 10, modo_lista=True)["total"]
+        r = self.client.put("/api/tarifas/ganancia_m2", {"valor": 40000}, content_type="application/json", **self.h)
+        self.assertEqual((r.status_code, r.json()["modificada"]), (200, True))
+        self.assertEqual(calculo.calcular(50, 10, modo_lista=True)["total"] - base, 500000)  # 10.000 más por m² × 50 m²
+        self.assertEqual(self.client.delete("/api/tarifas/ganancia_m2", **self.h).json()["modificada"], False)
+        self.assertEqual(calculo.calcular(50, 10, modo_lista=True)["total"], base)
+
+    def test_lista_todas_y_rechaza_negativos(self):
+        self.assertEqual(len(self.client.get("/api/tarifas/", **self.h).json()), len(__import__("core.calculo").calculo.TARIFAS_META))
+        self.assertEqual(self.client.put("/api/tarifas/ganancia_m2", {"valor": -1}, content_type="application/json", **self.h).status_code, 422)
+        self.assertEqual(self.client.put("/api/tarifas/inventada", {"valor": 1}, content_type="application/json", **self.h).status_code, 404)

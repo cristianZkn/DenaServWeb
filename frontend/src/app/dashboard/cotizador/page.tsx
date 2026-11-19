@@ -382,7 +382,7 @@ export default function CotizadorPage() {
                 step="0.5" suffix="m²" required max={10000} help="Con la superficie se calculan la mano de obra y el margen de la empresa." />
               {esCasa && (
                 <NumberField label="Superficie con vigas a la vista" name="m2_vigas_vista" value={formData.m2_vigas_vista}
-                  onChange={setCampo} suffix="m²" max={10000} help="Se pagan $8.000 por cada m² con vigas a la vista, a cada trabajador." />
+                  onChange={setCampo} suffix="m²" max={10000} help="Se paga un adicional por cada m² con vigas a la vista, a cada trabajador (valor en la sección Tarifas)." />
               )}
             </div>
 
@@ -421,8 +421,8 @@ export default function CotizadorPage() {
           {/* Paso 3: trabajadores y días (la mano de obra depende de la superficie y del radier ya indicados) */}
           <Seccion titulo="3. Mano de obra y plazos">
             <p className="text-slate-600 -mt-2">
-              A cada trabajador se le paga por m²: casa $25.000, vigas a la vista $8.000, radier o base $35.000 o $38.000, y $2.000
-              por m² de OSB Smartside Lap. Sin la cantidad de trabajadores no se puede calcular la mano de obra.
+              A cada trabajador se le paga por m² según las tarifas vigentes (casa, vigas a la vista, radier o base y OSB Smartside Lap).
+              Sin la cantidad de trabajadores no se puede calcular la mano de obra.
             </p>
             <div className="grid sm:grid-cols-2 gap-5">
               <NumberField label="Cantidad de trabajadores" name="n_trabajadores" value={nTrabajadores}

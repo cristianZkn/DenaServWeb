@@ -10,6 +10,7 @@ const NAV = [
   { href: "/dashboard/catalogos", label: "Materiales y precios" },
   { href: "/dashboard/proveedores", label: "Proveedores" },
   { href: "/dashboard/portafolio", label: "Portafolio" },
+  { href: "/dashboard/tarifas", label: "Tarifas" },
   { href: "/dashboard/usuarios", label: "Usuarios" },
 ];
 

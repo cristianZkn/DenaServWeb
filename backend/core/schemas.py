@@ -490,6 +490,21 @@ class CotizacionPublicaSchema(Schema):
         return float(obra.porcentaje_avance_real) if obra else 0
 
 
+class TarifaSchema(Schema):
+    clave: str
+    grupo: str
+    nombre: str
+    unidad: str
+    descripcion: str
+    valor: float
+    valor_de_fabrica: float
+    modificada: bool
+
+
+class TarifaInSchema(Schema):
+    valor: float = Field(ge=0, le=1_000_000_000)
+
+
 class ContratoInSchema(Schema):
     nombre_archivo: str = "contrato.pdf"
     pdf: str  # data URL base64 (application/pdf)
