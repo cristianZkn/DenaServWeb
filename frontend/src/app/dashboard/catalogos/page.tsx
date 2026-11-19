@@ -313,6 +313,9 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     setError("");
     if (!manual && !f.fuente_url.trim()) return setError("Pegue la dirección (URL) de la ficha del producto, o marque que no tiene ficha en línea.");
     if (manual && !f.nombre.trim()) return setError("Escriba el nombre del material.");
+    if (!manual && !/^https?:\/\//i.test(f.fuente_url.trim())) return setError("La dirección de la ficha debe comenzar con http:// o https://");
+    if (manual && f.nombre.trim().length > 150) return setError("El nombre puede tener hasta 150 caracteres.");
+    if (Number(f.precio_base_unitario) < 0 || Number(f.m2_por_unidad) < 0 || Number(f.mano_obra_m2) < 0) return setError("Los precios y medidas no pueden ser negativos.");
     if (manual && !f.proveedor_id) return setError("Elija la empresa a la que se le compra este material.");
     setGuardando(true);
     const payload: Record<string, unknown> = {

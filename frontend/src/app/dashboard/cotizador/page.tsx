@@ -334,7 +334,7 @@ export default function CotizadorPage() {
                   placeholder="Ej.: Carolina Rojas" className={inputCls} required minLength={3} maxLength={150} />
               </div>
               <div>
-                <label htmlFor="cliente_rut" className={labelCls}>RUT del cliente</label>
+                <label htmlFor="cliente_rut" className={labelCls}>RUN del cliente</label>
                 <input id="cliente_rut" name="cliente_rut" value={formData.cliente_rut}
                   onChange={(e) => setCampo("cliente_rut", formatearRut(e.target.value))}
                   placeholder="12.345.678-5" maxLength={12} className={inputCls} />

@@ -1085,3 +1085,25 @@ class ContratoNotarialTests(TestCase):
 
     def test_rechaza_lo_que_no_es_pdf(self):
         self.assertEqual(self._subir(b"hola").status_code, 400)
+
+
+class ValidacionCrudsTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def _prov(self, rut):
+        return self.client.post("/api/proveedores/", {"rut_empresa": rut, "razon_social": "Maderas SpA"}, content_type="application/json", **self.h)
+
+    def test_proveedor_exige_rut_real_y_no_duplicado(self):
+        self.assertEqual(self._prov("76.123.456-7").status_code, 422)
+        self.assertEqual(self._prov("abc").status_code, 422)
+        self.assertEqual(self._prov("76123456-0").json()["rut_empresa"], "76.123.456-0")
+        self.assertEqual(self._prov("76.123.456-0").status_code, 400)
+
+    def test_catalogo_rechaza_valores_invalidos(self):
+        def post(**d):
+            return self.client.post("/api/catalogo-tipos/", {"categoria": "TABIQUERIA", "nombre": "Pino", "unidad_medida": "UN", **d}, content_type="application/json", **self.h)
+        self.assertEqual(post(precio_base_unitario=-1).status_code, 422)
+        self.assertEqual(post(fuente_url="ftp://x").status_code, 422)
+        self.assertEqual(post(precio_base_unitario=1000).status_code, 200)

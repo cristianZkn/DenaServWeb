@@ -299,6 +299,8 @@ def listar_proveedores(request):
 
 @router.post("/proveedores/", response={200: ProveedorSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_proveedor(request, data: ProveedorInSchema):
+    if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exists():
+        return 400, {"message": "Ya existe un proveedor con ese RUT."}
     try:
         proveedor = Proveedor.objects.create(**data.dict())
         return 200, proveedor
@@ -308,6 +310,8 @@ def crear_proveedor(request, data: ProveedorInSchema):
 
 @router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
+    if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exclude(id=proveedor_id).exists():
+        return 400, {"message": "Ya existe otro proveedor con ese RUT."}
     try:
         proveedor = Proveedor.objects.get(id=proveedor_id)
         for attr, value in data.dict().items():

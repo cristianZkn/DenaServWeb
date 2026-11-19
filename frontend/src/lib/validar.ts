@@ -27,11 +27,11 @@ export function telefonoValido(tel: string): boolean {
 
 export const correoValido = (c: string) => /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(c);
 
-/** Mensaje del primer error de los datos del cliente, o "" si todo está bien. RUT y teléfono son opcionales. */
+/** Mensaje del primer error de los datos del cliente, o "" si todo está bien. RUN y teléfono son opcionales. */
 export function errorDatosCliente(d: { nombre: string; telefono: string; rut: string; direccion: string }): string {
   const nombre = d.nombre.trim();
   if (nombre.length < 3 || nombre.length > 150) return "El nombre del cliente debe tener entre 3 y 150 caracteres.";
-  if (d.rut.trim() && !rutValido(d.rut)) return "El RUT no es válido. Ejemplo: 12.345.678-5";
+  if (d.rut.trim() && !rutValido(d.rut)) return "El RUN no es válido. Ejemplo: 12.345.678-5";
   if (d.telefono.trim() && !telefonoValido(d.telefono)) return "El teléfono debe tener 9 dígitos. Ejemplo: +56 9 8765 4321";
   const dir = d.direccion.trim();
   if (dir.length < 5 || dir.length > 255) return "La dirección del terreno debe tener entre 5 y 255 caracteres.";

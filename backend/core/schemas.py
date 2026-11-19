@@ -18,7 +18,7 @@ def _opcional(fn):
 
 
 class _ContactoMixin:
-    """Valida teléfono/RUT/nombre/dirección de cliente; se mezcla en los schemas de cotización."""
+    """Valida teléfono/RUN/nombre/dirección de cliente; se mezcla en los schemas de cotización."""
     @field_validator("cliente_nombre", check_fields=False)
     @classmethod
     def _nombre(cls, x):
@@ -32,7 +32,7 @@ class _ContactoMixin:
     @field_validator("cliente_rut", check_fields=False)
     @classmethod
     def _rut(cls, x):
-        return _opcional(v.normalizar_rut)(x)
+        return _opcional(lambda r: v.normalizar_rut(r, "RUN"))(x)
 
     @field_validator("direccion_terreno", check_fields=False)
     @classmethod
@@ -74,7 +74,7 @@ class UsuarioInSchema(Schema):
     @field_validator("rut")
     @classmethod
     def _rut(cls, x):
-        return v.normalizar_rut(x)
+        return v.normalizar_rut(x, "RUN")
 
     @field_validator("nombre_completo")
     @classmethod
@@ -111,7 +111,7 @@ class ProveedorInSchema(Schema):
     @field_validator("rut_empresa")
     @classmethod
     def _rut(cls, x):
-        return v.texto(x, "El RUT de la empresa", 3, 12)
+        return v.normalizar_rut(x)
 
     @field_validator("razon_social")
     @classmethod
@@ -121,7 +121,7 @@ class ProveedorInSchema(Schema):
     @field_validator("contacto_nombre")
     @classmethod
     def _contacto(cls, x):
-        return v.texto(x, "El nombre de contacto", 2, 150) if x and x.strip() else None
+        return v.texto(x, "El nombre de contacto", 2, 100) if x and x.strip() else None
 
     @field_validator("telefono")
     @classmethod
@@ -165,19 +165,32 @@ class CatalogoTipoSchema(Schema):
         return float(calculo.costo_neto(obj.precio_base_unitario, descuento))
 
 class CatalogoTipoInSchema(Schema):
-    categoria: str
-    nombre: str = ''
-    descripcion: Optional[str] = None
-    unidad_medida: str = 'UN'
-    precio_base_unitario: float = 0.00
+    categoria: str = Field(min_length=2, max_length=50)
+    nombre: str = Field('', max_length=150)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    unidad_medida: str = Field('UN', min_length=1, max_length=20)
+    precio_base_unitario: float = Field(0.00, ge=0, le=1_000_000_000)
     proveedor_id: Optional[int] = None
-    etapa_obra: str = ''
-    rendimiento_m2: float = 0
-    fuente_url: str = ''
-    m2_por_unidad: float = 0
+    etapa_obra: str = Field('', max_length=50)
+    rendimiento_m2: float = Field(0, ge=0, le=100_000)
+    fuente_url: str = Field('', max_length=500)
+    m2_por_unidad: float = Field(0, ge=0, le=100_000)
     mano_obra_m2: float = Field(0, ge=0, le=1_000_000)  # mano de obra por m² instalado (0 = no aplica)
     verificado: bool = False
     activo: bool = True
+
+    @field_validator("fuente_url")
+    @classmethod
+    def _url(cls, x):
+        x = (x or "").strip()
+        if x and not x.startswith(("http://", "https://")):
+            raise ValueError("La dirección de la ficha debe comenzar con http:// o https://")
+        return x
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, x):
+        return v.texto(x, "El nombre", 2, 150) if x and x.strip() else ""
 
 
 class InsumoSchema(Schema):

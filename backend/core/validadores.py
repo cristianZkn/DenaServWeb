@@ -11,11 +11,11 @@ def rut_valido(rut: str) -> bool:
     return dv == {11: "0", 10: "K"}.get(esperado, str(esperado))
 
 
-def normalizar_rut(valor: str) -> str:
+def normalizar_rut(valor: str, nombre: str = "RUT") -> str:
     """'12345678-5' / '12.345.678-5' -> '12.345.678-5'. Valida largo (7-8 dígitos + DV) y dígito verificador."""
     limpio = re.sub(r"[.\-\s]", "", valor or "").upper()
     if not re.fullmatch(r"\d{7,8}[\dK]", limpio) or not rut_valido(limpio):
-        raise ValueError("El RUT no es válido. Ejemplo: 12.345.678-5")
+        raise ValueError(f"El {nombre} no es válido. Ejemplo: 12.345.678-5")
     cuerpo = f"{int(limpio[:-1]):,}".replace(",", ".")
     return f"{cuerpo}-{limpio[-1]}"
 

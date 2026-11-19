@@ -54,7 +54,7 @@ export default function FichaEmpresaPdf({ c, desglose: d, interno, bitacora }: {
 
         <Text style={s.h2}>Cliente y proyecto</Text>
         <Row a="Cliente" b={c.cliente_nombre} />
-        {c.cliente_rut ? <Row a="RUT" b={c.cliente_rut} /> : null}
+        {c.cliente_rut ? <Row a="RUN" b={c.cliente_rut} /> : null}
         {c.cliente_telefono ? <Row a="Contacto" b={c.cliente_telefono} /> : null}
         <Row a="Ubicación del terreno" b={c.direccion_terreno} />
         <Row a="Tipo de proyecto" b={c.tipo_proyecto === "SOLO_RADIER" ? "Radier" : "Casa prefabricada"} />

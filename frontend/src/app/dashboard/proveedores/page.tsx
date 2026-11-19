@@ -2,7 +2,7 @@
 
 import { useDialogo } from "@/components/ConfirmDialog";
 
-import { correoValido, telefonoValido } from "@/lib/validar";
+import { correoValido, formatearRut, rutValido, telefonoValido } from "@/lib/validar";
 import { useEffect, useState } from "react";
 
 interface Proveedor {
@@ -63,7 +63,7 @@ export default function ProveedoresPage() {
 
     const rut = formData.rut_empresa.trim();
     const razon = formData.razon_social.trim();
-    if (rut.length < 3 || rut.length > 12) return avisar("El RUT debe tener entre 3 y 12 caracteres.");
+    if (!rutValido(rut)) return avisar("El RUT de la empresa no es válido. Ejemplo: 76.123.456-0");
     if (razon.length < 2 || razon.length > 150) return avisar("La razón social debe tener entre 2 y 150 caracteres.");
     if (formData.telefono.trim() && !telefonoValido(formData.telefono)) return avisar("El teléfono debe tener 9 dígitos. Ejemplo: +56 9 1234 5678");
     if (formData.email.trim() && !correoValido(formData.email.trim())) return avisar("El correo no es válido. Ejemplo: contacto@proveedor.cl");
@@ -173,12 +173,12 @@ export default function ProveedoresPage() {
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4 text-sm">
             <div>
-              <label className="block font-semibold mb-1 text-slate-700">RUT Empresa *</label>
+              <label className="block font-semibold mb-1 text-slate-700">RUT de la empresa *</label>
               <input
                 type="text"
                 value={formData.rut_empresa}
-                onChange={(e) => setFormData({ ...formData, rut_empresa: e.target.value })}
-                placeholder="Ej: 76.123.456-7" maxLength={12}
+                onChange={(e) => setFormData({ ...formData, rut_empresa: formatearRut(e.target.value) })}
+                placeholder="Ej: 76.123.456-0" maxLength={12}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
                 required
               />

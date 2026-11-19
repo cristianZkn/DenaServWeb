@@ -414,7 +414,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <input value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
           </div>
           <div>
-            <label className={campo}>RUT del cliente</label>
+            <label className={campo}>RUN del cliente</label>
             <input value={form.cliente_rut} onChange={(e) => setForm({ ...form, cliente_rut: formatearRut(e.target.value) })} placeholder="12.345.678-5" maxLength={12} />
           </div>
           <div>

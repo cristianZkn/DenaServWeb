@@ -14,10 +14,11 @@ api = NinjaAPI(title="DenaServ API")
 @api.exception_handler(ValidationError)
 def datos_invalidos(request, exc):
     """422 con un mensaje legible: 'Campo: motivo' por cada error (el front lo muestra tal cual)."""
-    etiquetas = {"cliente_nombre": "Nombre del cliente", "cliente_telefono": "Teléfono", "cliente_rut": "RUT",
+    etiquetas = {"cliente_nombre": "Nombre del cliente", "cliente_telefono": "Teléfono", "cliente_rut": "RUN",
                  "direccion_terreno": "Dirección", "superficie_m2": "Superficie", "distancia_flete_km": "Distancia",
-                 "telefono": "Teléfono", "email": "Correo", "rut_empresa": "RUT", "razon_social": "Razón social",
-                 "descuento_pct": "Descuento", "m2_vigas_vista": "Metros con vigas"}
+                 "telefono": "Teléfono", "email": "Correo", "rut_empresa": "RUT de la empresa", "razon_social": "Razón social",
+                 "descuento_pct": "Descuento", "m2_vigas_vista": "Metros con vigas", "nombre": "Nombre", "unidad_medida": "Unidad", "categoria": "Categoría",
+                 "precio_base_unitario": "Precio", "fuente_url": "Dirección de la ficha", "comentario": "Comentario", "porcentaje": "Avance", "titulo": "Título"}
     msgs = []
     for e in exc.errors:
         campo = etiquetas.get(str(e["loc"][-1]), str(e["loc"][-1]))
