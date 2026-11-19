@@ -22,7 +22,7 @@ from .models import (
     BitacoraAvance, BitacoraFoto
 )
 from .schemas import (
-    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
+    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema,
     ProveedorSchema, ProveedorInSchema,
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
@@ -231,6 +231,61 @@ def current_user(request):
     if not request.auth:
         return 401, {"message": "No autenticado"}
     return 200, request.auth
+
+
+# ==============================================================================
+# 1b. USUARIOS AUTORIZADOS (correos que pueden ingresar al panel)
+# ==============================================================================
+@router.get("/usuarios/", response=List[UsuarioSchema], auth=AuthBearer())
+def listar_usuarios(request):
+    return Usuario.objects.all().order_by("nombre_completo")
+
+
+def _usuario_duplicado(data, excluir_id=None):
+    qs = Usuario.objects.exclude(id=excluir_id) if excluir_id else Usuario.objects.all()
+    if qs.filter(email__iexact=data.email).exists():
+        return "Ya existe un usuario con ese correo."
+    if qs.filter(rut=data.rut).exists():
+        return "Ya existe un usuario con ese RUN."
+    return None
+
+
+@router.post("/usuarios/", response={200: UsuarioSchema, 400: MessageSchema}, auth=AuthBearer())
+def crear_usuario(request, data: UsuarioInSchema):
+    error = _usuario_duplicado(data)
+    if error:
+        return 400, {"message": error}
+    return 200, Usuario.objects.create(**data.dict())
+
+
+@router.put("/usuarios/{usuario_id}", response={200: UsuarioSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def actualizar_usuario(request, usuario_id: int, data: UsuarioInSchema):
+    usuario = Usuario.objects.filter(id=usuario_id).first()
+    if not usuario:
+        return 404, {"message": "Usuario no encontrado"}
+    error = _usuario_duplicado(data, usuario_id)
+    if error:
+        return 400, {"message": error}
+    if usuario.id == request.auth.id and not data.activo:
+        return 400, {"message": "No puedes desactivar tu propio acceso."}
+    for attr, value in data.dict().items():
+        setattr(usuario, attr, value)
+    usuario.save()
+    return 200, usuario
+
+
+@router.delete("/usuarios/{usuario_id}", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_usuario(request, usuario_id: int):
+    usuario = Usuario.objects.filter(id=usuario_id).first()
+    if not usuario:
+        return 404, {"message": "Usuario no encontrado"}
+    if usuario.id == request.auth.id:
+        return 400, {"message": "No puedes eliminar tu propio acceso."}
+    try:
+        usuario.delete()
+    except Exception:  # tiene cotizaciones u otros registros asociados (FK protegida)
+        return 400, {"message": "Tiene registros asociados: desactívalo en lugar de eliminarlo."}
+    return 200, {"message": "Usuario eliminado"}
 
 
 # ==============================================================================

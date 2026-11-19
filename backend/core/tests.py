@@ -1036,3 +1036,29 @@ class SelectorMaterialesApiTests(TestCase):
         self.assertEqual(len(mats), 1)
         self.assertEqual((mats[0]["catalogo_tipo"]["nombre"], mats[0]["catalogo_tipo"]["proveedor"]["razon_social"], float(mats[0]["cantidad_calculada"])),
                          ("Pino 2x4", "Maderas SpA", 3.0))
+
+
+class UsuariosAutorizadosTests(TestCase):
+    def setUp(self):
+        self.u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.nuevo = {"rut": "12.345.678-5", "nombre_completo": "Nuevo Usuario", "email": "Nuevo@X.cl"}
+
+    def _post(self, d):
+        return self.client.post("/api/usuarios/", d, content_type="application/json", **self.h)
+
+    def test_crear_normaliza_y_permite_login(self):
+        r = self._post(self.nuevo)
+        self.assertEqual((r.status_code, r.json()["email"]), (200, "nuevo@x.cl"))
+        self.assertEqual(Usuario.objects.get(email="nuevo@x.cl").rut, "12.345.678-5")
+
+    def test_rechaza_run_invalido_y_duplicados(self):
+        self.assertEqual(self._post({**self.nuevo, "rut": "12.345.678-9"}).status_code, 422)
+        self._post(self.nuevo)
+        self.assertEqual(self._post(self.nuevo).status_code, 400)
+
+    def test_no_puede_desactivar_ni_eliminar_su_propio_acceso(self):
+        r = self.client.put(f"/api/usuarios/{self.u.id}", {"rut": self.u.rut, "nombre_completo": "Admin", "email": self.u.email, "activo": False},
+                            content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.client.delete(f"/api/usuarios/{self.u.id}", **self.h).status_code, 400)

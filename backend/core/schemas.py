@@ -64,6 +64,29 @@ class UsuarioSchema(Schema):
     google_id: Optional[str] = None
     activo: bool
 
+# --- 1b. Usuarios autorizados (administración) ---
+class UsuarioInSchema(Schema):
+    rut: str
+    nombre_completo: str
+    email: str
+    activo: bool = True
+
+    @field_validator("rut")
+    @classmethod
+    def _rut(cls, x):
+        return v.normalizar_rut(x)
+
+    @field_validator("nombre_completo")
+    @classmethod
+    def _nombre(cls, x):
+        return v.texto(x, "El nombre", 3, 150)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, x):
+        return v.validar_email(x).lower()
+
+
 
 # --- 2. Proveedor ---
 class ProveedorSchema(Schema):
