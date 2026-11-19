@@ -98,3 +98,10 @@ body {
     cursor: not-allowed;
   }
 }
+
+/* Campo obligatorio vacío o inválido: borde rojo (lo marca ValidacionVisual o marcarInvalido). Sin capa: tiene prioridad sobre las clases de Tailwind. */
+[aria-invalid="true"] {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+  box-shadow: 0 0 0 3px rgb(220 38 38 / 0.15);
+}

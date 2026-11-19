@@ -143,8 +143,8 @@ export default function BitacoraAvance({
               onChange={(e) => setPorcentaje(e.target.value)} className="!p-0 !min-h-0 !border-0 accent-blue-900" />
           </div>
           <div>
-            <label className={etiqueta} htmlFor="bit-com">Comentario</label>
-            <textarea id="bit-com" rows={3} maxLength={1000} value={comentario} onChange={(e) => setComentario(e.target.value)}
+            <label className={etiqueta} htmlFor="bit-com">Comentario *</label>
+            <textarea id="bit-com" required minLength={3} rows={3} maxLength={1000} value={comentario} onChange={(e) => setComentario(e.target.value)}
               placeholder="Ej.: avance de radier y proceso de levantar vigas" />
           </div>
           <div>

@@ -5,7 +5,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { errorDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
+import { errorDatosCliente, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
 import ContratoNotarial from "@/components/ContratoNotarial";
 import { bajarContrato, unirContrato } from "@/lib/contrato";
 import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
@@ -283,6 +283,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   };
 
   const guardarDatos = async () => {
+    const vacios = [["pd-nombre", form.cliente_nombre], ["pd-dir", form.direccion_terreno]].filter(([, v]) => !v.trim()).map(([i]) => i);
+    if (vacios.length) { marcarInvalido(...vacios); return avisar("Complete los campos obligatorios marcados en rojo.", true); }
     const err = errorDatosCliente({ nombre: form.cliente_nombre, telefono: form.cliente_telefono, rut: form.cliente_rut, direccion: form.direccion_terreno });
     if (err) return avisar(err, true);
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true, true)) });
@@ -293,7 +295,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
   const guardarValor = async () => {
     const dif = previa ? Number(previa.diferencia) : 0;
-    if (dif !== 0 && !motivo.trim()) return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true);
+    if (dif !== 0 && !motivo.trim()) { marcarInvalido("pv-motivo"); return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true); }
     const texto = `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
     if (!(await preguntar({ titulo: dif === 0 ? "¿Guardar los cambios?" : "¿Confirma el cambio de valor?", mensaje: dif === 0 ? undefined : texto }))) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: jsonAuth(), body: JSON.stringify(payload(true)) });
@@ -410,8 +412,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {panel === "datos" && (
         <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div>
-            <label className={campo}>Nombre del cliente</label>
-            <input value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
+            <label className={campo} htmlFor="pd-nombre">Nombre del cliente *</label>
+            <input id="pd-nombre" value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
           </div>
           <div>
             <label className={campo}>RUN del cliente</label>
@@ -422,8 +424,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <input type="tel" value={form.cliente_telefono} onChange={(e) => setForm({ ...form, cliente_telefono: formatearTelefono(e.target.value) })} placeholder="+56 9 8765 4321" maxLength={16} />
           </div>
           <div>
-            <label className={campo}>Dirección del terreno</label>
-            <input value={form.direccion_terreno} onChange={set("direccion_terreno")} maxLength={255} />
+            <label className={campo} htmlFor="pd-dir">Dirección del terreno *</label>
+            <input id="pd-dir" value={form.direccion_terreno} onChange={set("direccion_terreno")} maxLength={255} />
           </div>
           <p className={ayuda}>La modificación de estos datos no altera el valor de la obra.</p>
           <button onClick={guardarDatos} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>
@@ -525,8 +527,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
           {dif !== 0 && (
             <div>
-              <label className={campo}>Motivo de la modificación *</label>
-              <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: subió el precio del zinc" />
+              <label className={campo} htmlFor="pv-motivo">Motivo de la modificación *</label>
+              <input id="pv-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: subió el precio del zinc" />
             </div>
           )}
 

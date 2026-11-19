@@ -1,5 +1,6 @@
 "use client";
 
+import { marcarInvalido } from "@/lib/validar";
 import { useDialogo } from "./ConfirmDialog";
 
 import { useState } from "react";
@@ -147,6 +148,7 @@ export default function PagoModal({
               </label>
               <input
                 id="monto-pago"
+                aria-invalid={monto !== "" && !montoValido}
                 type="number"
                 inputMode="numeric"
                 min="0"
@@ -197,7 +199,7 @@ export default function PagoModal({
               </button>
             )}
             {completo === false && (
-              <button type="button" disabled={guardando || !montoValido} onClick={() => enviar({ pago_completo: false, monto_abonado: abonado })} className="px-5 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold cursor-pointer disabled:opacity-50">
+              <button type="button" disabled={guardando} onClick={() => (montoValido ? enviar(({ pago_completo: false, monto_abonado: abonado })) : marcarInvalido("monto-pago"))} className="px-5 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold cursor-pointer disabled:opacity-50">
                 {guardando ? "Guardando..." : "Guardar abono"}
               </button>
             )}

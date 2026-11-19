@@ -198,7 +198,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
 
         <div>
           <label className={etiqueta} htmlFor="pf-t">Título *</label>
-          <input id="pf-t" value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={150} placeholder="Ej: Casa de 54 m² en Limache" />
+          <input id="pf-t" required minLength={3} value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={150} placeholder="Ej: Casa de 54 m² en Limache" />
         </div>
         <div>
           <label className={etiqueta} htmlFor="pf-c">Comuna</label>

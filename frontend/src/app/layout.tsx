@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ValidacionVisual from "@/components/ValidacionVisual";
 
 export const metadata: Metadata = {
   title: "DENASERV WEB",
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="antialiased text-slate-900 bg-slate-50 min-h-screen">
+        <ValidacionVisual />
         {children}
       </body>
     </html>

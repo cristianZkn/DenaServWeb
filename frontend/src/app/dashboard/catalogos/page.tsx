@@ -366,8 +366,8 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
         </div>
 
         <div>
-          <label className={etiqueta} htmlFor="m-prov">Empresa (proveedor)</label>
-          <select id="m-prov" value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
+          <label className={etiqueta} htmlFor="m-prov">Empresa (proveedor){manual ? " *" : ""}</label>
+          <select id="m-prov" required={manual} value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
             <option value="">{manual ? "Elija una empresa…" : "Detectar por la dirección de la ficha"}</option>
             {proveedores.filter((p) => p.activo !== false).map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
           </select>
@@ -386,8 +386,8 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
         {manual ? (
           <>
             <div>
-              <label className={etiqueta} htmlFor="m-nom">Nombre del material</label>
-              <input id="m-nom" value={f.nombre} onChange={(e) => set("nombre", e.target.value)}
+              <label className={etiqueta} htmlFor="m-nom">Nombre del material *</label>
+              <input id="m-nom" required maxLength={150} value={f.nombre} onChange={(e) => set("nombre", e.target.value)}
                 placeholder={f.categoria === "BASE_TERRENO" ? "Ej: Radier H20 10 cm" : "Ej: Clavos 3 pulgadas"} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -410,8 +410,8 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
         ) : (
           <>
             <div>
-              <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto</label>
-              <input id="m-url" type="url" value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
+              <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto *</label>
+              <input id="m-url" type="url" required value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
                 placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
               <p className="text-sm text-slate-500 mt-1">Hoy se leen solas las fichas de Easy, Sodimac, MCT y Ferrelan. El nombre y el precio salen de esa página.</p>
             </div>

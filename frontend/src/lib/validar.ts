@@ -48,3 +48,12 @@ export function errorDatosCliente(d: { nombre: string; telefono: string; rut: st
   if (dir.length < 5 || dir.length > 255) return "La dirección del terreno debe tener entre 5 y 255 caracteres.";
   return "";
 }
+
+/** Resalta en rojo un campo por su id (para validaciones hechas en código, fuera de un formulario) y le da el foco. */
+export function marcarInvalido(...ids: string[]) {
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    el?.setAttribute("aria-invalid", "true");
+    if (i === 0) el?.focus();
+  });
+}
