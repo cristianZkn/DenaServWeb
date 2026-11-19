@@ -137,14 +137,14 @@ export default function CotizadorPage() {
     cliente_rut: "",
     direccion_terreno: "",
     tipo_proyecto: "CASA",
-    superficie_m2: "54",
-    distancia_flete_km: "25",
+    superficie_m2: "",
+    distancia_flete_km: "",
     m2_vigas_vista: "",
     dias_obra: "",
   });
   const [llevaRadier, setLlevaRadier] = useState(false);
-  const [tarifaRadier, setTarifaRadier] = useState("35000");
-  const [precioLitro, setPrecioLitro] = useState("1650");
+  const [tarifaRadier, setTarifaRadier] = useState("");
+  const [precioLitro, setPrecioLitro] = useState("");
   const [nTrabajadores, setNTrabajadores] = useState("");
   const setCampo = (name: string, value: string) => setFormData((prev) => ({ ...prev, [name]: value }));
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setCampo(e.target.name, e.target.value);
@@ -154,7 +154,7 @@ export default function CotizadorPage() {
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
   const [materiales, setMateriales] = useState<MaterialLista[]>([]);
   const [materialElegido, setMaterialElegido] = useState("");
-  const [cantidadElegida, setCantidadElegida] = useState("1");
+  const [cantidadElegida, setCantidadElegida] = useState("");
 
   const agregarMaterial = () => {
     const id = Number(materialElegido);
@@ -166,7 +166,7 @@ export default function CotizadorPage() {
         : [...prev, { catalogo_id: id, cantidad: cantidadElegida }]
     );
     setMaterialElegido("");
-    setCantidadElegida("1");
+    setCantidadElegida("");
   };
 
   // ---- Lo que se envía al servidor (solo datos completos y válidos)
@@ -199,7 +199,7 @@ export default function CotizadorPage() {
     dias_obra: Math.floor(num(formData.dias_obra)),
     lleva_radier: !esCasa || llevaRadier,
     tarifa_radier_m2: num(tarifaRadier),
-    precio_litro: num(precioLitro) || 1650,
+    precio_litro: num(precioLitro) > 0 ? num(precioLitro) : undefined,
   };
 
   // Recalcula el presupuesto en el servidor 300 ms después del último cambio.
@@ -273,6 +273,8 @@ export default function CotizadorPage() {
     });
     if (errorDatos) return setError(errorDatos);
     if (num(formData.superficie_m2) <= 0) return setError("Los metros cuadrados deben ser mayores a 0.");
+    if ((llevaRadier || !esCasa) && num(tarifaRadier) <= 0) return setError("Elija el valor de la mano de obra del radier.");
+    if (num(formData.distancia_flete_km) > 0 && num(precioLitro) <= 0) return setError("Indique el precio de la bencina para calcular el traslado.");
     if (num(nTrabajadores) < 1) return setError("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.");
     if (num(formData.distancia_flete_km) > 0 && parametrosTarifas.dias_obra + (parametrosTarifas.lleva_radier ? 4 : 0) < 1) {
       return setError("Indique los días de construcción para calcular el traslado.");
@@ -309,7 +311,9 @@ export default function CotizadorPage() {
   const elegido = catalogo.find((c) => String(c.id) === materialElegido);
   // Datos de los que depende el valor y que todavía no se han ingresado
   const pendientes = [
+    ...(num(formData.superficie_m2) <= 0 ? ["la superficie"] : []),
     ...(num(nTrabajadores) < 1 ? ["la cantidad de trabajadores"] : []),
+    ...(num(formData.distancia_flete_km) > 0 && num(precioLitro) <= 0 ? ["el precio de la bencina"] : []),
     ...(parametrosTarifas.dias_obra + (parametrosTarifas.lleva_radier ? 4 : 0) < 1 && num(formData.distancia_flete_km) > 0 ? ["los días de construcción"] : []),
   ];
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
@@ -399,6 +403,7 @@ export default function CotizadorPage() {
                 <div className="max-w-xs">
                   <label htmlFor="tarifa_radier" className={labelCls}>Mano de obra del radier (por trabajador)</label>
                   <select id="tarifa_radier" value={tarifaRadier} onChange={(e) => setTarifaRadier(e.target.value)} className={inputCls}>
+                    <option value="" disabled>Elija el valor por m²</option>
                     <option value="35000">$35.000 por m²</option>
                     <option value="38000">$38.000 por m²</option>
                   </select>
@@ -494,7 +499,7 @@ export default function CotizadorPage() {
               </p>
               <div>
                 <label htmlFor="cantidad_material" className={labelCls}>Cantidad{elegido ? ` (${unidadDe(elegido)})` : ""}</label>
-                <input id="cantidad_material" type="number" inputMode="decimal" min="0" step="any" value={cantidadElegida}
+                <input id="cantidad_material" type="number" inputMode="decimal" min="0" step="any" value={cantidadElegida} placeholder="Ej.: 10"
                   onFocus={(e) => e.target.select()} onChange={(e) => setCantidadElegida(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarMaterial(); } }} className={inputCls} />
               </div>
