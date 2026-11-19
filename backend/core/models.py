@@ -143,6 +143,9 @@ class Cotizacion(models.Model):
         related_name='cotizaciones'
     )
 
+    def contrato_notarial_existe(self):
+        return ContratoNotarial.objects.filter(cotizacion_id=self.pk).exists()
+
     class Meta:
         db_table = 'cotizacion'
         verbose_name = 'Cotización'
@@ -296,6 +299,17 @@ class BitacoraFoto(models.Model):
     class Meta:
         db_table = 'bitacora_foto'
         ordering = ['id']
+
+
+# Contrato notarial oficial (PDF opcional) del proyecto
+class ContratoNotarial(models.Model):
+    cotizacion = models.OneToOneField(Cotizacion, on_delete=models.CASCADE, related_name='contrato_notarial')
+    nombre_archivo = models.CharField(max_length=150, default='contrato.pdf')
+    contenido = models.BinaryField()
+    fecha_subida = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'contrato_notarial'
 
 
 # 9. cambio_cotizacion: historial de reajustes del monto total

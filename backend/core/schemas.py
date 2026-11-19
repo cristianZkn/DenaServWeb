@@ -340,6 +340,12 @@ class CotizacionSchema(Schema):
     usuario: Optional[UsuarioSchema] = None
 
 class CotizacionDetalladaSchema(CotizacionSchema):
+    tiene_contrato: bool = False
+
+    @staticmethod
+    def resolve_tiene_contrato(obj):
+        return obj.contrato_notarial_existe()
+
     hitos_pago: List[HitoPagoSchema] = []
     detalles_insumo: List[DetalleCotizacionInsumoSchema] = []
     obras_ejecucion: List[ObraEjecucionSchema] = []
@@ -459,10 +465,21 @@ class CotizacionPublicaSchema(Schema):
     hitos_pago: List[HitoPagoSchema] = []
     avance: float = 0  # % de avance de la obra
 
+    tiene_contrato: bool = False
+
+    @staticmethod
+    def resolve_tiene_contrato(obj):
+        return obj.contrato_notarial_existe()
+
     @staticmethod
     def resolve_avance(obj):
         obra = obj.obras_ejecucion.all()[0] if obj.obras_ejecucion.all() else None
         return float(obra.porcentaje_avance_real) if obra else 0
+
+
+class ContratoInSchema(Schema):
+    nombre_archivo: str = "contrato.pdf"
+    pdf: str  # data URL base64 (application/pdf)
 
 
 # --- Bitácora de avance de obra ---

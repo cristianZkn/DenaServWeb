@@ -6,6 +6,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import ContratoNotarial from "@/components/ContratoNotarial";
+import { bajarContrato, unirContrato } from "@/lib/contrato";
 import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
 import { claseEstado, etiquetaEstado } from "@/lib/estados";
 import { fotoPrivadaADataUrl } from "@/lib/imagenes";
@@ -27,6 +29,7 @@ interface Detalle extends FichaData {
   cliente_rut?: string | null;
   distancia_flete_km: number;
   token_publico?: string;
+  tiene_contrato?: boolean;
   base_terreno?: { nombre: string } | null;
   revestimiento?: { nombre: string } | null;
   detalles_insumo?: { id: number; etapa_obra: string; es_adicional?: boolean; subtotal_costo: number; cantidad_calculada: number }[];
@@ -332,7 +335,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     const registros = await Promise.all(
       bitacora.map(async (b) => ({ ...b, fotos: (await Promise.all(b.fotos.slice(0, 3).map(fotoPrivadaADataUrl))).filter((f): f is string => !!f) }))
     );
-    const blob = await pdf(<FichaEmpresaPdf c={cot} desglose={desglose} interno={gan} bitacora={registros} />).toBlob();
+    const ficha = await pdf(<FichaEmpresaPdf c={cot} desglose={desglose} interno={gan} bitacora={registros} />).toBlob();
+    const blob = await unirContrato(ficha, cot.tiene_contrato ? await bajarContrato(`/api/cotizaciones/${id}/contrato/`, true) : null);
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${cot.codigo_cotizacion}-empresa.pdf`;
@@ -572,6 +576,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             onCambio={cargar}
             onRegistros={setBitacora}
           />
+
+          <ContratoNotarial cotizacionId={cot.id} adjunto={!!cot.tiene_contrato} onCambio={cargar} />
 
           {gan && (
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-2 text-lg">

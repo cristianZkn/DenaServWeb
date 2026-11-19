@@ -1062,3 +1062,26 @@ class UsuariosAutorizadosTests(TestCase):
                             content_type="application/json", **self.h)
         self.assertEqual(r.status_code, 400)
         self.assertEqual(self.client.delete(f"/api/usuarios/{self.u.id}", **self.h).status_code, 400)
+
+
+class ContratoNotarialTests(TestCase):
+    def setUp(self):
+        self.u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Uno", "direccion_terreno": "Calle Uno 1",
+                                    "superficie_m2": 40, "modo_lista": True}, content_type="application/json", **self.h).json()
+
+    def _subir(self, pdf):
+        import base64
+        return self.client.post(f"/api/cotizaciones/{self.cot['id']}/contrato/", {"nombre_archivo": "c.pdf",
+                                "pdf": "data:application/pdf;base64," + base64.b64encode(pdf).decode()}, content_type="application/json", **self.h)
+
+    def test_adjuntar_ver_y_quitar(self):
+        self.assertFalse(self.client.get(f"/api/cotizaciones/{self.cot['id']}/", **self.h).json()["tiene_contrato"])
+        self.assertEqual(self._subir(b"%PDF-1.4 x").status_code, 200)
+        self.assertTrue(self.client.get(f"/api/cotizaciones/{self.cot['id']}/", **self.h).json()["tiene_contrato"])
+        self.assertEqual(self.client.get(f"/api/cotizaciones/public/{self.cot['token_publico']}/contrato").content, b"%PDF-1.4 x")
+        self.assertEqual(self.client.delete(f"/api/cotizaciones/{self.cot['id']}/contrato/", **self.h).status_code, 200)
+
+    def test_rechaza_lo_que_no_es_pdf(self):
+        self.assertEqual(self._subir(b"hola").status_code, 400)

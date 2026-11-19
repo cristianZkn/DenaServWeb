@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { FichaData } from "./FichaPdf";
 
 import { DESTINO_HITO, NOMBRE_HITO } from "./FichaPdf";
+import { bajarContrato, unirContrato } from "@/lib/contrato";
 import { claseEstado, etiquetaEstado } from "@/lib/estados";
 
 interface HitoPago {
@@ -23,12 +24,14 @@ interface HitoPago {
 interface Cotizacion extends FichaData {
   id: number;
   hitos_pago: HitoPago[];
+  tiene_contrato?: boolean;
 }
 
-async function descargarPdf(c: Cotizacion) {
+async function descargarPdf(c: Cotizacion, token: string) {
   // react-pdf se carga solo al descargar (pesado y solo cliente).
   const [{ pdf }, { default: FichaPdf }] = await Promise.all([import("@react-pdf/renderer"), import("./FichaPdf")]);
-  const blob = await pdf(<FichaPdf c={c} />).toBlob();
+  const ficha = await pdf(<FichaPdf c={c} />).toBlob();
+  const blob = await unirContrato(ficha, c.tiene_contrato ? await bajarContrato(`/api/cotizaciones/public/${token}/contrato`, false) : null);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${c.codigo_cotizacion}.pdf`;
@@ -103,7 +106,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             REF: {cotizacion.codigo_cotizacion}
           </span>
           <button
-            onClick={() => descargarPdf(cotizacion)}
+            onClick={() => descargarPdf(cotizacion, resolvedParams.uuid)}
             className="bg-blue-900 text-white font-bold px-3 py-1 rounded hover:bg-blue-800 cursor-pointer"
           >
             Descargar PDF
@@ -250,6 +253,16 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             </div>
           </div>
 
+          {cotizacion.tiene_contrato && (
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 mb-4 border-b pb-2">Contrato notarial</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-4 sm:p-6 rounded-xl border border-slate-200">
+                <p className="text-sm text-slate-600 max-w-md">Contrato oficial del proyecto, firmado ante notario. También se incluye al final del PDF de esta ficha.</p>
+                <a href={`/api/cotizaciones/public/${resolvedParams.uuid}/contrato`} target="_blank" rel="noopener noreferrer"
+                  className="bg-blue-900 text-white font-bold px-4 py-2 rounded-lg hover:bg-blue-800">Ver contrato (PDF)</a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

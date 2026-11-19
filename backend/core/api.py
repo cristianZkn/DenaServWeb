@@ -1,4 +1,5 @@
 import base64
+import re
 import hmac
 import logging
 import jwt
@@ -19,10 +20,10 @@ from ninja.security import APIKeyHeader, HttpBearer
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
     DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
-    BitacoraAvance, BitacoraFoto
+    BitacoraAvance, BitacoraFoto, ContratoNotarial
 )
 from .schemas import (
-    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema,
+    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema,
     ProveedorSchema, ProveedorInSchema,
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
@@ -880,6 +881,53 @@ def servir_foto_bitacora(request, foto_id: int):
     r = HttpResponse(bytes(f.contenido), content_type=f.tipo_mime)
     r["Cache-Control"] = "private, max-age=86400"
     return r
+
+
+MAX_BYTES_CONTRATO = 3_000_000  # el cuerpo en base64 debe caber en el límite de 4,5 MB de Vercel
+
+
+def _pdf_respuesta(c):
+    r = HttpResponse(bytes(c.contenido), content_type="application/pdf")
+    r["Content-Disposition"] = f'inline; filename="{c.nombre_archivo}"'
+    r["Cache-Control"] = "private, max-age=0"
+    return r
+
+
+@router.post("/cotizaciones/{cotizacion_id}/contrato/", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def subir_contrato(request, cotizacion_id: int, data: ContratoInSchema):
+    """Adjunta (o reemplaza) el PDF del contrato notarial del proyecto."""
+    if not Cotizacion.objects.filter(id=cotizacion_id).exists():
+        return 404, {"message": "Cotización no encontrada"}
+    try:
+        contenido = base64.b64decode(data.pdf.split(",", 1)[-1], validate=True)
+    except Exception:
+        return 400, {"message": "El archivo no se pudo leer."}
+    if not contenido.startswith(b"%PDF-"):
+        return 400, {"message": "El contrato debe ser un archivo PDF."}
+    if len(contenido) > MAX_BYTES_CONTRATO:
+        return 400, {"message": "El PDF puede pesar hasta 3 MB."}
+    nombre = re.sub(r'[^\w.\- ]', "_", data.nombre_archivo)[:150] or "contrato.pdf"
+    ContratoNotarial.objects.update_or_create(cotizacion_id=cotizacion_id, defaults={"nombre_archivo": nombre, "contenido": contenido, "fecha_subida": datetime.now(tz.utc)})
+    return 200, {"message": "Contrato adjuntado"}
+
+
+@router.get("/cotizaciones/{cotizacion_id}/contrato/", auth=AuthBearer())
+def ver_contrato(request, cotizacion_id: int):
+    c = ContratoNotarial.objects.filter(cotizacion_id=cotizacion_id).first()
+    return _pdf_respuesta(c) if c else HttpResponse(status=404)
+
+
+@router.delete("/cotizaciones/{cotizacion_id}/contrato/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def quitar_contrato(request, cotizacion_id: int):
+    borrados, _ = ContratoNotarial.objects.filter(cotizacion_id=cotizacion_id).delete()
+    return (200, {"message": "Contrato eliminado"}) if borrados else (404, {"message": "El proyecto no tiene contrato"})
+
+
+@router.get("/cotizaciones/public/{token}/contrato")
+def ver_contrato_publico(request, token: uuid.UUID):
+    """El cliente lo descarga con el enlace privado de su ficha."""
+    c = ContratoNotarial.objects.filter(cotizacion__token_publico=token).first()
+    return _pdf_respuesta(c) if c else HttpResponse(status=404)
 
 
 @router.get("/cotizaciones/{cotizacion_id}/desglose/", response={200: dict, 404: MessageSchema}, auth=AuthBearer())
