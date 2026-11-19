@@ -6,6 +6,8 @@ from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, Obra
 
 class DenaServMigrationTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # los límites de peticiones se cuentan en la caché
         self.client = Client()
         self.usuario = Usuario.objects.create(
             rut="12345678-9",
@@ -264,11 +266,19 @@ class ExtraccionTests(TestCase):
         import requests
         from unittest import mock
         from . import scraper
-        ok = mock.Mock(status_code=200, text="<html/>")
+        ok = mock.Mock(status_code=200, text="<html/>", url="https://www.easy.cl/x/p")
         with mock.patch("core.scraper.requests.get", side_effect=[requests.ConnectionError("x"), ok]) as g:
             self.assertEqual(scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None), "<html/>")
         self.assertEqual(g.call_count, 2)
         with mock.patch("core.scraper.requests.get", side_effect=requests.ConnectionError("x")):
+            with self.assertRaises(scraper.ErrorExtraccion):
+                scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None)
+
+    def test_no_sigue_una_redireccion_a_un_sitio_que_no_es_tienda(self):
+        from unittest import mock
+        from . import scraper
+        desviada = mock.Mock(status_code=200, text="<html/>", url="http://169.254.169.254/latest/meta-data/")
+        with mock.patch("core.scraper.requests.get", return_value=desviada):
             with self.assertRaises(scraper.ErrorExtraccion):
                 scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None)
 
@@ -1368,3 +1378,67 @@ class CombustibleManualTests(TestCase):
     def test_rechaza_precio_cero_y_combustible_desconocido(self):
         self.assertEqual(self.fijar("93", 0).status_code, 400)
         self.assertEqual(self.fijar("91", 1000).status_code, 404)
+
+
+class SeguridadTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.u = Usuario.objects.create(rut="7-7", nombre_completo="Seg", email="seg@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+
+    def login(self, **extra):
+        return self.client.post("/api/auth/google", {"email": "intruso@x.cl"}, content_type="application/json", **extra)
+
+    def test_el_inicio_de_sesion_se_limita_por_ip(self):
+        for _ in range(10):
+            self.login()
+        self.assertEqual(self.login().status_code, 429)                       # a la 11.ª en un minuto
+        self.assertNotEqual(self.login(REMOTE_ADDR="10.9.9.9").status_code, 429)  # otra IP no se ve afectada
+
+    def test_la_ip_informada_por_el_proxy_solo_vale_con_la_clave(self):
+        from django.test import override_settings
+        with override_settings(PROXY_SECRET="clave-compartida"):
+            for _ in range(10):
+                self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="clave-compartida")
+            self.assertEqual(self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="clave-compartida").status_code, 429)
+            self.assertNotEqual(self.login(HTTP_X_CLIENT_IP="2.2.2.2", HTTP_X_PROXY_SECRET="clave-compartida").status_code, 429)   # otra IP real
+            # sin la clave el encabezado se ignora: no se puede fingir otra IP ni cargar el límite a una ajena
+            self.assertNotEqual(self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="mala").status_code, 429)
+
+    def test_los_errores_internos_no_se_filtran(self):
+        from unittest import mock
+        with mock.patch("core.api.Proveedor.objects.create", side_effect=Exception('relation "proveedor" does not exist: SELECT * FROM x')):
+            r = self.client.post("/api/proveedores/", {"rut_empresa": "76123456-0", "razon_social": "Maderas SpA"},
+                                 content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+        self.assertNotIn("SELECT", r.json()["message"])
+        self.assertNotIn("relation", r.json()["message"])
+
+    def test_token_vencido_o_sin_expiracion_se_rechaza(self):
+        import jwt
+        from django.conf import settings
+        from datetime import datetime, timedelta, timezone as tz
+        vencido = jwt.encode({"user_id": self.u.id, "exp": datetime.now(tz.utc) - timedelta(minutes=1)}, settings.SECRET_KEY, algorithm="HS256")
+        sin_exp = jwt.encode({"user_id": self.u.id}, settings.SECRET_KEY, algorithm="HS256")
+        for token in (vencido, sin_exp):
+            self.assertEqual(self.client.get("/api/auth/me", HTTP_AUTHORIZATION=f"Bearer {token}").status_code, 401)
+        self.assertEqual(self.client.get("/api/auth/me", **self.h).status_code, 200)
+
+    def test_la_documentacion_de_la_api_no_se_publica_en_produccion(self):
+        from django.conf import settings
+        if not settings.DEBUG:
+            self.assertEqual(self.client.get("/api/openapi.json").status_code, 404)
+
+    def test_los_datos_se_pasan_como_parametros_no_como_sql(self):
+        r = self.client.get("/api/catalogo-tipos/?categoria=' OR '1'='1&activo=true", **self.h)
+        self.assertEqual((r.status_code, r.json()), (200, []))
+        r = self.client.post("/api/proveedores/", {"rut_empresa": "76123456-0", "razon_social": "x'); DROP TABLE proveedor;--"},
+                             content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Proveedor.objects.filter(razon_social__startswith="x'); DROP").exists())
+
+    def test_imagen_de_portafolio_solo_acepta_http(self):
+        r = self.client.post("/api/portafolio/", {"titulo": "Casa uno", "imagen_url": "javascript:alert(1)"},
+                             content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 422)

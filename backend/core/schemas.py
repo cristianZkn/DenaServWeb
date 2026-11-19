@@ -484,6 +484,14 @@ class PortafolioProyectoInSchema(Schema):
     cotizacion_id: Optional[int] = None
     imagenes: List[str] = []  # imágenes como data URL (data:image/jpeg;base64,...)
 
+    @field_validator("imagen_url")
+    @classmethod
+    def _imagen_url(cls, x):
+        x = (x or "").strip()
+        if x and not x.startswith(("http://", "https://")):
+            raise ValueError("La dirección de la imagen debe comenzar con http:// o https://")
+        return x or None
+
 
 class PortafolioProyectoUpdateSchema(Schema):
     titulo: Optional[str] = Field(None, min_length=3, max_length=150)

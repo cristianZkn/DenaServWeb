@@ -161,6 +161,16 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Detrás del proxy de Render: confiar en X-Forwarded-Proto y proteger cookies en producción.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000  # el navegador exige HTTPS en este dominio durante un año
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+# El tamaño máximo de un cuerpo es lo que admiten las subidas (contrato PDF 3 MB y fotos en base64); más que eso se rechaza.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
+
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = [o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o]
 
@@ -175,7 +185,11 @@ MAILERS = {
 }
 
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',') if o]
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False  # el navegador habla con el proxy de Next.js; el backend no usa cookies
+
+# Clave compartida con el proxy de Next.js: solo con ella el backend toma como IP del visitante la que el proxy le informa
+# (límite de peticiones por IP). Sin ella se usa la IP de la conexión.
+PROXY_SECRET = os.getenv('PROXY_SECRET', '')
 
 # Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)
 WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '')

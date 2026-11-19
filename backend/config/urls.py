@@ -1,14 +1,22 @@
 # pyrefly: ignore [missing-import]
+import os
+
 from django.contrib import admin
 # pyrefly: ignore [missing-import]
 from django.urls import path
 # pyrefly: ignore [missing-import]
+from django.conf import settings
 from ninja import NinjaAPI
 from ninja.errors import ValidationError
+from ninja.throttling import AuthRateThrottle
+
+from core.limites import IpRateThrottle
 
 ######### entrada de la API #########
 
-api = NinjaAPI(title="DenaServ API")
+# En producción no se publica la documentación de la API (ni openapi.json): solo en desarrollo.
+# Límites por minuto: por IP del visitante y por usuario autenticado (el inicio de sesión tiene uno más estricto).
+api = NinjaAPI(title="DenaServ API", throttle=[IpRateThrottle("600/m"), AuthRateThrottle("600/m")], docs_url="/docs" if settings.DEBUG else None, openapi_url="/openapi.json" if settings.DEBUG else None)
 
 
 @api.exception_handler(ValidationError)
@@ -34,7 +42,7 @@ def health_check(request):
 from core.api import router as core_router
 api.add_router("", core_router)
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path("api/", api.urls)
-]
+urlpatterns = [path("api/", api.urls)]
+# El panel de Django no se usa (la gestión es la web de DenaServ): solo se habilita en desarrollo o con ENABLE_ADMIN=1.
+if settings.DEBUG or os.getenv("ENABLE_ADMIN") == "1":
+    urlpatterns.insert(0, path('admin/', admin.site.urls))

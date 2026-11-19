@@ -16,6 +16,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.security import APIKeyHeader, HttpBearer
+from ninja.throttling import AuthRateThrottle
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
@@ -34,7 +35,8 @@ from .schemas import (
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema
 )
-from . import calculo, combustibles, precios
+from . import calculo, combustibles, precios, scraper
+from .limites import IpRateThrottle
 
 
 def _neto(item):
@@ -164,11 +166,20 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
+def _msj(e: Exception) -> str:
+    """Mensaje que se le muestra al usuario. Solo se muestran los que escribió la aplicación (ValueError y errores de lectura
+    de tiendas); cualquier otro error (base de datos, librerías) queda en el log y no se filtra al navegador."""
+    if isinstance(e, (ValueError, scraper.ErrorExtraccion)):
+        return str(e)
+    logger.exception("Error no controlado en la API")
+    return "No se pudo completar la operación. Revise los datos e intente de nuevo."
+
+
 # --- Seguridad & JWT ---
 class AuthBearer(HttpBearer):
     def authenticate(self, request, token):
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"require": ["exp", "user_id"]})
             user = Usuario.objects.filter(id=payload.get("user_id"), activo=True).first()
             return user
         except Exception as e:  # token vencido/inválido o fallo de BD: se rechaza, pero queda el motivo en el log
@@ -190,7 +201,7 @@ def create_jwt_token(usuario: Usuario) -> str:
         "user_id": usuario.id,
         "email": usuario.email,
         "nombre": usuario.nombre_completo,
-        "exp": datetime.now(tz.utc) + timedelta(days=7),
+        "exp": datetime.now(tz.utc) + timedelta(hours=12),
         "iat": datetime.now(tz.utc)
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
@@ -199,7 +210,7 @@ def create_jwt_token(usuario: Usuario) -> str:
 # ==============================================================================
 # 1. AUTENTICACIÓN (Google SSO)
 # ==============================================================================
-@router.post("/auth/google", response={200: TokenSchema, 401: MessageSchema, 403: MessageSchema})
+@router.post("/auth/google", response={200: TokenSchema, 401: MessageSchema, 403: MessageSchema}, throttle=[IpRateThrottle("10/m")])
 def google_sso_login(request, data: GoogleAuthInSchema):
     email, nombre_completo, google_id = None, data.nombre_completo, data.google_id
 
@@ -339,7 +350,7 @@ def precios_combustibles(request):
     try:
         return 200, combustibles.listar()
     except ValueError as e:
-        return 503, {"message": str(e)}
+        return 503, {"message": _msj(e)}
 
 
 @router.get("/combustibles/estado/", response=dict, auth=AuthBearer())
@@ -359,7 +370,7 @@ def fijar_precio_combustible(request, tipo: str, data: TarifaInSchema):
     return 200, combustibles.estado()
 
 
-@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer())
+@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("12/m")])
 def volver_precio_cne(request, tipo: str):
     """Deja de usar el precio manual y vuelve al de la CNE."""
     if tipo not in combustibles.TIPOS:
@@ -367,16 +378,16 @@ def volver_precio_cne(request, tipo: str):
     try:
         combustibles.volver_a_cne(tipo)
     except ValueError as e:
-        return 503, {"message": f"{e} Se mantiene el precio ingresado a mano."}
+        return 503, {"message": f"{_msj(e)} Se mantiene el precio ingresado a mano."}
     return 200, combustibles.estado()
 
 
-@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer())
+@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("6/m")])
 def actualizar_combustibles(request):
     try:
         return 200, combustibles.actualizar()
     except ValueError as e:
-        return 503, {"message": str(e)}
+        return 503, {"message": _msj(e)}
 
 
 # ==============================================================================
@@ -395,7 +406,7 @@ def crear_proveedor(request, data: ProveedorInSchema):
         proveedor = Proveedor.objects.create(**data.dict())
         return 200, proveedor
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -412,7 +423,7 @@ def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/proveedores/{proveedor_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -424,7 +435,7 @@ def eliminar_proveedor(request, proveedor_id: int):
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
     except Exception as e:
-        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+        return 400, {"message": f"No se puede eliminar: {_msj(e)}"}
 
 
 # ==============================================================================
@@ -500,7 +511,7 @@ def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
         item.save()
         return 200, item
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.put("/catalogo-tipos/{catalogo_id}", response={200: CatalogoTipoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -519,7 +530,7 @@ def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSche
     except CatalogoTipo.DoesNotExist:
         return 404, {"message": "Elemento de catálogo no encontrado"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/catalogo-tipos/{catalogo_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -531,7 +542,7 @@ def eliminar_catalogo_tipo(request, catalogo_id: int):
     except CatalogoTipo.DoesNotExist:
         return 404, {"message": "Elemento de catálogo no encontrado"}
     except Exception as e:
-        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+        return 400, {"message": f"No se puede eliminar: {_msj(e)}"}
 
 
 # ==============================================================================
@@ -620,7 +631,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
 
             return 200, cotizacion
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
@@ -628,7 +639,7 @@ def calcular_cotizacion(request, data: CalculoInSchema):
     try:
         return 200, _calcular_desde_catalogo(data)
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.get("/cotizaciones/progreso/", response=List[ProgresoObraSchema], auth=AuthBearer())
@@ -733,7 +744,7 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 traslados=[TrasladoInSchema(tipo=x.tipo, combustible=x.combustible, dias=x.dias, precio_litro=float(x.precio_litro))
                            for x in cot.traslados.all()]))
         except ValueError as e:
-            return 400, {"message": str(e)}
+            return 400, {"message": _msj(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (
             r["costo_materiales_total"], r["costo_mano_obra"], r["costo_flete"])
         nuevo_total = r["total"] + cot.costo_nivelacion + cot.ajuste_monto
@@ -794,7 +805,7 @@ def agregar_insumo_cotizacion(request, cotizacion_id: int, data: DetalleCotizaci
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 # ==============================================================================
@@ -852,7 +863,7 @@ def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
         try:
             mime, contenido = _leer_comprobante(data.comprobante)
         except ValueError as e:
-            return 400, {"message": str(e)}
+            return 400, {"message": _msj(e)}
     with transaction.atomic():
         # Se bloquea el hito y se lee su saldo dentro de la transacción: dos abonos simultáneos no pueden pasarse del total.
         hito = HitoPago.objects.select_for_update().select_related("cotizacion").get(id=hito_id)
@@ -985,7 +996,7 @@ def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
     except ObraEjecucion.DoesNotExist:
         return 404, {"message": "Obra no encontrada"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 # ---- Bitácora de avance
@@ -1023,7 +1034,7 @@ def registrar_avance(request, cotizacion_id: int, data: BitacoraInSchema):
             obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = porcentaje, date.today()
             obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
     return 200, b
 
 
@@ -1036,7 +1047,7 @@ def agregar_fotos_bitacora(request, bitacora_id: int, data: BitacoraFotosInSchem
         with transaction.atomic():
             _guardar_fotos_bitacora(b, data.agregar_imagenes)
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
     return 200, b
 
 
@@ -1219,9 +1230,9 @@ def crear_proyecto_portafolio(request, data: PortafolioProyectoInSchema):
             _guardar_imagenes(proyecto, data.imagenes)
         return 200, proyecto
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.patch("/portafolio/{proyecto_id}/", response={200: PortafolioProyectoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -1240,7 +1251,7 @@ def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyec
             _guardar_imagenes(proyecto, data.agregar_imagenes)
         return 200, proyecto
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())

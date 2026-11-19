@@ -66,6 +66,7 @@ def descargar(url: str, pausa=time.sleep) -> str:
     for intento in range(INTENTOS):
         try:
             r = requests.get(url, headers=HEADERS, timeout=TIMEOUT, verify=verify)
+            tienda_de(r.url)  # si la tienda redirige a otro sitio no se lee (evita usar el servidor para consultar direcciones ajenas)
             if r.status_code in BLOQUEO:
                 r = _con_cloudscraper(url, verify) or r
         except requests.RequestException as e:  # caída de conexión, timeout, TLS

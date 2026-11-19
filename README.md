@@ -103,6 +103,9 @@ Crea el archivo `backend/.env` a partir de [`backend/.env.example`](backend/.env
 | `WHATSAPP_NUMERO` | Número de contacto del portafolio, con código de país (`569XXXXXXXX`) |
 | `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | Orígenes permitidos (los valores por defecto sirven en local) |
 | `CRON_TOKEN` | Clave del actualizador semanal de precios (solo producción) |
+| `PROXY_SECRET` | Clave compartida con el frontend (el mismo valor en Vercel y en Render). Permite que el backend cuente las peticiones por la IP real del visitante; sin ella usa la IP de la conexión |
+| `COMBUSTIBLE_ZONA` | Zona de la CNE para el precio del combustible: `Zona Norte`, `Zona Centro` (por defecto), `Metropolitana` o `Zona Sur` |
+| `ENABLE_ADMIN` | `1` para habilitar el panel de Django en `/admin/` (en producción está apagado) |
 
 Luego aplica las migraciones y levanta el servidor:
 
@@ -138,6 +141,7 @@ Crea `frontend/.env.local` a partir de [`frontend/.env.example`](frontend/.env.e
 |---|---|
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | El mismo cliente OAuth de Google del backend |
 | `BACKEND_URL` | URL del backend; en local `http://127.0.0.1:8000` |
+| `PROXY_SECRET` | La misma clave que en el backend (opcional en local) |
 
 ```powershell
 npm run dev
@@ -159,6 +163,14 @@ La aplicación queda en `http://localhost:3000/`. El panel interno está en `/da
 - **Backend en Render:** ejecuta `python manage.py migrate` en cada despliegue y define las variables de entorno del paso 3 (con `DJANGO_DEBUG=0` y una `DJANGO_SECRET_KEY` propia).
 - **Frontend en Vercel:** define `BACKEND_URL` con la URL pública del backend y `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
 - **Precios semanales:** el workflow de GitHub necesita los secretos `API_URL` (URL del backend) y `CRON_TOKEN` (el mismo de Render).
+
+## Seguridad
+
+- **Sesión:** el token vive en una cookie `httpOnly` que solo el servidor de Next.js lee (no se usa `localStorage`); dura 12 horas. El proxy `/api/*` la convierte en el encabezado que espera el backend y acepta peticiones que modifican datos solo si nacen en el mismo sitio.
+- **Límites de peticiones:** 600 por minuto por IP y por usuario, y 10 por minuto por IP en el inicio de sesión. Para ataques de denegación de servicio a gran escala conviene además activar reglas de límite en el Firewall de Vercel.
+- **Entradas:** todo acceso a la base pasa por el ORM de Django (consultas parametrizadas); los datos se validan en el backend; React escapa lo que muestra; los archivos subidos se aceptan solo con tipos permitidos (JPG, PNG, WebP, PDF).
+- **Cabeceras:** el frontend envía política de contenido (CSP), HSTS, anti-clickjacking y `nosniff`. La documentación de la API (`/api/docs`) y el panel `/admin/` no están disponibles en producción.
+- **Dependencias:** revisar con `npm audit` (frontend) y `pip-audit` (backend) antes de cada despliegue importante.
 
 ## Convenciones de trabajo
 
