@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import { errorDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
 import { CATEGORIAS } from "@/lib/categorias";
 
@@ -346,7 +346,7 @@ export default function CotizadorPage() {
               <div>
                 <label htmlFor="cliente_telefono" className={labelCls}>Teléfono o WhatsApp</label>
                 <input id="cliente_telefono" name="cliente_telefono" type="tel" value={formData.cliente_telefono}
-                  onChange={(e) => setCampo("cliente_telefono", e.target.value.replace(/[^\d+\s]/g, ""))}
+                  onChange={(e) => setCampo("cliente_telefono", formatearTelefono(e.target.value))}
                   placeholder="+56 9 8765 4321" maxLength={16} className={inputCls} />
               </div>
             </div>

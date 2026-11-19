@@ -5,7 +5,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { errorDatosCliente, formatearRut } from "@/lib/validar";
+import { errorDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
 import ContratoNotarial from "@/components/ContratoNotarial";
 import { bajarContrato, unirContrato } from "@/lib/contrato";
 import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
@@ -419,7 +419,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           </div>
           <div>
             <label className={campo}>Teléfono</label>
-            <input type="tel" value={form.cliente_telefono} onChange={(e) => setForm({ ...form, cliente_telefono: e.target.value.replace(/[^\d+\s]/g, "") })} placeholder="+56 9 8765 4321" maxLength={16} />
+            <input type="tel" value={form.cliente_telefono} onChange={(e) => setForm({ ...form, cliente_telefono: formatearTelefono(e.target.value) })} placeholder="+56 9 8765 4321" maxLength={16} />
           </div>
           <div>
             <label className={campo}>Dirección del terreno</label>

@@ -16,6 +16,17 @@ export function rutValido(rut: string): boolean {
   return s.slice(-1) === (esperado === 11 ? "0" : esperado === 10 ? "K" : String(esperado));
 }
 
+/** Celular chileno mientras se escribe: la persona ingresa solo los 8 dígitos finales y se agrega "+56 9" con el espacio cada 4. */
+export function formatearTelefono(valor: string): string {
+  let d = valor.replace(/\D/g, "");
+  if (d.startsWith("569")) d = d.slice(3);
+  else if (d.startsWith("56")) d = d.slice(2);
+  else if (d.length > 8 && d.startsWith("9")) d = d.slice(1);
+  d = d.slice(0, 8);
+  if (!d) return "";
+  return `+56 9 ${d.slice(0, 4)}${d.length > 4 ? " " + d.slice(4) : ""}`;
+}
+
 /** Teléfono chileno de 9 dígitos, con o sin +56. */
 export function telefonoValido(tel: string): boolean {
   let s = tel.replace(/[\s\-().]/g, "");

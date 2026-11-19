@@ -2,7 +2,7 @@
 
 import { useDialogo } from "@/components/ConfirmDialog";
 
-import { correoValido, formatearRut, rutValido, telefonoValido } from "@/lib/validar";
+import { correoValido, formatearRut, formatearTelefono, rutValido, telefonoValido } from "@/lib/validar";
 import { useEffect, useState } from "react";
 
 interface Proveedor {
@@ -209,7 +209,7 @@ export default function ProveedoresPage() {
               <input
                 type="text"
                 value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value.replace(/[^\d+\s]/g, "") })}
+                onChange={(e) => setFormData({ ...formData, telefono: formatearTelefono(e.target.value) })}
                 placeholder="+56 9 1234 5678" maxLength={16}
                 className="w-full px-3 py-2 border rounded-lg border-slate-300"
               />
