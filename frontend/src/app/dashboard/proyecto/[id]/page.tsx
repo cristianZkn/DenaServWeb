@@ -591,7 +591,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: el pago quedó registrado. El estado y el avance se actualizaron según los pagos."); cargar(); }} />}
+      {pagando && <PagoModal hito={pagando} onClose={() => setPagando(null)} onSaved={() => { avisar("Listo: los pagos quedaron actualizados. El estado y el avance se ajustaron según lo pagado."); cargar(); }} />}
 
       <details className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <summary className="text-xl font-bold cursor-pointer">Historial de modificaciones del valor ({cambios.length})</summary>

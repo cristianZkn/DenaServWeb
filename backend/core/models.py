@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from django.db import models
 from django.utils import timezone
@@ -299,6 +300,31 @@ class BitacoraFoto(models.Model):
     class Meta:
         db_table = 'bitacora_foto'
         ordering = ['id']
+
+
+# detalle_registros: libro de pagos. Cada abono de un hito es una fila (monto, método, fecha, comprobante);
+# el monto abonado del hito es siempre la suma de sus filas.
+METODOS_PAGO = [
+    ("EFECTIVO", "Efectivo"), ("TRANSFERENCIA", "Transferencia"), ("CHEQUE", "Cheque"),
+    ("DEBITO", "Tarjeta de débito"), ("CREDITO", "Tarjeta de crédito"), ("OTRO", "Otro"),
+]
+
+
+class DetalleRegistro(models.Model):
+    hito = models.ForeignKey(HitoPago, on_delete=models.CASCADE, related_name='registros')
+    monto = models.DecimalField(max_digits=18, decimal_places=2)
+    metodo = models.CharField(max_length=20, choices=METODOS_PAGO, default='OTRO')
+    fecha = models.DateField(default=date.today)
+    nota = models.CharField(max_length=200, blank=True, default='')
+    comprobante = models.BinaryField(null=True, blank=True)  # imagen o PDF del comprobante (opcional)
+    comprobante_mime = models.CharField(max_length=30, blank=True, default='')
+    comprobante_nombre = models.CharField(max_length=150, blank=True, default='')
+    usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    fecha_registro = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'detalle_registros'
+        ordering = ['fecha', 'id']
 
 
 # Tarifas fijas del cálculo que la empresa cambió desde la web (las que no están aquí usan el valor de fábrica)

@@ -7,6 +7,7 @@ from django.conf import settings
 from decimal import Decimal
 from pydantic import Field, field_validator
 from . import calculo
+from .models import METODOS_PAGO
 from . import validadores as v
 
 
@@ -235,6 +236,21 @@ class DetalleCotizacionInsumoInSchema(Schema):
 
 
 # --- 6. Hito de Pago ---
+class RegistroPagoSchema(Schema):
+    """Una fila del libro de pagos (detalle_registros): lo pagado en ese abono y cómo va el hito después de él."""
+    id: int
+    monto: float
+    metodo: str
+    metodo_etiqueta: str
+    fecha: date
+    nota: str = ""
+    tiene_comprobante: bool = False
+    comprobante_nombre: str = ""
+    usuario: Optional[str] = None
+    acumulado: float  # total pagado del hito hasta este abono
+    saldo: float      # lo que falta del hito después de este abono
+
+
 class HitoPagoSchema(Schema):
     id: int
     cotizacion_id: int
@@ -246,13 +262,44 @@ class HitoPagoSchema(Schema):
     estado: str
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
+    registros: List[RegistroPagoSchema] = []
+
+    @staticmethod
+    def resolve_registros(obj):
+        etiquetas, acumulado, filas = dict(METODOS_PAGO), Decimal(0), []
+        for r in obj.registros.select_related("usuario").defer("comprobante"):
+            acumulado += r.monto
+            filas.append({"id": r.id, "monto": r.monto, "metodo": r.metodo, "metodo_etiqueta": etiquetas.get(r.metodo, r.metodo),
+                          "fecha": r.fecha, "nota": r.nota, "tiene_comprobante": bool(r.comprobante_mime),
+                          "comprobante_nombre": r.comprobante_nombre, "usuario": r.usuario.nombre_completo if r.usuario else None,
+                          "acumulado": acumulado, "saldo": max(obj.monto_pago - acumulado, 0)})
+        return filas
+
 
 class HitoPagoUpdateSchema(Schema):
+    """Compatibilidad: el panel usa `RegistroPagoInSchema`. Aquí `monto_abonado` es el total recibido (nunca baja)."""
     estado: Optional[str] = None
-    pago_completo: Optional[bool] = None   # True = pagó todo; False = pago parcial (requiere monto_abonado)
-    monto_abonado: Optional[float] = None  # total recibido hasta ahora (no lo que falta)
+    pago_completo: Optional[bool] = None
+    monto_abonado: Optional[float] = None
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
+    metodo: Optional[str] = None
+
+
+class RegistroPagoInSchema(Schema):
+    monto: float = Field(gt=0, le=10_000_000_000)  # lo pagado en este abono (no el total ni lo que falta)
+    metodo: str
+    fecha: Optional[date] = None
+    nota: str = Field("", max_length=200)
+    comprobante: Optional[str] = None  # data URL (imagen o PDF), opcional
+    comprobante_nombre: str = Field("", max_length=150)
+
+    @field_validator("metodo")
+    @classmethod
+    def _metodo(cls, x):
+        if x not in dict(METODOS_PAGO):
+            raise ValueError("Elija cómo se pagó: efectivo, transferencia, cheque, tarjeta u otro.")
+        return x
 
 
 # --- 7. Obra Ejecución ---

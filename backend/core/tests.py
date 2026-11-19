@@ -1127,3 +1127,45 @@ class TarifasEditablesTests(TestCase):
         self.assertEqual(len(self.client.get("/api/tarifas/", **self.h).json()), len(__import__("core.calculo").calculo.TARIFAS_META))
         self.assertEqual(self.client.put("/api/tarifas/ganancia_m2", {"valor": -1}, content_type="application/json", **self.h).status_code, 422)
         self.assertEqual(self.client.put("/api/tarifas/inventada", {"valor": 1}, content_type="application/json", **self.h).status_code, 404)
+
+
+class LibroDePagosTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="Cajero", email="c@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Pagos", "direccion_terreno": "Calle Uno 1",
+                               "superficie_m2": 40}, content_type="application/json", **self.h).json()
+        self.hito = HitoPago.objects.filter(cotizacion_id=cot["id"]).order_by("id").first()
+
+    def abonar(self, monto, metodo="TRANSFERENCIA", **extra):
+        return self.client.post(f"/api/hitos-pago/{self.hito.id}/registros/", {"monto": monto, "metodo": metodo, **extra},
+                                content_type="application/json", **self.h)
+
+    def test_abonos_suman_y_calculan_saldo(self):
+        total = int(self.hito.monto_pago)
+        r = self.abonar(1000).json()
+        self.assertEqual((r["estado"], r["monto_abonado"], r["monto_pendiente"]), ("ABONADO", 1000, total - 1000))
+        r = self.abonar(2000, "EFECTIVO").json()
+        self.assertEqual([(x["monto"], x["acumulado"], x["saldo"], x["metodo_etiqueta"]) for x in r["registros"]],
+                         [(1000, 1000, total - 1000, "Transferencia"), (2000, 3000, total - 3000, "Efectivo")])
+        r = self.abonar(total - 3000).json()
+        self.assertEqual((r["estado"], r["monto_pendiente"]), ("PAGADO", 0))
+
+    def test_rechaza_monto_mayor_al_saldo_y_metodo_invalido(self):
+        self.assertEqual(self.abonar(int(self.hito.monto_pago) + 1).status_code, 400)
+        self.assertEqual(self.abonar(0).status_code, 422)
+        self.assertEqual(self.abonar(1000, "TRUEQUE").status_code, 422)
+
+    def test_comprobante_se_guarda_y_se_sirve(self):
+        import base64
+        r = self.abonar(1000, comprobante="data:application/pdf;base64," + base64.b64encode(b"%PDF-1 x").decode(), comprobante_nombre="c.pdf").json()
+        reg = r["registros"][0]
+        self.assertTrue(reg["tiene_comprobante"])
+        self.assertEqual(self.client.get(f"/api/registros-pago/{reg['id']}/comprobante/", **self.h).content, b"%PDF-1 x")
+        self.assertEqual(self.abonar(1000, comprobante="data:text/html;base64,AAAA").status_code, 400)
+
+    def test_anular_un_abono_recalcula_el_hito(self):
+        self.abonar(1000)
+        reg = self.abonar(2000).json()["registros"][1]
+        r = self.client.delete(f"/api/registros-pago/{reg['id']}/", **self.h).json()
+        self.assertEqual((r["monto_abonado"], r["estado"], len(r["registros"])), (1000, "ABONADO", 1))

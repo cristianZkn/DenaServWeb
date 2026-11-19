@@ -20,7 +20,7 @@ from ninja.security import APIKeyHeader, HttpBearer
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
     DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
-    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa
+    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema, TarifaSchema, TarifaInSchema,
@@ -28,7 +28,7 @@ from .schemas import (
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
-    HitoPagoSchema, HitoPagoUpdateSchema,
+    HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
     MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema,
@@ -741,45 +741,127 @@ def listar_hitos_cotizacion(request, cotizacion_id: int):
     return HitoPago.objects.filter(cotizacion_id=cotizacion_id).order_by("id")
 
 
+def _sincronizar_hito(hito):
+    """El monto abonado, el estado y la fecha del hito salen siempre del libro de pagos (detalle_registros)."""
+    registros = list(hito.registros.defer("comprobante"))
+    hito.monto_abonado = min(sum((r.monto for r in registros), Decimal(0)), hito.monto_pago)
+    hito.estado = "PAGADO" if hito.monto_abonado >= hito.monto_pago else ("ABONADO" if hito.monto_abonado > 0 else "PENDIENTE")
+    hito.fecha_pago = registros[-1].fecha if registros else None
+    hito.save(update_fields=["monto_abonado", "estado", "fecha_pago"])
+
+
+def _confirmar_cambio_de_pagos(hito):
+    """Sincroniza el hito y el proyecto; si el cambio contradice el avance ya registrado, lo revierte (409)."""
+    _sincronizar_hito(hito)
+    error = _reconciliar(hito.cotizacion)
+    if error:
+        transaction.set_rollback(True)
+        return 409, {"message": error}
+    return 200, HitoPago.objects.get(id=hito.id)
+
+
+MIME_COMPROBANTE = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+
+
+def _leer_comprobante(data_url: str):
+    """'data:...;base64,...' -> (mime, bytes). ValueError con mensaje para el usuario si no sirve."""
+    try:
+        cabecera, b64 = data_url.split(",", 1)
+        mime, contenido = cabecera.split(";")[0].removeprefix("data:"), base64.b64decode(b64, validate=True)
+    except Exception:
+        raise ValueError("El comprobante no se pudo leer.")
+    if mime not in MIME_COMPROBANTE:
+        raise ValueError("El comprobante debe ser una imagen (JPG, PNG, WebP) o un PDF.")
+    if len(contenido) > MAX_BYTES_IMAGEN:
+        raise ValueError("El comprobante puede pesar hasta 2,5 MB.")
+    return mime, contenido
+
+
+@router.post("/hitos-pago/{hito_id}/registros/", response={200: HitoPagoSchema, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
+    """Anota un abono en el libro de pagos. El monto es lo pagado ahora; no puede superar lo que falta del hito."""
+    hito = HitoPago.objects.select_related("cotizacion").filter(id=hito_id).first()
+    if not hito:
+        return 404, {"message": "Hito de pago no encontrado"}
+    monto = Decimal(str(data.monto)).quantize(Decimal("1"))
+    pendiente = hito.monto_pago - hito.monto_abonado
+    if monto <= 0 or monto > pendiente:
+        return 400, {"message": f"El monto debe estar entre $1 y lo que falta por pagar (${int(pendiente):,}).".replace(",", ".")}
+    mime, contenido = "", None
+    if data.comprobante:
+        try:
+            mime, contenido = _leer_comprobante(data.comprobante)
+        except ValueError as e:
+            return 400, {"message": str(e)}
+    with transaction.atomic():
+        DetalleRegistro.objects.create(hito=hito, monto=monto, metodo=data.metodo, fecha=data.fecha or date.today(), nota=data.nota.strip(),
+                                       comprobante=contenido, comprobante_mime=mime, comprobante_nombre=data.comprobante_nombre if contenido else "",
+                                       usuario=request.auth)
+        return _confirmar_cambio_de_pagos(hito)
+
+
+@router.delete("/registros-pago/{registro_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def anular_registro_pago(request, registro_id: int):
+    """Corrige un abono mal ingresado: lo elimina del libro y el hito vuelve a calcularse."""
+    reg = DetalleRegistro.objects.select_related("hito__cotizacion").defer("comprobante").filter(id=registro_id).first()
+    if not reg:
+        return 404, {"message": "Registro de pago no encontrado"}
+    hito = reg.hito
+    with transaction.atomic():
+        reg.delete()
+        return _confirmar_cambio_de_pagos(hito)
+
+
+@router.get("/registros-pago/{registro_id}/comprobante/", auth=AuthBearer())
+def ver_comprobante(request, registro_id: int):
+    reg = DetalleRegistro.objects.filter(id=registro_id).first()
+    if not reg or not reg.comprobante_mime:
+        return HttpResponse(status=404)
+    r = HttpResponse(bytes(reg.comprobante), content_type=reg.comprobante_mime)
+    nombre = re.sub(r"[^\w. -]", "_", reg.comprobante_nombre) or "comprobante"
+    r["Content-Disposition"] = f'inline; filename="{nombre}"'
+    r["Cache-Control"] = "private, max-age=86400"
+    return r
+
+
 @router.patch("/hitos-pago/{hito_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_hito_pago(request, hito_id: int, data: HitoPagoUpdateSchema):
-    """Registra un pago. `pago_completo=True` (o estado PAGADO) salda el hito; `pago_completo=False` exige
-    `monto_abonado` (total recibido) y deja el hito en ABONADO con la deuda restante; estado PENDIENTE lo deja en cero."""
-    hito = HitoPago.objects.filter(id=hito_id).first()
+    """Compatibilidad con el registro por total: `pago_completo=True` (o PAGADO) abona lo que falta; `monto_abonado` es el
+    total recibido (anota la diferencia como un abono); PENDIENTE borra todos los abonos. No admite bajar un total: para
+    corregir se anula el abono desde el libro de pagos."""
+    hito = HitoPago.objects.select_related("cotizacion").filter(id=hito_id).first()
     if not hito:
         return 404, {"message": "Hito de pago no encontrado"}
     if data.pago_completo is True or data.estado == "PAGADO":
-        abonado = hito.monto_pago
+        objetivo = hito.monto_pago
     elif data.estado == "PENDIENTE" and data.monto_abonado is None:
-        abonado = Decimal(0)
+        objetivo = Decimal(0)
     elif data.pago_completo is False or data.monto_abonado is not None:
         if data.monto_abonado is None:
             return 400, {"message": "Indique cuánto se pagó."}
-        abonado = Decimal(str(data.monto_abonado)).quantize(Decimal("1"))
-        if abonado < 0 or abonado > hito.monto_pago:
+        objetivo = Decimal(str(data.monto_abonado)).quantize(Decimal("1"))
+        if objetivo < 0 or objetivo > hito.monto_pago:
             tope = f"{int(hito.monto_pago):,}".replace(",", ".")
             return 400, {"message": f"El monto pagado debe estar entre $0 y ${tope}."}
     elif data.estado is not None:
         return 400, {"message": "Estado de pago no válido."}
     else:
-        abonado = hito.monto_abonado
-    hito.monto_abonado = abonado
-    hito.estado = "PAGADO" if abonado >= hito.monto_pago else ("ABONADO" if abonado > 0 else "PENDIENTE")
-    if data.fecha_pago is not None:
-        hito.fecha_pago = data.fecha_pago
-    elif abonado > 0:
-        hito.fecha_pago = date.today()
-    else:
-        hito.fecha_pago = None
-    if data.comprobante_ref is not None:
-        hito.comprobante_ref = data.comprobante_ref
+        objetivo = hito.monto_abonado
+    if data.metodo is not None and data.metodo not in dict(METODOS_PAGO):
+        return 400, {"message": "Método de pago no válido."}
+    if objetivo < hito.monto_abonado:
+        if objetivo > 0:
+            return 400, {"message": "El total no puede bajar: anule el abono equivocado desde el historial de pagos."}
     with transaction.atomic():
-        hito.save()
-        error = _reconciliar(hito.cotizacion)  # estado y avance siguen a los pagos
-        if error:
-            transaction.set_rollback(True)
-            return 409, {"message": error}
-    return 200, hito
+        if objetivo == 0:
+            hito.registros.all().delete()
+        elif objetivo > hito.monto_abonado:
+            DetalleRegistro.objects.create(hito=hito, monto=objetivo - hito.monto_abonado, metodo=data.metodo or "OTRO",
+                                           fecha=data.fecha_pago or date.today(), usuario=request.auth)
+        if data.comprobante_ref is not None:
+            hito.comprobante_ref = data.comprobante_ref
+            hito.save(update_fields=["comprobante_ref"])
+        return _confirmar_cambio_de_pagos(hito)
 
 
 # ==============================================================================
