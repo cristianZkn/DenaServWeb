@@ -21,7 +21,13 @@ export interface EmpresaFicha {
 export interface Desglose {
   materiales: { nombre: string; categoria: string; unidad: string; proveedor: string | null; cantidad: number; subtotal: number; de_la_lista: boolean }[];
   mano_obra: { concepto: string; m2?: number; tarifa: number; trabajadores: number; subtotal: number }[];
-  traslado: { km: number; dias: number; litros: number; precio_litro: number; costo: number } | null;
+  traslado: {
+    km: number; costo: number;
+    // cotizaciones nuevas: tres traslados con combustible y días propios
+    lineas?: { tipo: string; nombre: string; combustible: string; dias: number; dias_extra?: number; dias_total?: number; precio_litro: number; litros_por_dia: number; costo_por_dia: number; litros: number; costo: number }[];
+    // cotizaciones antiguas: un solo traslado
+    dias?: number; litros?: number; precio_litro?: number;
+  } | null;
   costo_materiales: number; costo_mano_obra: number; costo_flete: number; costo_nivelacion: number;
   ganancia: number; neto: number; iva: number; total: number;
   n_trabajadores: number; dias_obra: number; m2_vigas_vista: number;
@@ -39,6 +45,7 @@ const e = StyleSheet.create({
   foto: { width: 110, height: 80, marginRight: 4, marginBottom: 4, objectFit: "cover" },
 });
 
+const COMBUSTIBLE: Record<string, string> = { "93": "bencina 93", "95": "bencina 95", "97": "bencina 97", DIESEL: "diésel" };
 const num = (n: number) => Number(n).toLocaleString("es-CL", { maximumFractionDigits: 2 });
 
 export default function FichaEmpresaPdf({ c, desglose: d, interno, bitacora }: { c: EmpresaFicha; desglose: Desglose; interno: ControlInterno; bitacora: RegistroPdf[] }) {
@@ -94,8 +101,19 @@ export default function FichaEmpresaPdf({ c, desglose: d, interno, bitacora }: {
         <Row a={`Total de mano de obra${d.n_trabajadores ? ` (${d.n_trabajadores} trabajadores)` : ""}`} b={clp(d.costo_mano_obra)} strong />
 
         <Text style={s.h2}>Traslado</Text>
-        {d.traslado ? (
-          <Row a={`${num(d.traslado.km)} km por día ÷ 10 × ${d.traslado.dias} días = ${num(d.traslado.litros)} L × ${clp(d.traslado.precio_litro)}`} b={clp(d.traslado.costo)} />
+        {d.traslado?.lineas ? (
+          <>
+            {d.traslado.lineas.map((l) => (
+              <View key={l.tipo} style={e.fila} wrap={false}>
+                <Text style={e.c1}>{l.nombre} ({COMBUSTIBLE[l.combustible] || l.combustible} a {clp(l.precio_litro)}/L)</Text>
+                <Text style={e.c2}>{num(d.traslado!.km)} km ÷ 10 = {num(l.litros_por_dia)} L/día = {clp(l.costo_por_dia)} × {l.dias_total ?? l.dias} {(l.dias_total ?? l.dias) === 1 ? "día" : "días"}{l.dias_extra ? ` (${l.dias} + ${l.dias_extra} de fabricación del radier)` : ""}</Text>
+                <Text style={e.c3}>{clp(l.costo)}</Text>
+              </View>
+            ))}
+            <Row a="Total de traslados" b={clp(d.traslado.costo)} strong />
+          </>
+        ) : d.traslado ? (
+          <Row a={`${num(d.traslado.km)} km por día ÷ 10 × ${d.traslado.dias} días = ${num(d.traslado.litros ?? 0)} L × ${clp(d.traslado.precio_litro ?? 0)}`} b={clp(d.traslado.costo)} />
         ) : (
           <Row a={`Distancia al terreno: ${c.distancia_flete_km} km`} b={clp(d.costo_flete)} />
         )}

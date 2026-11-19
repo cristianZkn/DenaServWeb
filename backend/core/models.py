@@ -327,6 +327,34 @@ class DetalleRegistro(models.Model):
         ordering = ['fecha', 'id']
 
 
+# Último precio del combustible leído de la CNE (tipos: 93, 95, 97, DIESEL)
+class PrecioCombustible(models.Model):
+    tipo = models.CharField(max_length=10, unique=True)
+    precio = models.DecimalField(max_digits=10, decimal_places=2)  # $ por litro
+    zona = models.CharField(max_length=50, blank=True, default='')
+    fuente = models.CharField(max_length=100, blank=True, default='')
+    manual = models.BooleanField(default=False)  # fijado por la empresa: la consulta a la CNE no lo reemplaza
+    actualizado_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'precio_combustible'
+
+
+# Traslados de una cotización: maestros, materiales y flete, cada uno con su combustible, sus días y el precio del litro
+# que regía al cotizar (queda fijo aunque el combustible cambie después).
+class TrasladoCotizacion(models.Model):
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='traslados')
+    tipo = models.CharField(max_length=10)  # MAESTROS | MATERIALES | FLETE
+    combustible = models.CharField(max_length=10)  # 93 | 95 | 97 | DIESEL
+    dias = models.PositiveIntegerField(default=0)
+    precio_litro = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        db_table = 'traslado_cotizacion'
+        constraints = [models.UniqueConstraint(fields=['cotizacion', 'tipo'], name='un_traslado_por_tipo')]
+        ordering = ['id']
+
+
 # Tarifas fijas del cálculo que la empresa cambió desde la web (las que no están aquí usan el valor de fábrica)
 class Tarifa(models.Model):
     clave = models.CharField(max_length=50, unique=True)

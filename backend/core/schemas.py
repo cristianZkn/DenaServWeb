@@ -328,6 +328,34 @@ class ManoObraInSchema(Schema):
     cobro: float = Field(ge=0, le=100_000_000)  # lo que cobra cada uno por toda la obra
 
 
+class TrasladoInSchema(Schema):
+    """Un traslado de la cotización. Si no se informa `precio_litro` se usa el precio vigente del combustible (CNE)."""
+    tipo: str
+    combustible: str
+    dias: int = Field(ge=0, le=365)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+
+    @field_validator("tipo")
+    @classmethod
+    def _tipo(cls, x):
+        if x not in calculo.TIPOS_TRASLADO:
+            raise ValueError("El tipo de traslado debe ser maestros, materiales o flete.")
+        return x
+
+    @field_validator("combustible")
+    @classmethod
+    def _combustible(cls, x):
+        if x not in ("93", "95", "97", "DIESEL"):
+            raise ValueError("El combustible debe ser 93, 95, 97 o diésel.")
+        return x
+
+
+def _sin_traslados_repetidos(lista):
+    if len({t.tipo for t in lista}) != len(lista):
+        raise ValueError("Cada tipo de traslado se puede indicar una sola vez.")
+    return lista
+
+
 class CotizacionInSchema(_ContactoMixin, Schema):
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
@@ -357,6 +385,12 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    traslados: List[TrasladoInSchema] = Field([], max_length=3)  # modo vigente: maestros, materiales y flete
+
+    @field_validator("traslados")
+    @classmethod
+    def _traslados_unicos(cls, x):
+        return _sin_traslados_repetidos(x)
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -488,6 +522,12 @@ class CalculoInSchema(Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    traslados: List[TrasladoInSchema] = Field([], max_length=3)
+
+    @field_validator("traslados")
+    @classmethod
+    def _traslados_unicos(cls, x):
+        return _sin_traslados_repetidos(x)
 
 
 class NivelacionInSchema(Schema):

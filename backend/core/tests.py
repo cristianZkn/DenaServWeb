@@ -1229,3 +1229,142 @@ class ConteoDePagosTests(TestCase):
         self.assertEqual(r.status_code, 409)
         self.assertIn("ya se cobraron", r.json()["message"])
         self.assertEqual([h["monto_pago"] for h in self.hitos()][0], h0["monto_pago"])   # nada cambió
+
+
+class TrasladosConCombustibleTests(TestCase):
+    def setUp(self):
+        from . import combustibles
+        from .models import PrecioCombustible
+        u = Usuario.objects.create(rut="7-7", nombre_completo="T", email="t@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        for tipo, precio in (("93", 1000), ("95", 1100), ("97", 1200), ("DIESEL", 900)):
+            PrecioCombustible.objects.create(tipo=tipo, precio=precio)   # vigentes: no se consulta a la CNE
+        self.base = {"cliente_nombre": "Cliente Uno", "direccion_terreno": "Calle Uno 1", "superficie_m2": 40, "distancia_flete_km": 30,
+                     "modo_tarifas": True, "n_trabajadores": 3}
+
+    def calcular(self, traslados):
+        return self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 3,
+                                "traslados": traslados}, content_type="application/json", **self.h).json()
+
+    def test_cada_traslado_usa_su_combustible_y_sus_dias(self):
+        r = self.calcular([{"tipo": "MAESTROS", "combustible": "93", "dias": 30}, {"tipo": "MATERIALES", "combustible": "DIESEL", "dias": 15},
+                           {"tipo": "FLETE", "combustible": "97", "dias": 2}])
+        costos = {l["tipo"]: float(l["costo"]) for l in r["traslado"]["lineas"]}
+        # 30 km / 10 = 3 L por día: 3 x 1.000 x 30 = 90.000; 3 x 900 x 15 = 40.500; 3 x 1.200 x 2 = 7.200
+        self.assertEqual(costos, {"MAESTROS": 90000, "MATERIALES": 40500, "FLETE": 7200})
+        self.assertEqual(float(r["costo_flete"]), 137700)
+        self.assertEqual(float(r["traslado"]["lineas"][0]["costo_por_dia"]), 3000)
+
+    def test_se_guarda_con_el_precio_del_litro_de_ese_dia_y_el_desglose_lo_muestra(self):
+        tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 10}, {"tipo": "MATERIALES", "combustible": "95", "dias": 5},
+              {"tipo": "FLETE", "combustible": "DIESEL", "dias": 1}]
+        cot = self.client.post("/api/cotizaciones/", {**self.base, "traslados": tr}, content_type="application/json", **self.h).json()
+        from .models import PrecioCombustible
+        PrecioCombustible.objects.filter(tipo="93").update(precio=2000)        # el combustible sube después
+        d = self.client.get(f"/api/cotizaciones/{cot['id']}/desglose/", **self.h).json()
+        self.assertEqual([(l["tipo"], l["precio_litro"], l["costo"]) for l in d["traslado"]["lineas"]],
+                         [("MAESTROS", 1000, 30000), ("MATERIALES", 1100, 16500), ("FLETE", 900, 2700)])
+        self.assertEqual(d["costo_flete"], 49200)
+
+    def test_rechaza_tipo_combustible_y_repetidos(self):
+        mal = lambda tr: self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "traslados": tr}, content_type="application/json", **self.h).status_code
+        self.assertEqual(mal([{"tipo": "AVION", "combustible": "93", "dias": 1}]), 422)
+        self.assertEqual(mal([{"tipo": "FLETE", "combustible": "91", "dias": 1}]), 422)
+        self.assertEqual(mal([{"tipo": "FLETE", "combustible": "93", "dias": 1}, {"tipo": "FLETE", "combustible": "95", "dias": 1}]), 422)
+
+    def test_sin_radier_en_el_terreno_los_maestros_suman_4_dias(self):
+        tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 10}, {"tipo": "MATERIALES", "combustible": "93", "dias": 10},
+              {"tipo": "FLETE", "combustible": "93", "dias": 1}]
+        r = self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 3,
+                             "lleva_radier": True, "tarifa_radier_m2": 35000, "traslados": tr}, content_type="application/json", **self.h).json()
+        lin = {l["tipo"]: l for l in r["traslado"]["lineas"]}
+        self.assertEqual((lin["MAESTROS"]["dias_total"], float(lin["MAESTROS"]["costo"])), (14, 3 * 1000 * 14))   # 10 + 4 días de fabricación
+        self.assertEqual((lin["MATERIALES"]["dias_total"], lin["FLETE"]["dias_total"]), (10, 1))                   # solo los maestros
+
+
+class CombustiblesCneTests(TestCase):
+    FILAS = [{"zona_geografica_nombre": z, "combustible_nombre_largo": n, "precio_promedio": p}
+             for z in ("Zona Centro", "Zona Sur") for n, p in (("Gasolina 93", "1614.4"), ("Gasolina 95", "1649"), ("Gasolina 97", "1688"),
+                                                                ("Petroleo Diesel", "1619"), ("GLP Vehicular", "710"))]
+
+    def _cne(self, filas):
+        from unittest import mock
+        r = mock.Mock(); r.json.return_value = {"data": filas}; r.raise_for_status.return_value = None
+        return mock.patch("core.combustibles.requests.get", return_value=r)
+
+    def test_lee_la_zona_configurada_y_guarda_los_precios(self):
+        from . import combustibles
+        with self._cne(self.FILAS):
+            precios = combustibles.listar()
+        self.assertEqual({p["tipo"]: p["precio"] for p in precios}, {"93": 1614, "95": 1649, "97": 1688, "DIESEL": 1619})
+        with self._cne([]) as sin_red:   # vigentes: no vuelve a consultar
+            combustibles.listar()
+        sin_red.assert_not_called()
+
+    def test_si_la_cne_falla_se_usa_el_ultimo_precio_guardado(self):
+        import requests
+        from unittest import mock
+        from . import combustibles
+        from .models import PrecioCombustible
+        from django.utils import timezone
+        from datetime import timedelta
+        for t, p in (("93", 1), ("95", 2), ("97", 3), ("DIESEL", 4)):
+            PrecioCombustible.objects.create(tipo=t, precio=p, actualizado_en=timezone.now() - timedelta(days=2))
+        with mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError()):
+            self.assertEqual([p["precio"] for p in combustibles.listar()], [1, 2, 3, 4])
+
+    def test_sin_precios_guardados_ni_cne_da_error_claro(self):
+        import requests
+        from unittest import mock
+        from . import combustibles
+        with mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError()):
+            with self.assertRaises(ValueError):
+                combustibles.listar()
+
+
+class CombustibleManualTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="T", email="t@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def caida(self):
+        import requests
+        from unittest import mock
+        return mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError())
+
+    def fijar(self, tipo, valor):
+        return self.client.put(f"/api/combustibles/{tipo}", {"valor": valor}, content_type="application/json", **self.h)
+
+    def test_con_la_cne_caida_se_cotiza_con_los_precios_manuales(self):
+        with self.caida():
+            estado = self.client.get("/api/combustibles/estado/", **self.h).json()
+            self.assertIn("CNE", estado["error"])
+            self.assertEqual([f["precio"] for f in estado["filas"]], [None] * 4)      # se pueden editar aunque no haya ninguno
+            for tipo, v in (("93", 1500), ("95", 1600), ("97", 1700), ("DIESEL", 1400)):
+                self.assertEqual(self.fijar(tipo, v).status_code, 200)
+            r = self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 2,
+                                 "traslados": [{"tipo": "FLETE", "combustible": "DIESEL", "dias": 2}]}, content_type="application/json", **self.h)
+        self.assertEqual((r.status_code, float(r.json()["costo_flete"])), (200, 3 * 1400 * 2))
+
+    def test_la_consulta_a_la_cne_no_pisa_un_precio_manual_y_se_puede_volver(self):
+        from unittest import mock
+        from . import combustibles
+        filas = [{"zona_geografica_nombre": "Zona Centro", "combustible_nombre_largo": n, "precio_promedio": "1000"}
+                 for n in ("Gasolina 93", "Gasolina 95", "Gasolina 97", "Petroleo Diesel")]
+        resp = mock.Mock(); resp.json.return_value = {"data": filas}; resp.raise_for_status.return_value = None
+        with mock.patch("core.combustibles.requests.get", return_value=resp):
+            combustibles.actualizar()
+            self.fijar("93", 2000)
+            combustibles.actualizar()
+            precios = {f["tipo"]: (f["precio"], f["manual"]) for f in combustibles.listar()}
+            self.assertEqual((precios["93"], precios["95"]), ((2000, True), (1000, False)))
+            r = self.client.delete("/api/combustibles/93", **self.h)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual({f["tipo"]: f["precio"] for f in r.json()["filas"]}["93"], 1000)
+        with self.caida():
+            self.fijar("93", 2000)
+            self.assertEqual(self.client.delete("/api/combustibles/93", **self.h).status_code, 503)   # sigue el manual
+
+    def test_rechaza_precio_cero_y_combustible_desconocido(self):
+        self.assertEqual(self.fijar("93", 0).status_code, 400)
+        self.assertEqual(self.fijar("91", 1000).status_code, 404)

@@ -20,7 +20,7 @@ from ninja.security import APIKeyHeader, HttpBearer
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
     DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
-    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO
+    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO, TrasladoCotizacion
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema, TarifaSchema, TarifaInSchema,
@@ -31,10 +31,10 @@ from .schemas import (
     HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
     MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
-    CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema,
+    CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema
 )
-from . import calculo, precios
+from . import calculo, combustibles, precios
 
 
 def _neto(item):
@@ -67,8 +67,11 @@ def _calcular_desde_catalogo(data):
                             'mano_obra_m2': it.mano_obra_m2})
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
+    traslados = [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
+                  "precio_litro": x.precio_litro if x.precio_litro is not None else combustibles.precio(x.combustible)}
+                 for x in data.traslados]
     return calculo.calcular(
-        m2=data.superficie_m2, km=data.distancia_km,
+        m2=data.superficie_m2, km=data.distancia_km, traslados=traslados,
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
@@ -328,6 +331,55 @@ def restablecer_tarifa(request, clave: str):
 
 
 # ==============================================================================
+# 1d. PRECIO DEL COMBUSTIBLE (CNE, Bencina en Línea)
+# ==============================================================================
+@router.get("/combustibles/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer())
+def precios_combustibles(request):
+    """Precio por litro de 93, 95, 97 y diésel. Se consulta a la CNE si los guardados tienen más de 6 horas."""
+    try:
+        return 200, combustibles.listar()
+    except ValueError as e:
+        return 503, {"message": str(e)}
+
+
+@router.get("/combustibles/estado/", response=dict, auth=AuthBearer())
+def estado_combustibles(request):
+    """Los 4 combustibles para editarlos (aunque la CNE no responda) y, si falló, el motivo."""
+    return combustibles.estado()
+
+
+@router.put("/combustibles/{tipo}", response={200: dict, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def fijar_precio_combustible(request, tipo: str, data: TarifaInSchema):
+    """Fija a mano el precio por litro (por ejemplo, si la CNE no responde)."""
+    if tipo not in combustibles.TIPOS:
+        return 404, {"message": "Combustible no encontrado"}
+    if data.valor <= 0:
+        return 400, {"message": "El precio por litro debe ser mayor que 0."}
+    combustibles.fijar_manual(tipo, Decimal(str(data.valor)).quantize(Decimal("1")))
+    return 200, combustibles.estado()
+
+
+@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer())
+def volver_precio_cne(request, tipo: str):
+    """Deja de usar el precio manual y vuelve al de la CNE."""
+    if tipo not in combustibles.TIPOS:
+        return 404, {"message": "Combustible no encontrado"}
+    try:
+        combustibles.volver_a_cne(tipo)
+    except ValueError as e:
+        return 503, {"message": f"{e} Se mantiene el precio ingresado a mano."}
+    return 200, combustibles.estado()
+
+
+@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer())
+def actualizar_combustibles(request):
+    try:
+        return 200, combustibles.actualizar()
+    except ValueError as e:
+        return 503, {"message": str(e)}
+
+
+# ==============================================================================
 # 2. PROVEEDORES
 # ==============================================================================
 @router.get("/proveedores/", response=List[ProveedorSchema], auth=AuthBearer())
@@ -506,7 +558,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales,
                 maestros=data.maestros, modo_lista=data.modo_lista, modo_tarifas=data.modo_tarifas,
                 n_trabajadores=data.n_trabajadores, dias_obra=data.dias_obra, lleva_radier=data.lleva_radier,
-                tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro))
+                tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro, traslados=data.traslados))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -537,6 +589,9 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 usuario=request.auth
             )
 
+            TrasladoCotizacion.objects.bulk_create([
+                TrasladoCotizacion(cotizacion=cotizacion, tipo=l["tipo"], combustible=l["combustible"], dias=l["dias"], precio_litro=l["precio_litro"])
+                for l in r["traslado"].get("lineas", [])] if isinstance(r.get("traslado"), dict) else [])
             DetalleCotizacionInsumo.objects.bulk_create([
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
                                         cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"])
@@ -674,7 +729,9 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 maestros=[ManoObraInSchema(cantidad=l.cantidad, cobro=float(l.cobro)) for l in cot.mano_obra.all()],
                 modo_lista=cot.modo_lista, modo_tarifas=cot.modo_tarifas, n_trabajadores=cot.n_trabajadores,
                 dias_obra=cot.dias_obra, lleva_radier=cot.lleva_radier,
-                tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro)))
+                tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro),
+                traslados=[TrasladoInSchema(tipo=x.tipo, combustible=x.combustible, dias=x.dias, precio_litro=float(x.precio_litro))
+                           for x in cot.traslados.all()]))
         except ValueError as e:
             return 400, {"message": str(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (
@@ -1084,6 +1141,12 @@ def desglose_cotizacion(request, cotizacion_id: int):
     else:
         mano_obra = [{"concepto": "Mano de obra", "trabajadores": l.cantidad, "tarifa": float(l.cobro), "subtotal": float(l.cantidad * l.cobro)}
                      for l in cot.mano_obra.all()]
+    if cot.traslados.exists():  # tres traslados, cada uno con su combustible y sus días
+        res = calculo.traslados_combustible(cot.distancia_flete_km, [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
+                                            "precio_litro": x.precio_litro} for x in cot.traslados.all()], calculo.vigentes()["km_por_litro"],
+                                            int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+        traslado = {"km": float(res["km"]), "costo": float(res["costo"]),
+                    "lineas": [{k: (float(v) if isinstance(v, Decimal) else v) for k, v in l.items()} for l in res["lineas"]]}
     total = float(cot.costo_total)
     base = float(cot.costo_materiales + cot.costo_mano_obra + cot.costo_flete + cot.costo_nivelacion)
     neto = round(total / 1.19)
