@@ -66,7 +66,7 @@ const DIAS_RADIER = 4; // días de fabricación del radier o la base (tarifa «d
 const COMBUSTIBLES = [
   { v: "93", t: "Bencina 93" }, { v: "95", t: "Bencina 95" }, { v: "97", t: "Bencina 97" }, { v: "DIESEL", t: "Diésel" },
 ];
-type Combustible = { tipo: string; nombre: string; precio: number; zona: string; fuente: string; actualizado_en: string };
+type Combustible = { tipo: string; nombre: string; precio: number; manual?: boolean; zona: string; fuente: string; actualizado_en: string };
 const FASES: Record<string, string> = { ANTICIPO_40: "Anticipo", AVANCE_30: "Avance de obra", ENTREGA_30: "Entrega" };
 
 const clp = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`;
@@ -515,11 +515,13 @@ export default function CotizadorPage() {
                       <li key={c.tipo} className="bg-white border border-slate-200 rounded-lg px-3 py-2">
                         <div className="text-xs font-semibold text-slate-500">{c.nombre}</div>
                         <div className="text-lg font-black tabular-nums">{clp(c.precio)}<span className="text-xs font-semibold text-slate-500"> /L</span></div>
+                        {c.manual && <div className="text-xs font-bold text-amber-800">Precio manual</div>}
                       </li>
                     ))}
                   </ul>
                   <p className="text-xs text-slate-500">
-                    Promedio de {combustibles[0].zona} según {combustibles[0].fuente}, consultado el {new Date(combustibles[0].actualizado_en).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}.
+                    Promedio de {combustibles.find((c) => !c.manual)?.zona || "la zona"} según Bencina en Línea (CNE), consultado el {new Date(combustibles[0].actualizado_en).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}.
+                    Los precios manuales se cambian en la sección Tarifas.
                   </p>
                 </>
               )}
