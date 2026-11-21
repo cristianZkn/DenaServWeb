@@ -1,4 +1,5 @@
 import base64
+import re
 import hmac
 import logging
 import jwt
@@ -11,27 +12,32 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.security import APIKeyHeader, HttpBearer
+from ninja.throttling import AuthRateThrottle
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
-    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea
+    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
+    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO, TrasladoCotizacion
 )
 from .schemas import (
-    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema,
+    GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema, TarifaSchema, TarifaInSchema,
     ProveedorSchema, ProveedorInSchema,
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
-    HitoPagoSchema, HitoPagoUpdateSchema,
+    HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
     MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
-    CotizacionPublicaSchema, CotizacionEditSchema, CambioCotizacionSchema
+    CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
+    BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
-from . import calculo, precios
+from . import calculo, combustibles, precios, scraper
+from .limites import IpRateThrottle
 
 
 def _neto(item):
@@ -64,8 +70,11 @@ def _calcular_desde_catalogo(data):
                             'mano_obra_m2': it.mano_obra_m2})
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
+    traslados = [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
+                  "precio_litro": x.precio_litro if x.precio_litro is not None else combustibles.precio(x.combustible)}
+                 for x in data.traslados]
     return calculo.calcular(
-        m2=data.superficie_m2, km=data.distancia_km,
+        m2=data.superficie_m2, km=data.distancia_km, traslados=traslados,
         precio_base_m2=_neto(get(data.base_terreno_id)), precio_revest_m2=_neto(get(data.revestimiento_id)),
         base_min_m2=_precio_minimo('BASE_TERRENO'), revest_min_m2=_precio_minimo('REVESTIMIENTO'),
         separacion_cm=data.separacion_cm, ganancia_m2=data.ganancia_m2, m2_vigas_vista=data.m2_vigas_vista, insumos=insumos,
@@ -75,35 +84,108 @@ def _calcular_desde_catalogo(data):
         lleva_radier=data.lleva_radier, tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro)
 
 
-def _repartir_en_hitos(cot, delta) -> bool:
+def _repartir_en_hitos(cot, delta):
     """Reparte `delta` entre los hitos aún PENDIENTES en proporción a su porcentaje (el último absorbe el redondeo).
-    False si hay diferencia pero no queda ningún hito pendiente."""
+    Devuelve None si se pudo, o el motivo si no: no queda ningún hito sin pagar, o la rebaja dejaría un hito por
+    debajo de lo que ya se cobró en él. No guarda nada hasta validar todos los hitos."""
     if not delta:
-        return True
+        return None
     pendientes = list(cot.hitos_pago.exclude(estado="PAGADO").order_by("id"))
     if not pendientes:
-        return False
+        return "Todos los hitos están pagados: no se puede cambiar el monto."
     pesos = sum(h.porcentaje for h in pendientes) or Decimal(1)
-    asignado = Decimal(0)
+    asignado, nuevos = Decimal(0), []
     for i, h in enumerate(pendientes):
         parte = delta - asignado if i == len(pendientes) - 1 else (delta * h.porcentaje / pesos).quantize(Decimal("1"))
-        h.monto_pago += parte
         asignado += parte
-        if h.monto_abonado >= h.monto_pago:  # el ajuste bajó el monto por debajo de lo ya abonado
-            h.monto_abonado, h.estado = h.monto_pago, "PAGADO"
-        h.save(update_fields=["monto_pago", "monto_abonado", "estado"])
-    return True
+        nuevos.append(h.monto_pago + parte)
+        if nuevos[-1] < h.monto_abonado:
+            return (f"La rebaja deja el pago «{h.fase}» en ${int(nuevos[-1]):,}, por debajo de los ${int(h.monto_abonado):,} que ya se cobraron. "
+                    "Anule antes el abono que corresponda.").replace(",", ".")
+    for h, monto in zip(pendientes, nuevos):
+        h.monto_pago = monto
+        h.estado = "PAGADO" if h.monto_abonado >= monto else h.estado
+        h.save(update_fields=["monto_pago", "estado"])
+    return None
+
+
+# --- Estado y avance de la obra: se derivan de los pagos para que nunca se contradigan ---
+ETIQUETA_ESTADO = {"BORRADOR": "Cotizado", "ACEPTADA": "En ejecución", "FINALIZADA": "Obra terminada"}
+
+
+def _anticipo_pagado(hitos) -> bool:
+    """True si el primer pago (anticipo del 40 %) está pagado por completo."""
+    return any(h.fase == "ANTICIPO_40" and h.estado == "PAGADO" for h in hitos)
+
+
+def _estado_segun_pagos(hitos) -> str:
+    """Cotizado hasta pagar POR COMPLETO el anticipo del 40 % (un pago con saldo pendiente no cambia el estado); En
+    ejecución desde entonces; Obra terminada al completarse TODOS los pagos."""
+    if hitos and all(h.estado == "PAGADO" for h in hitos):
+        return "FINALIZADA"
+    return "ACEPTADA" if _anticipo_pagado(hitos) else "BORRADOR"
+
+
+def _limites_avance(hitos) -> tuple:
+    """(mínimo, máximo) de avance permitido según lo pagado. El 2.º pago corresponde al 50 % de avance y el último al
+    100 %: sin el anticipo completo no hay avance; con solo el anticipo el avance llega hasta 49 %; hasta cobrar el último pago, 99 %."""
+    pagado = {h.fase for h in hitos if h.estado == "PAGADO"}
+    todos = bool(hitos) and all(h.estado == "PAGADO" for h in hitos)
+    maximo = 100 if todos else 99 if "AVANCE_30" in pagado else 49 if "ANTICIPO_40" in pagado else 0
+    minimo = 100 if todos else 50 if "AVANCE_30" in pagado else 0
+    return min(minimo, maximo), maximo
+
+
+def _obra_de(cot):
+    return cot.obras_ejecucion.first() or ObraEjecucion.objects.create(
+        cotizacion=cot, porcentaje_avance_real=0, fecha_ultima_actualizacion=date.today())
+
+
+def _reconciliar(cot):
+    """Deja el estado y el avance coherentes con los pagos. Devuelve un mensaje de error si el cambio de pagos
+    contradice el avance ya registrado (quien llama debe revertirlo)."""
+    hitos = list(HitoPago.objects.filter(cotizacion=cot))
+    obra = _obra_de(cot)
+    minimo, maximo = _limites_avance(hitos)
+    avance = obra.porcentaje_avance_real
+    if avance > maximo:
+        return f"No se puede cambiar este pago: la obra registra {int(avance)} % de avance y ese avance requiere el pago."
+    if avance < minimo:
+        obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = minimo, date.today()
+        obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
+    estado = _estado_segun_pagos(hitos)
+    if cot.estado != estado:
+        cot.estado = estado
+        cot.save(update_fields=["estado"])
+    return None
+
+
+def _mensaje_tope_avance(maximo) -> str:
+    if maximo == 0:
+        return "El anticipo (40 %) aún no está pagado por completo: la obra no ha iniciado. Complete ese pago para comenzar."
+    if maximo == 49:
+        return "El avance no puede llegar al 50 % mientras el 2.º pago no esté cobrado completo."
+    return "El 100 % de avance se registra al cobrar por completo el último pago."
 
 
 router = Router()
 logger = logging.getLogger(__name__)
 
 
+def _msj(e: Exception) -> str:
+    """Mensaje que se le muestra al usuario. Solo se muestran los que escribió la aplicación (ValueError y errores de lectura
+    de tiendas); cualquier otro error (base de datos, librerías) queda en el log y no se filtra al navegador."""
+    if isinstance(e, (ValueError, scraper.ErrorExtraccion)):
+        return str(e)
+    logger.exception("Error no controlado en la API")
+    return "No se pudo completar la operación. Revise los datos e intente de nuevo."
+
+
 # --- Seguridad & JWT ---
 class AuthBearer(HttpBearer):
     def authenticate(self, request, token):
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"require": ["exp", "user_id"]})
             user = Usuario.objects.filter(id=payload.get("user_id"), activo=True).first()
             return user
         except Exception as e:  # token vencido/inválido o fallo de BD: se rechaza, pero queda el motivo en el log
@@ -125,7 +207,7 @@ def create_jwt_token(usuario: Usuario) -> str:
         "user_id": usuario.id,
         "email": usuario.email,
         "nombre": usuario.nombre_completo,
-        "exp": datetime.now(tz.utc) + timedelta(days=7),
+        "exp": datetime.now(tz.utc) + timedelta(hours=12),
         "iat": datetime.now(tz.utc)
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
@@ -134,7 +216,7 @@ def create_jwt_token(usuario: Usuario) -> str:
 # ==============================================================================
 # 1. AUTENTICACIÓN (Google SSO)
 # ==============================================================================
-@router.post("/auth/google", response={200: TokenSchema, 401: MessageSchema, 403: MessageSchema})
+@router.post("/auth/google", response={200: TokenSchema, 401: MessageSchema, 403: MessageSchema}, throttle=[IpRateThrottle("10/m")])
 def google_sso_login(request, data: GoogleAuthInSchema):
     email, nombre_completo, google_id = None, data.nombre_completo, data.google_id
 
@@ -178,6 +260,143 @@ def current_user(request):
 
 
 # ==============================================================================
+# 1b. USUARIOS AUTORIZADOS (correos que pueden ingresar al panel)
+# ==============================================================================
+@router.get("/usuarios/", response=List[UsuarioSchema], auth=AuthBearer())
+def listar_usuarios(request):
+    return Usuario.objects.all().order_by("nombre_completo")
+
+
+def _usuario_duplicado(data, excluir_id=None):
+    qs = Usuario.objects.exclude(id=excluir_id) if excluir_id else Usuario.objects.all()
+    if qs.filter(email__iexact=data.email).exists():
+        return "Ya existe un usuario con ese correo."
+    if qs.filter(rut=data.rut).exists():
+        return "Ya existe un usuario con ese RUN."
+    return None
+
+
+@router.post("/usuarios/", response={200: UsuarioSchema, 400: MessageSchema}, auth=AuthBearer())
+def crear_usuario(request, data: UsuarioInSchema):
+    error = _usuario_duplicado(data)
+    if error:
+        return 400, {"message": error}
+    return 200, Usuario.objects.create(**data.dict())
+
+
+@router.put("/usuarios/{usuario_id}", response={200: UsuarioSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def actualizar_usuario(request, usuario_id: int, data: UsuarioInSchema):
+    usuario = Usuario.objects.filter(id=usuario_id).first()
+    if not usuario:
+        return 404, {"message": "Usuario no encontrado"}
+    error = _usuario_duplicado(data, usuario_id)
+    if error:
+        return 400, {"message": error}
+    if usuario.id == request.auth.id and not data.activo:
+        return 400, {"message": "No puedes desactivar tu propio acceso."}
+    for attr, value in data.dict().items():
+        setattr(usuario, attr, value)
+    usuario.save()
+    return 200, usuario
+
+
+@router.delete("/usuarios/{usuario_id}", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_usuario(request, usuario_id: int):
+    usuario = Usuario.objects.filter(id=usuario_id).first()
+    if not usuario:
+        return 404, {"message": "Usuario no encontrado"}
+    if usuario.id == request.auth.id:
+        return 400, {"message": "No puedes eliminar tu propio acceso."}
+    try:
+        usuario.delete()
+    except Exception:  # tiene cotizaciones u otros registros asociados (FK protegida)
+        return 400, {"message": "Tiene registros asociados: desactívalo en lugar de eliminarlo."}
+    return 200, {"message": "Usuario eliminado"}
+
+
+# ==============================================================================
+# 1c. TARIFAS DEL CÁLCULO (valores fijos que la empresa puede cambiar sin tocar el código)
+# ==============================================================================
+def _tarifas_listadas():
+    actuales = calculo.vigentes()
+    return [{"clave": k, "grupo": g, "nombre": n, "unidad": u, "descripcion": d, "valor": float(actuales[k]),
+             "valor_de_fabrica": float(calculo.DEFAULTS[k]), "modificada": actuales[k] != calculo.DEFAULTS[k]}
+            for k, g, n, u, d in calculo.TARIFAS_META]
+
+
+@router.get("/tarifas/", response=List[TarifaSchema], auth=AuthBearer())
+def listar_tarifas(request):
+    return _tarifas_listadas()
+
+
+@router.put("/tarifas/{clave}", response={200: TarifaSchema, 404: MessageSchema}, auth=AuthBearer())
+def cambiar_tarifa(request, clave: str, data: TarifaInSchema):
+    """Nuevo valor de una tarifa: rige para las cotizaciones que se calculen desde ahora (las ya guardadas no cambian)."""
+    if clave not in calculo.DEFAULTS:
+        return 404, {"message": "Tarifa no encontrada"}
+    Tarifa.objects.update_or_create(clave=clave, defaults={"valor": data.valor, "usuario": request.auth, "actualizado_en": datetime.now(tz.utc)})
+    return 200, next(x for x in _tarifas_listadas() if x["clave"] == clave)
+
+
+@router.delete("/tarifas/{clave}", response={200: TarifaSchema, 404: MessageSchema}, auth=AuthBearer())
+def restablecer_tarifa(request, clave: str):
+    """Vuelve al valor de fábrica."""
+    if clave not in calculo.DEFAULTS:
+        return 404, {"message": "Tarifa no encontrada"}
+    Tarifa.objects.filter(clave=clave).delete()
+    return 200, next(x for x in _tarifas_listadas() if x["clave"] == clave)
+
+
+# ==============================================================================
+# 1d. PRECIO DEL COMBUSTIBLE (CNE, Bencina en Línea)
+# ==============================================================================
+@router.get("/combustibles/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer())
+def precios_combustibles(request):
+    """Precio por litro de 93, 95, 97 y diésel. Se consulta a la CNE si los guardados tienen más de 6 horas."""
+    try:
+        return 200, combustibles.listar()
+    except ValueError as e:
+        return 503, {"message": _msj(e)}
+
+
+@router.get("/combustibles/estado/", response=dict, auth=AuthBearer())
+def estado_combustibles(request):
+    """Los 4 combustibles para editarlos (aunque la CNE no responda) y, si falló, el motivo."""
+    return combustibles.estado()
+
+
+@router.put("/combustibles/{tipo}", response={200: dict, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def fijar_precio_combustible(request, tipo: str, data: TarifaInSchema):
+    """Fija a mano el precio por litro (por ejemplo, si la CNE no responde)."""
+    if tipo not in combustibles.TIPOS:
+        return 404, {"message": "Combustible no encontrado"}
+    if data.valor <= 0:
+        return 400, {"message": "El precio por litro debe ser mayor que 0."}
+    combustibles.fijar_manual(tipo, Decimal(str(data.valor)).quantize(Decimal("1")))
+    return 200, combustibles.estado()
+
+
+@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("12/m")])
+def volver_precio_cne(request, tipo: str):
+    """Deja de usar el precio manual y vuelve al de la CNE."""
+    if tipo not in combustibles.TIPOS:
+        return 404, {"message": "Combustible no encontrado"}
+    try:
+        combustibles.volver_a_cne(tipo)
+    except ValueError as e:
+        return 503, {"message": f"{_msj(e)} Se mantiene el precio ingresado a mano."}
+    return 200, combustibles.estado()
+
+
+@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("6/m")])
+def actualizar_combustibles(request):
+    try:
+        return 200, combustibles.actualizar()
+    except ValueError as e:
+        return 503, {"message": _msj(e)}
+
+
+# ==============================================================================
 # 2. PROVEEDORES
 # ==============================================================================
 @router.get("/proveedores/", response=List[ProveedorSchema], auth=AuthBearer())
@@ -187,15 +406,19 @@ def listar_proveedores(request):
 
 @router.post("/proveedores/", response={200: ProveedorSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_proveedor(request, data: ProveedorInSchema):
+    if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exists():
+        return 400, {"message": "Ya existe un proveedor con ese RUT."}
     try:
         proveedor = Proveedor.objects.create(**data.dict())
         return 200, proveedor
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
 def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
+    if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exclude(id=proveedor_id).exists():
+        return 400, {"message": "Ya existe otro proveedor con ese RUT."}
     try:
         proveedor = Proveedor.objects.get(id=proveedor_id)
         for attr, value in data.dict().items():
@@ -206,7 +429,7 @@ def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/proveedores/{proveedor_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -218,7 +441,7 @@ def eliminar_proveedor(request, proveedor_id: int):
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
     except Exception as e:
-        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+        return 400, {"message": f"No se puede eliminar: {_msj(e)}"}
 
 
 # ==============================================================================
@@ -294,7 +517,7 @@ def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
         item.save()
         return 200, item
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.put("/catalogo-tipos/{catalogo_id}", response={200: CatalogoTipoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -313,7 +536,7 @@ def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSche
     except CatalogoTipo.DoesNotExist:
         return 404, {"message": "Elemento de catálogo no encontrado"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/catalogo-tipos/{catalogo_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -325,7 +548,7 @@ def eliminar_catalogo_tipo(request, catalogo_id: int):
     except CatalogoTipo.DoesNotExist:
         return 404, {"message": "Elemento de catálogo no encontrado"}
     except Exception as e:
-        return 400, {"message": f"No se puede eliminar: {str(e)}"}
+        return 400, {"message": f"No se puede eliminar: {_msj(e)}"}
 
 
 # ==============================================================================
@@ -338,9 +561,7 @@ def listar_cotizaciones(request):
 
 @router.post("/cotizaciones/", response={200: CotizacionSchema, 400: MessageSchema}, auth=AuthBearer())
 def crear_cotizacion(request, data: CotizacionInSchema):
-    # Una obra solo puede darse por terminada cuando todos sus pagos están completos (ver cambio de estado).
-    if data.estado not in ("BORRADOR", "ACEPTADA"):
-        return 400, {"message": "Una cotización nueva solo puede crearse en preparación o en ejecución."}
+    # El estado nunca se elige: toda cotización nueva queda «Cotizado» y cambia sola con los pagos.
     try:
         with transaction.atomic():
             usuario = request.auth
@@ -354,7 +575,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, materiales=data.materiales,
                 maestros=data.maestros, modo_lista=data.modo_lista, modo_tarifas=data.modo_tarifas,
                 n_trabajadores=data.n_trabajadores, dias_obra=data.dias_obra, lleva_radier=data.lleva_radier,
-                tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro))
+                tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro, traslados=data.traslados))
 
             cotizacion = Cotizacion.objects.create(
                 codigo_cotizacion=codigo,
@@ -370,21 +591,24 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 costo_mano_obra=r["costo_mano_obra"],
                 costo_flete=r["costo_flete"],
                 costo_total=r["total"],
-                estado=data.estado or "BORRADOR",
+                estado="BORRADOR",
                 tipo_proyecto=data.tipo_proyecto,
-                ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.DEFAULTS["ganancia_m2"],
+                ganancia_m2=data.ganancia_m2 if data.ganancia_m2 is not None else calculo.vigentes()["ganancia_m2"],
                 m2_vigas_vista=data.m2_vigas_vista,
-                radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.DEFAULTS["radier_m2"],
+                radier_m2=data.radier_m2 if data.radier_m2 is not None else calculo.vigentes()["radier_m2"],
                 modo_lista=data.modo_lista,
                 modo_tarifas=data.modo_tarifas,
                 n_trabajadores=data.n_trabajadores,
                 dias_obra=data.dias_obra,
                 lleva_radier=data.lleva_radier or data.tipo_proyecto == "SOLO_RADIER",
-                tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.DEFAULTS["mo_radier_m2"],
-                precio_litro=data.precio_litro if data.precio_litro is not None else calculo.DEFAULTS["precio_litro"],
+                tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.vigentes()["mo_radier_m2"],
+                precio_litro=data.precio_litro if data.precio_litro is not None else calculo.vigentes()["precio_litro"],
                 usuario=request.auth
             )
 
+            TrasladoCotizacion.objects.bulk_create([
+                TrasladoCotizacion(cotizacion=cotizacion, tipo=l["tipo"], combustible=l["combustible"], dias=l["dias"], precio_litro=l["precio_litro"])
+                for l in r["traslado"].get("lineas", [])] if isinstance(r.get("traslado"), dict) else [])
             DetalleCotizacionInsumo.objects.bulk_create([
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
                                         cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"])
@@ -413,7 +637,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
 
             return 200, cotizacion
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.post("/cotizaciones/calcular", response={200: dict, 400: MessageSchema}, auth=AuthBearer())
@@ -421,7 +645,7 @@ def calcular_cotizacion(request, data: CalculoInSchema):
     try:
         return 200, _calcular_desde_catalogo(data)
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.get("/cotizaciones/progreso/", response=List[ProgresoObraSchema], auth=AuthBearer())
@@ -430,6 +654,37 @@ def progreso_obras(request):
     obras = ObraEjecucion.objects.select_related("cotizacion").filter(cotizacion__estado="ACEPTADA").order_by("id")
     return [{"id": o.cotizacion_id, "codigo_cotizacion": o.cotizacion.codigo_cotizacion,
              "cliente_nombre": o.cotizacion.cliente_nombre, "avance": o.porcentaje_avance_real} for o in obras]
+
+
+def _trimestre(fecha) -> tuple:
+    return fecha.year, (fecha.month - 1) // 3 + 1
+
+
+@router.get("/cotizaciones/estadisticas/", response=EstadisticasSchema, auth=AuthBearer())
+def estadisticas_panel(request):
+    """Cifras del panel principal: proyectos por estado y, en los últimos 4 trimestres, cuántos se cotizaron y cuántos se
+    terminaron. Un proyecto se da por terminado en la fecha de su último pago."""
+    hoy = timezone.localdate()
+    año, trim = _trimestre(hoy)
+    ventana = []  # los 4 trimestres que terminan en el actual, del más antiguo al más reciente
+    for _ in range(4):
+        ventana.append((año, trim))
+        año, trim = (año, trim - 1) if trim > 1 else (año - 1, 4)
+    ventana.reverse()
+    filas = {t: {"clave": f"{t[0]}-T{t[1]}", "etiqueta": f"T{t[1]} {t[0]}", "creados": 0, "terminados": 0} for t in ventana}
+    conteo = {"BORRADOR": 0, "ACEPTADA": 0, "FINALIZADA": 0}
+    for c in Cotizacion.objects.prefetch_related("hitos_pago"):
+        conteo[c.estado] = conteo.get(c.estado, 0) + 1
+        creada = _trimestre(timezone.localtime(c.fecha_creacion).date())
+        if creada in filas:
+            filas[creada]["creados"] += 1
+        if c.estado == "FINALIZADA":
+            pagos = [h.fecha_pago for h in c.hitos_pago.all() if h.fecha_pago]
+            cierre = _trimestre(max(pagos) if pagos else timezone.localtime(c.fecha_creacion).date())
+            if cierre in filas:
+                filas[cierre]["terminados"] += 1
+    return {"cotizados": conteo["BORRADOR"], "en_ejecucion": conteo["ACEPTADA"], "terminados": conteo["FINALIZADA"],
+            "trimestres": [filas[t] for t in ventana]}
 
 
 @router.get("/cotizaciones/{cotizacion_id}/", response={200: CotizacionDetalladaSchema, 404: MessageSchema}, auth=AuthBearer())
@@ -454,23 +709,16 @@ def eliminar_cotizacion(request, cotizacion_id: int):
 
 @router.patch("/cotizaciones/{cotizacion_id}/estado", response={200: CotizacionSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_estado_cotizacion(request, cotizacion_id: int, data: CotizacionEstadoUpdateSchema):
+    """El estado depende de los pagos: solo se acepta el que ya corresponde. Se mantiene para no romper clientes antiguos."""
     if data.estado not in ESTADOS_COTIZACION:
         return 400, {"message": "Estado no válido. Use BORRADOR, ACEPTADA o FINALIZADA."}
-    try:
-        cotizacion = Cotizacion.objects.get(id=cotizacion_id)
-        if data.estado == "FINALIZADA":
-            # Solo una obra en ejecución (ACEPTADA) con todos sus pagos completos puede darse por terminada.
-            if cotizacion.estado != "ACEPTADA":
-                return 409, {"message": "Solo una obra en ejecución (aceptada) puede finalizarse."}
-            sin_pagar = cotizacion.hitos_pago.exclude(estado="PAGADO").count()
-            if sin_pagar:
-                quedan = "queda 1 pago" if sin_pagar == 1 else f"quedan {sin_pagar} pagos"
-                return 409, {"message": f"No se puede finalizar: {quedan} sin cobrar por completo. La obra sigue en ejecución."}
-        cotizacion.estado = data.estado
-        cotizacion.save(update_fields=["estado"])
-        return 200, cotizacion
-    except Cotizacion.DoesNotExist:
+    cotizacion = Cotizacion.objects.filter(id=cotizacion_id).first()
+    if not cotizacion:
         return 404, {"message": "Cotización no encontrada"}
+    esperado = _estado_segun_pagos(list(cotizacion.hitos_pago.all()))
+    if data.estado != esperado:
+        return 409, {"message": f"El estado no se cambia a mano: se actualiza solo con los pagos. Este proyecto está «{ETIQUETA_ESTADO[esperado]}»."}
+    return 200, cotizacion
 
 
 @router.post("/cotizaciones/{cotizacion_id}/nivelacion", response={200: dict, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
@@ -485,11 +733,13 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
     if not data.aplicar:
         return 200, resultado
     with transaction.atomic():
-        if not _repartir_en_hitos(cot, delta):
-            return 409, {"message": "Todos los hitos están pagados: no se puede ajustar el valor."}
+        error = _repartir_en_hitos(cot, delta)
+        if error:
+            return 409, {"message": error}
         cot.nivelacion_modalidad, cot.nivelacion_m3, cot.costo_nivelacion = n["modalidad"], n["m3"], n["costo"]
         cot.costo_total += delta
         cot.save(update_fields=["nivelacion_modalidad", "nivelacion_m3", "costo_nivelacion", "costo_total"])
+        _reconciliar(cot)
     return 200, resultado
 
 
@@ -527,9 +777,11 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 maestros=[ManoObraInSchema(cantidad=l.cantidad, cobro=float(l.cobro)) for l in cot.mano_obra.all()],
                 modo_lista=cot.modo_lista, modo_tarifas=cot.modo_tarifas, n_trabajadores=cot.n_trabajadores,
                 dias_obra=cot.dias_obra, lleva_radier=cot.lleva_radier,
-                tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro)))
+                tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro),
+                traslados=[TrasladoInSchema(tipo=x.tipo, combustible=x.combustible, dias=x.dias, precio_litro=float(x.precio_litro))
+                           for x in cot.traslados.all()]))
         except ValueError as e:
-            return 400, {"message": str(e)}
+            return 400, {"message": _msj(e)}
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (
             r["costo_materiales_total"], r["costo_mano_obra"], r["costo_flete"])
         nuevo_total = r["total"] + cot.costo_nivelacion + cot.ajuste_monto
@@ -540,10 +792,12 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
     if delta and not motivo:
         return 400, {"message": "Indique el motivo del reajuste del monto."}
     with transaction.atomic():
-        if not _repartir_en_hitos(cot, delta):
-            return 409, {"message": "Todos los hitos están pagados: no se puede reajustar el monto."}
+        error = _repartir_en_hitos(cot, delta)
+        if error:
+            return 409, {"message": error}
         cot.costo_total = nuevo_total
         cot.save()
+        _reconciliar(cot)
         if delta:
             CambioCotizacion.objects.create(cotizacion=cot, usuario=request.auth, total_anterior=total_anterior,
                                             total_nuevo=nuevo_total, motivo=motivo[:255])
@@ -588,7 +842,7 @@ def agregar_insumo_cotizacion(request, cotizacion_id: int, data: DetalleCotizaci
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 # ==============================================================================
@@ -599,40 +853,128 @@ def listar_hitos_cotizacion(request, cotizacion_id: int):
     return HitoPago.objects.filter(cotizacion_id=cotizacion_id).order_by("id")
 
 
-@router.patch("/hitos-pago/{hito_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def _sincronizar_hito(hito):
+    """El monto abonado, el estado y la fecha del hito salen siempre del libro de pagos (detalle_registros)."""
+    registros = list(hito.registros.defer("comprobante"))
+    hito.monto_abonado = min(sum((r.monto for r in registros), Decimal(0)), hito.monto_pago)
+    hito.estado = "PAGADO" if hito.monto_abonado >= hito.monto_pago else ("ABONADO" if hito.monto_abonado > 0 else "PENDIENTE")
+    hito.fecha_pago = registros[-1].fecha if registros else None
+    hito.save(update_fields=["monto_abonado", "estado", "fecha_pago"])
+
+
+def _confirmar_cambio_de_pagos(hito):
+    """Sincroniza el hito y el proyecto; si el cambio contradice el avance ya registrado, lo revierte (409)."""
+    _sincronizar_hito(hito)
+    error = _reconciliar(hito.cotizacion)
+    if error:
+        transaction.set_rollback(True)
+        return 409, {"message": error}
+    return 200, HitoPago.objects.get(id=hito.id)
+
+
+MIME_COMPROBANTE = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+
+
+def _leer_comprobante(data_url: str):
+    """'data:...;base64,...' -> (mime, bytes). ValueError con mensaje para el usuario si no sirve."""
+    try:
+        cabecera, b64 = data_url.split(",", 1)
+        mime, contenido = cabecera.split(";")[0].removeprefix("data:"), base64.b64decode(b64, validate=True)
+    except Exception:
+        raise ValueError("El comprobante no se pudo leer.")
+    if mime not in MIME_COMPROBANTE:
+        raise ValueError("El comprobante debe ser una imagen (JPG, PNG, WebP) o un PDF.")
+    if len(contenido) > MAX_BYTES_IMAGEN:
+        raise ValueError("El comprobante puede pesar hasta 2,5 MB.")
+    return mime, contenido
+
+
+@router.post("/hitos-pago/{hito_id}/registros/", response={200: HitoPagoSchema, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
+    """Anota un abono en el libro de pagos. El monto es lo pagado ahora; no puede superar lo que falta del hito."""
+    if not HitoPago.objects.filter(id=hito_id).exists():
+        return 404, {"message": "Hito de pago no encontrado"}
+    monto = Decimal(str(data.monto)).quantize(Decimal("1"))
+    mime, contenido = "", None
+    if data.comprobante:
+        try:
+            mime, contenido = _leer_comprobante(data.comprobante)
+        except ValueError as e:
+            return 400, {"message": _msj(e)}
+    with transaction.atomic():
+        # Se bloquea el hito y se lee su saldo dentro de la transacción: dos abonos simultáneos no pueden pasarse del total.
+        hito = HitoPago.objects.select_for_update().select_related("cotizacion").get(id=hito_id)
+        pendiente = hito.monto_pago - hito.monto_abonado
+        if monto <= 0 or monto > pendiente:
+            return 400, {"message": f"El monto debe estar entre $1 y lo que falta por pagar (${int(pendiente):,}).".replace(",", ".")}
+        DetalleRegistro.objects.create(hito=hito, monto=monto, metodo=data.metodo, fecha=data.fecha or date.today(), nota=data.nota.strip(),
+                                       comprobante=contenido, comprobante_mime=mime, comprobante_nombre=data.comprobante_nombre if contenido else "",
+                                       usuario=request.auth)
+        return _confirmar_cambio_de_pagos(hito)
+
+
+@router.delete("/registros-pago/{registro_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def anular_registro_pago(request, registro_id: int):
+    """Corrige un abono mal ingresado: lo elimina del libro y el hito vuelve a calcularse."""
+    reg = DetalleRegistro.objects.select_related("hito__cotizacion").defer("comprobante").filter(id=registro_id).first()
+    if not reg:
+        return 404, {"message": "Registro de pago no encontrado"}
+    hito = reg.hito
+    with transaction.atomic():
+        reg.delete()
+        return _confirmar_cambio_de_pagos(hito)
+
+
+@router.get("/registros-pago/{registro_id}/comprobante/", auth=AuthBearer())
+def ver_comprobante(request, registro_id: int):
+    reg = DetalleRegistro.objects.filter(id=registro_id).first()
+    if not reg or not reg.comprobante_mime:
+        return HttpResponse(status=404)
+    r = HttpResponse(bytes(reg.comprobante), content_type=reg.comprobante_mime)
+    nombre = re.sub(r"[^\w. -]", "_", reg.comprobante_nombre) or "comprobante"
+    r["Content-Disposition"] = f'inline; filename="{nombre}"'
+    r["Cache-Control"] = "private, max-age=86400"
+    return r
+
+
+@router.patch("/hitos-pago/{hito_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_hito_pago(request, hito_id: int, data: HitoPagoUpdateSchema):
-    """Registra un pago. `pago_completo=True` (o estado PAGADO) salda el hito; `pago_completo=False` exige
-    `monto_abonado` (total recibido) y deja el hito en ABONADO con la deuda restante; estado PENDIENTE lo deja en cero."""
-    hito = HitoPago.objects.filter(id=hito_id).first()
+    """Compatibilidad con el registro por total: `pago_completo=True` (o PAGADO) abona lo que falta; `monto_abonado` es el
+    total recibido (anota la diferencia como un abono); PENDIENTE borra todos los abonos. No admite bajar un total: para
+    corregir se anula el abono desde el libro de pagos."""
+    hito = HitoPago.objects.select_related("cotizacion").filter(id=hito_id).first()
     if not hito:
         return 404, {"message": "Hito de pago no encontrado"}
     if data.pago_completo is True or data.estado == "PAGADO":
-        abonado = hito.monto_pago
+        objetivo = hito.monto_pago
     elif data.estado == "PENDIENTE" and data.monto_abonado is None:
-        abonado = Decimal(0)
+        objetivo = Decimal(0)
     elif data.pago_completo is False or data.monto_abonado is not None:
         if data.monto_abonado is None:
             return 400, {"message": "Indique cuánto se pagó."}
-        abonado = Decimal(str(data.monto_abonado)).quantize(Decimal("1"))
-        if abonado < 0 or abonado > hito.monto_pago:
+        objetivo = Decimal(str(data.monto_abonado)).quantize(Decimal("1"))
+        if objetivo < 0 or objetivo > hito.monto_pago:
             tope = f"{int(hito.monto_pago):,}".replace(",", ".")
             return 400, {"message": f"El monto pagado debe estar entre $0 y ${tope}."}
     elif data.estado is not None:
         return 400, {"message": "Estado de pago no válido."}
     else:
-        abonado = hito.monto_abonado
-    hito.monto_abonado = abonado
-    hito.estado = "PAGADO" if abonado >= hito.monto_pago else ("ABONADO" if abonado > 0 else "PENDIENTE")
-    if data.fecha_pago is not None:
-        hito.fecha_pago = data.fecha_pago
-    elif abonado > 0:
-        hito.fecha_pago = date.today()
-    else:
-        hito.fecha_pago = None
-    if data.comprobante_ref is not None:
-        hito.comprobante_ref = data.comprobante_ref
-    hito.save()
-    return 200, hito
+        objetivo = hito.monto_abonado
+    if data.metodo is not None and data.metodo not in dict(METODOS_PAGO):
+        return 400, {"message": "Método de pago no válido."}
+    if objetivo < hito.monto_abonado:
+        if objetivo > 0:
+            return 400, {"message": "El total no puede bajar: anule el abono equivocado desde el historial de pagos."}
+    with transaction.atomic():
+        if objetivo == 0:
+            hito.registros.all().delete()
+        elif objetivo > hito.monto_abonado:
+            DetalleRegistro.objects.create(hito=hito, monto=objetivo - hito.monto_abonado, metodo=data.metodo or "OTRO",
+                                           fecha=data.fecha_pago or date.today(), usuario=request.auth)
+        if data.comprobante_ref is not None:
+            hito.comprobante_ref = data.comprobante_ref
+            hito.save(update_fields=["comprobante_ref"])
+        return _confirmar_cambio_de_pagos(hito)
 
 
 # ==============================================================================
@@ -655,18 +997,34 @@ def resumen_ganancias(request, cotizacion_id: int):
         return 404, {"message": "Cotización u obra no encontrada"}
     neto = (c.costo_total / Decimal("1.19")).quantize(Decimal("1"))
     presupuestado = ((c.costo_materiales + c.costo_mano_obra + c.costo_flete + c.costo_nivelacion) / Decimal("1.19")).quantize(Decimal("1"))
+    minimo, maximo = _limites_avance(list(c.hitos_pago.all()))
     return 200, {
         "neto_cobrado": neto, "costo_presupuestado": presupuestado,
         "ganancia_estimada": neto - presupuestado,
-        "avance_real": obra.porcentaje_avance_real,
-        "hito_avance_exigible": obra.porcentaje_avance_real >= 50,  # Hito 2 (30%) se cobra al 50% de avance
+        "avance_real": obra.porcentaje_avance_real, "avance_minimo": minimo, "avance_maximo": maximo,
     }
 
 
-@router.patch("/obras/{obra_id}/", response={200: ObraEjecucionSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def _validar_avance(cot, avance, actual=None):
+    """None si el avance es coherente con los pagos; si no, el mensaje que se muestra al usuario."""
+    minimo, maximo = _limites_avance(list(cot.hitos_pago.all()))
+    if avance > maximo:
+        return _mensaje_tope_avance(maximo)
+    if avance < minimo:
+        return f"Con los pagos registrados el avance no puede ser menor a {minimo} %."
+    if actual is not None and avance < actual:
+        return f"El avance no puede ser menor al ya registrado ({int(actual)} %)."
+    return None
+
+
+@router.patch("/obras/{obra_id}/", response={200: ObraEjecucionSchema, 404: MessageSchema, 400: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
 def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
     try:
-        obra = ObraEjecucion.objects.get(id=obra_id)
+        obra = ObraEjecucion.objects.select_related("cotizacion").get(id=obra_id)
+        if data.porcentaje_avance_real is not None:
+            error = _validar_avance(obra.cotizacion, Decimal(str(data.porcentaje_avance_real)))
+            if error:
+                return 409, {"message": error}
         for attr, value in data.dict(exclude_unset=True).items():
             if value is not None:
                 setattr(obra, attr, value)
@@ -675,7 +1033,179 @@ def actualizar_obra(request, obra_id: int, data: ObraEjecucionInSchema):
     except ObraEjecucion.DoesNotExist:
         return 404, {"message": "Obra no encontrada"}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
+
+
+# ---- Bitácora de avance
+MAX_FOTOS_BITACORA = 6
+
+
+def _guardar_fotos_bitacora(bitacora, data_urls):
+    if bitacora.fotos.count() + len(data_urls) > MAX_FOTOS_BITACORA:
+        raise ValueError(f"Cada registro admite hasta {MAX_FOTOS_BITACORA} fotos.")
+    for du in data_urls:
+        mime, contenido = _decodificar_imagen(du)
+        BitacoraFoto.objects.create(bitacora=bitacora, contenido=contenido, tipo_mime=mime)
+
+
+@router.get("/cotizaciones/{cotizacion_id}/bitacora/", response=List[BitacoraSchema], auth=AuthBearer())
+def listar_bitacora(request, cotizacion_id: int):
+    return BitacoraAvance.objects.select_related("usuario").prefetch_related("fotos").filter(cotizacion_id=cotizacion_id)
+
+
+@router.post("/cotizaciones/{cotizacion_id}/bitacora/", response={200: BitacoraSchema, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
+def registrar_avance(request, cotizacion_id: int, data: BitacoraInSchema):
+    """Registra un avance (porcentaje + comentario + fotos) y actualiza el avance de la obra, que debe ser coherente con los pagos."""
+    cot = Cotizacion.objects.filter(id=cotizacion_id).first()
+    if not cot:
+        return 404, {"message": "Cotización no encontrada"}
+    obra = _obra_de(cot)
+    porcentaje = Decimal(str(data.porcentaje))
+    error = _validar_avance(cot, porcentaje, obra.porcentaje_avance_real)
+    if error:
+        return 409, {"message": error}
+    try:
+        with transaction.atomic():
+            b = BitacoraAvance.objects.create(cotizacion=cot, porcentaje=porcentaje, comentario=data.comentario.strip(), usuario=request.auth)
+            _guardar_fotos_bitacora(b, data.imagenes)
+            obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = porcentaje, date.today()
+            obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
+    except ValueError as e:
+        return 400, {"message": _msj(e)}
+    return 200, b
+
+
+@router.patch("/bitacora/{bitacora_id}/", response={200: BitacoraSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def agregar_fotos_bitacora(request, bitacora_id: int, data: BitacoraFotosInSchema):
+    b = BitacoraAvance.objects.filter(id=bitacora_id).first()
+    if not b:
+        return 404, {"message": "Registro no encontrado"}
+    try:
+        with transaction.atomic():
+            _guardar_fotos_bitacora(b, data.agregar_imagenes)
+    except ValueError as e:
+        return 400, {"message": _msj(e)}
+    return 200, b
+
+
+@router.delete("/bitacora/{bitacora_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_bitacora(request, bitacora_id: int):
+    """Elimina un registro mal ingresado; el avance de la obra vuelve al del último registro que queda."""
+    b = BitacoraAvance.objects.select_related("cotizacion").filter(id=bitacora_id).first()
+    if not b:
+        return 404, {"message": "Registro no encontrado"}
+    cot = b.cotizacion
+    with transaction.atomic():
+        b.delete()
+        restantes = max((x.porcentaje for x in cot.bitacoras.all()), default=Decimal(0))
+        minimo, _ = _limites_avance(list(cot.hitos_pago.all()))
+        obra = _obra_de(cot)
+        obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = max(restantes, Decimal(minimo)), date.today()
+        obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
+    return 200, {"message": "Registro eliminado"}
+
+
+@router.get("/bitacora/fotos/{foto_id}/", auth=AuthBearer())
+def servir_foto_bitacora(request, foto_id: int):
+    f = BitacoraFoto.objects.filter(id=foto_id).first()
+    if not f:
+        return HttpResponse(status=404)
+    r = HttpResponse(bytes(f.contenido), content_type=f.tipo_mime)
+    r["Cache-Control"] = "private, max-age=86400"
+    return r
+
+
+MAX_BYTES_CONTRATO = 3_000_000  # el cuerpo en base64 debe caber en el límite de 4,5 MB de Vercel
+
+
+def _pdf_respuesta(c):
+    r = HttpResponse(bytes(c.contenido), content_type="application/pdf")
+    r["Content-Disposition"] = f'inline; filename="{c.nombre_archivo}"'
+    r["Cache-Control"] = "private, max-age=0"
+    return r
+
+
+@router.post("/cotizaciones/{cotizacion_id}/contrato/", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def subir_contrato(request, cotizacion_id: int, data: ContratoInSchema):
+    """Adjunta (o reemplaza) el PDF del contrato notarial del proyecto."""
+    if not Cotizacion.objects.filter(id=cotizacion_id).exists():
+        return 404, {"message": "Cotización no encontrada"}
+    try:
+        contenido = base64.b64decode(data.pdf.split(",", 1)[-1], validate=True)
+    except Exception:
+        return 400, {"message": "El archivo no se pudo leer."}
+    if not contenido.startswith(b"%PDF-"):
+        return 400, {"message": "El contrato debe ser un archivo PDF."}
+    if len(contenido) > MAX_BYTES_CONTRATO:
+        return 400, {"message": "El PDF puede pesar hasta 3 MB."}
+    nombre = re.sub(r'[^\w.\- ]', "_", data.nombre_archivo)[:150] or "contrato.pdf"
+    ContratoNotarial.objects.update_or_create(cotizacion_id=cotizacion_id, defaults={"nombre_archivo": nombre, "contenido": contenido, "fecha_subida": datetime.now(tz.utc)})
+    return 200, {"message": "Contrato adjuntado"}
+
+
+@router.get("/cotizaciones/{cotizacion_id}/contrato/", auth=AuthBearer())
+def ver_contrato(request, cotizacion_id: int):
+    c = ContratoNotarial.objects.filter(cotizacion_id=cotizacion_id).first()
+    return _pdf_respuesta(c) if c else HttpResponse(status=404)
+
+
+@router.delete("/cotizaciones/{cotizacion_id}/contrato/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def quitar_contrato(request, cotizacion_id: int):
+    borrados, _ = ContratoNotarial.objects.filter(cotizacion_id=cotizacion_id).delete()
+    return (200, {"message": "Contrato eliminado"}) if borrados else (404, {"message": "El proyecto no tiene contrato"})
+
+
+@router.get("/cotizaciones/public/{token}/contrato")
+def ver_contrato_publico(request, token: uuid.UUID):
+    """El cliente lo descarga con el enlace privado de su ficha."""
+    c = ContratoNotarial.objects.filter(cotizacion__token_publico=token).first()
+    return _pdf_respuesta(c) if c else HttpResponse(status=404)
+
+
+@router.get("/cotizaciones/{cotizacion_id}/desglose/", response={200: dict, 404: MessageSchema}, auth=AuthBearer())
+def desglose_cotizacion(request, cotizacion_id: int):
+    """Detalle completo para la ficha de la empresa: todos los materiales con su cantidad, la mano de obra, el traslado y la ganancia."""
+    cot = Cotizacion.objects.filter(id=cotizacion_id).first()
+    if not cot:
+        return 404, {"message": "Cotización no encontrada"}
+    detalles = list(cot.detalles_insumo.select_related("catalogo_tipo__proveedor").order_by("etapa_obra", "id"))
+    materiales = [{
+        "nombre": d.catalogo_tipo.nombre, "categoria": d.catalogo_tipo.categoria, "unidad": d.catalogo_tipo.unidad_medida,
+        "proveedor": d.catalogo_tipo.proveedor.razon_social if d.catalogo_tipo.proveedor else None,
+        "cantidad": float(d.cantidad_calculada), "subtotal": float(d.subtotal_costo), "de_la_lista": d.es_adicional,
+    } for d in detalles]
+    mano_obra, traslado = [], None
+    if cot.modo_tarifas:
+        adicionales = [{"nombre": d.catalogo_tipo.nombre, "cantidad": d.cantidad_calculada, "mano_obra_m2": d.catalogo_tipo.mano_obra_m2}
+                       for d in detalles if d.es_adicional]
+        lineas = calculo.lineas_mano_obra_tarifas(cot.superficie_m2, cot.n_trabajadores, cot.m2_vigas_vista, cot.tipo_proyecto,
+                                                  adicionales, cot.lleva_radier, cot.tarifa_radier_m2, calculo.vigentes())
+        mano_obra = [{"concepto": l["concepto"], "m2": float(l["m2"]), "tarifa": float(l["tarifa"]),
+                      "trabajadores": l["trabajadores"], "subtotal": float(l["subtotal"])} for l in lineas]
+        dias = cot.dias_obra + (int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+        tr = calculo.traslado_combustible(cot.distancia_flete_km, dias, cot.precio_litro, calculo.vigentes()["km_por_litro"])
+        traslado = {"km": float(tr["km"]), "dias": tr["dias"], "litros": float(tr["litros"]),
+                    "precio_litro": float(tr["precio_litro"]), "costo": float(tr["costo"])}
+    else:
+        mano_obra = [{"concepto": "Mano de obra", "trabajadores": l.cantidad, "tarifa": float(l.cobro), "subtotal": float(l.cantidad * l.cobro)}
+                     for l in cot.mano_obra.all()]
+    if cot.traslados.exists():  # tres traslados, cada uno con su combustible y sus días
+        res = calculo.traslados_combustible(cot.distancia_flete_km, [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
+                                            "precio_litro": x.precio_litro} for x in cot.traslados.all()], calculo.vigentes()["km_por_litro"],
+                                            int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+        traslado = {"km": float(res["km"]), "costo": float(res["costo"]),
+                    "lineas": [{k: (float(v) if isinstance(v, Decimal) else v) for k, v in l.items()} for l in res["lineas"]]}
+    total = float(cot.costo_total)
+    base = float(cot.costo_materiales + cot.costo_mano_obra + cot.costo_flete + cot.costo_nivelacion)
+    neto = round(total / 1.19)
+    return 200, {
+        "materiales": materiales, "mano_obra": mano_obra, "traslado": traslado,
+        "costo_materiales": float(cot.costo_materiales), "costo_mano_obra": float(cot.costo_mano_obra),
+        "costo_flete": float(cot.costo_flete), "costo_nivelacion": float(cot.costo_nivelacion),
+        "ganancia": max(0, round(total - base)), "neto": neto, "iva": round(total) - neto, "total": total,
+        "n_trabajadores": cot.n_trabajadores, "dias_obra": cot.dias_obra, "tipo_proyecto": cot.tipo_proyecto,
+        "m2_vigas_vista": float(cot.m2_vigas_vista), "estado": cot.estado,
+    }
 
 
 # ==============================================================================
@@ -737,9 +1267,9 @@ def crear_proyecto_portafolio(request, data: PortafolioProyectoInSchema):
             _guardar_imagenes(proyecto, data.imagenes)
         return 200, proyecto
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
     except Exception as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.patch("/portafolio/{proyecto_id}/", response={200: PortafolioProyectoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -758,7 +1288,7 @@ def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyec
             _guardar_imagenes(proyecto, data.agregar_imagenes)
         return 200, proyecto
     except ValueError as e:
-        return 400, {"message": str(e)}
+        return 400, {"message": _msj(e)}
 
 
 @router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())

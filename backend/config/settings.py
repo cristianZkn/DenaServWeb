@@ -37,6 +37,9 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 # Token de Apify para la actualización semanal de precios.
 # Llave del planificador semanal de precios (POST /api/insumos/actualizar-precios con cabecera X-Cron-Token).
 CRON_TOKEN = os.getenv('CRON_TOKEN', '')
+# Zonas de la CNE cuyo precio se promedia para el combustible: el centro-sur del país (Zona Centro: hasta el Maule; Zona Sur:
+# Ñuble, Biobío y La Araucanía, donde está Los Ángeles). Se pueden cambiar con COMBUSTIBLE_ZONAS, separadas por coma.
+COMBUSTIBLE_ZONAS = [z.strip() for z in os.getenv('COMBUSTIBLE_ZONAS', 'Zona Centro,Zona Sur').split(',') if z.strip()]
 
 # SECURITY WARNING: don't run with debug turned on in production!
 ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
@@ -92,19 +95,32 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'postgres'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', ''),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        # Supabase exige TLS; en desarrollo local se permite sin él.
-        'OPTIONS': {'sslmode': os.getenv('DB_SSLMODE', 'prefer' if DEBUG else 'require')},
-        'DISABLE_SERVER_SIDE_CURSORS': True,  # necesario con el pooler de Supabase en modo transacción
+if os.getenv('DB_HOST'):
+    # Producción / Supabase (o cualquier PostgreSQL configurado en .env)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'postgres'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+            # Supabase exige TLS; en desarrollo local se permite sin él.
+            'OPTIONS': {'sslmode': os.getenv('DB_SSLMODE', 'prefer' if DEBUG else 'require')},
+            'DISABLE_SERVER_SIDE_CURSORS': True,  # necesario con el pooler de Supabase en modo transacción
+        }
     }
-}
+else:
+    # Desarrollo local: SQLite (archivo db.sqlite3), sin tocar la base real.
+    # Fuera de desarrollo se exige PostgreSQL: en un servidor el archivo SQLite se perdería en cada despliegue.
+    if not DEBUG:
+        raise RuntimeError('Falta DB_HOST en el entorno (en producción se requiere PostgreSQL).')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -146,6 +162,16 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Detrás del proxy de Render: confiar en X-Forwarded-Proto y proteger cookies en producción.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000  # el navegador exige HTTPS en este dominio durante un año
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+# El tamaño máximo de un cuerpo es lo que admiten las subidas (contrato PDF 3 MB y fotos en base64); más que eso se rechaza.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
+
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = [o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o]
 
@@ -160,7 +186,11 @@ MAILERS = {
 }
 
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',') if o]
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False  # el navegador habla con el proxy de Next.js; el backend no usa cookies
+
+# Clave compartida con el proxy de Next.js: solo con ella el backend toma como IP del visitante la que el proxy le informa
+# (límite de peticiones por IP). Sin ella se usa la IP de la conexión.
+PROXY_SECRET = os.getenv('PROXY_SECRET', '')
 
 # Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)
 WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '')

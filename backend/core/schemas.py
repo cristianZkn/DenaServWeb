@@ -7,6 +7,7 @@ from django.conf import settings
 from decimal import Decimal
 from pydantic import Field, field_validator
 from . import calculo
+from .models import METODOS_PAGO
 from . import validadores as v
 
 
@@ -18,7 +19,7 @@ def _opcional(fn):
 
 
 class _ContactoMixin:
-    """Valida teléfono/RUT/nombre/dirección de cliente; se mezcla en los schemas de cotización."""
+    """Valida teléfono/RUN/nombre/dirección de cliente; se mezcla en los schemas de cotización."""
     @field_validator("cliente_nombre", check_fields=False)
     @classmethod
     def _nombre(cls, x):
@@ -32,7 +33,7 @@ class _ContactoMixin:
     @field_validator("cliente_rut", check_fields=False)
     @classmethod
     def _rut(cls, x):
-        return _opcional(v.normalizar_rut)(x)
+        return _opcional(lambda r: v.normalizar_rut(r, "RUN"))(x)
 
     @field_validator("direccion_terreno", check_fields=False)
     @classmethod
@@ -64,6 +65,29 @@ class UsuarioSchema(Schema):
     google_id: Optional[str] = None
     activo: bool
 
+# --- 1b. Usuarios autorizados (administración) ---
+class UsuarioInSchema(Schema):
+    rut: str
+    nombre_completo: str
+    email: str
+    activo: bool = True
+
+    @field_validator("rut")
+    @classmethod
+    def _rut(cls, x):
+        return v.normalizar_rut(x, "RUN")
+
+    @field_validator("nombre_completo")
+    @classmethod
+    def _nombre(cls, x):
+        return v.texto(x, "El nombre", 3, 150)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, x):
+        return v.validar_email(x).lower()
+
+
 
 # --- 2. Proveedor ---
 class ProveedorSchema(Schema):
@@ -88,7 +112,7 @@ class ProveedorInSchema(Schema):
     @field_validator("rut_empresa")
     @classmethod
     def _rut(cls, x):
-        return v.texto(x, "El RUT de la empresa", 3, 12)
+        return v.normalizar_rut(x)
 
     @field_validator("razon_social")
     @classmethod
@@ -98,7 +122,7 @@ class ProveedorInSchema(Schema):
     @field_validator("contacto_nombre")
     @classmethod
     def _contacto(cls, x):
-        return v.texto(x, "El nombre de contacto", 2, 150) if x and x.strip() else None
+        return v.texto(x, "El nombre de contacto", 2, 100) if x and x.strip() else None
 
     @field_validator("telefono")
     @classmethod
@@ -142,19 +166,32 @@ class CatalogoTipoSchema(Schema):
         return float(calculo.costo_neto(obj.precio_base_unitario, descuento))
 
 class CatalogoTipoInSchema(Schema):
-    categoria: str
-    nombre: str = ''
-    descripcion: Optional[str] = None
-    unidad_medida: str = 'UN'
-    precio_base_unitario: float = 0.00
+    categoria: str = Field(min_length=2, max_length=50)
+    nombre: str = Field('', max_length=150)
+    descripcion: Optional[str] = Field(None, max_length=2000)
+    unidad_medida: str = Field('UN', min_length=1, max_length=20)
+    precio_base_unitario: float = Field(0.00, ge=0, le=1_000_000_000)
     proveedor_id: Optional[int] = None
-    etapa_obra: str = ''
-    rendimiento_m2: float = 0
-    fuente_url: str = ''
-    m2_por_unidad: float = 0
+    etapa_obra: str = Field('', max_length=50)
+    rendimiento_m2: float = Field(0, ge=0, le=100_000)
+    fuente_url: str = Field('', max_length=500)
+    m2_por_unidad: float = Field(0, ge=0, le=100_000)
     mano_obra_m2: float = Field(0, ge=0, le=1_000_000)  # mano de obra por m² instalado (0 = no aplica)
     verificado: bool = False
     activo: bool = True
+
+    @field_validator("fuente_url")
+    @classmethod
+    def _url(cls, x):
+        x = (x or "").strip()
+        if x and not x.startswith(("http://", "https://")):
+            raise ValueError("La dirección de la ficha debe comenzar con http:// o https://")
+        return x
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, x):
+        return v.texto(x, "El nombre", 2, 150) if x and x.strip() else ""
 
 
 class InsumoSchema(Schema):
@@ -199,6 +236,21 @@ class DetalleCotizacionInsumoInSchema(Schema):
 
 
 # --- 6. Hito de Pago ---
+class RegistroPagoSchema(Schema):
+    """Una fila del libro de pagos (detalle_registros): lo pagado en ese abono y cómo va el hito después de él."""
+    id: int
+    monto: float
+    metodo: str
+    metodo_etiqueta: str
+    fecha: date
+    nota: str = ""
+    tiene_comprobante: bool = False
+    comprobante_nombre: str = ""
+    usuario: Optional[str] = None
+    acumulado: float  # total pagado del hito hasta este abono
+    saldo: float      # lo que falta del hito después de este abono
+
+
 class HitoPagoSchema(Schema):
     id: int
     cotizacion_id: int
@@ -210,13 +262,44 @@ class HitoPagoSchema(Schema):
     estado: str
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
+    registros: List[RegistroPagoSchema] = []
+
+    @staticmethod
+    def resolve_registros(obj):
+        etiquetas, acumulado, filas = dict(METODOS_PAGO), Decimal(0), []
+        for r in obj.registros.select_related("usuario").defer("comprobante"):
+            acumulado += r.monto
+            filas.append({"id": r.id, "monto": r.monto, "metodo": r.metodo, "metodo_etiqueta": etiquetas.get(r.metodo, r.metodo),
+                          "fecha": r.fecha, "nota": r.nota, "tiene_comprobante": bool(r.comprobante_mime),
+                          "comprobante_nombre": r.comprobante_nombre, "usuario": r.usuario.nombre_completo if r.usuario else None,
+                          "acumulado": acumulado, "saldo": max(obj.monto_pago - acumulado, 0)})
+        return filas
+
 
 class HitoPagoUpdateSchema(Schema):
+    """Compatibilidad: el panel usa `RegistroPagoInSchema`. Aquí `monto_abonado` es el total recibido (nunca baja)."""
     estado: Optional[str] = None
-    pago_completo: Optional[bool] = None   # True = pagó todo; False = pago parcial (requiere monto_abonado)
-    monto_abonado: Optional[float] = None  # total recibido hasta ahora (no lo que falta)
+    pago_completo: Optional[bool] = None
+    monto_abonado: Optional[float] = None
     fecha_pago: Optional[date] = None
     comprobante_ref: Optional[str] = None
+    metodo: Optional[str] = None
+
+
+class RegistroPagoInSchema(Schema):
+    monto: float = Field(gt=0, le=10_000_000_000)  # lo pagado en este abono (no el total ni lo que falta)
+    metodo: str
+    fecha: Optional[date] = None
+    nota: str = Field("", max_length=200)
+    comprobante: Optional[str] = None  # data URL (imagen o PDF), opcional
+    comprobante_nombre: str = Field("", max_length=150)
+
+    @field_validator("metodo")
+    @classmethod
+    def _metodo(cls, x):
+        if x not in dict(METODOS_PAGO):
+            raise ValueError("Elija cómo se pagó: efectivo, transferencia, cheque, tarjeta u otro.")
+        return x
 
 
 # --- 7. Obra Ejecución ---
@@ -243,6 +326,34 @@ class ManoObraInSchema(Schema):
     """Trabajadores que cobran el mismo monto. Para pagos diferenciados se envían varias líneas."""
     cantidad: int = Field(gt=0, le=100)
     cobro: float = Field(ge=0, le=100_000_000)  # lo que cobra cada uno por toda la obra
+
+
+class TrasladoInSchema(Schema):
+    """Un traslado de la cotización. Si no se informa `precio_litro` se usa el precio vigente del combustible (CNE)."""
+    tipo: str
+    combustible: str
+    dias: int = Field(ge=0, le=365)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+
+    @field_validator("tipo")
+    @classmethod
+    def _tipo(cls, x):
+        if x not in calculo.TIPOS_TRASLADO:
+            raise ValueError("El tipo de traslado debe ser maestros, materiales o flete.")
+        return x
+
+    @field_validator("combustible")
+    @classmethod
+    def _combustible(cls, x):
+        if x not in ("93", "95", "97", "DIESEL"):
+            raise ValueError("El combustible debe ser 93, 95, 97 o diésel.")
+        return x
+
+
+def _sin_traslados_repetidos(lista):
+    if len({t.tipo for t in lista}) != len(lista):
+        raise ValueError("Cada tipo de traslado se puede indicar una sola vez.")
+    return lista
 
 
 class CotizacionInSchema(_ContactoMixin, Schema):
@@ -274,6 +385,12 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    traslados: List[TrasladoInSchema] = Field([], max_length=3)  # modo vigente: maestros, materiales y flete
+
+    @field_validator("traslados")
+    @classmethod
+    def _traslados_unicos(cls, x):
+        return _sin_traslados_repetidos(x)
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -317,6 +434,12 @@ class CotizacionSchema(Schema):
     usuario: Optional[UsuarioSchema] = None
 
 class CotizacionDetalladaSchema(CotizacionSchema):
+    tiene_contrato: bool = False
+
+    @staticmethod
+    def resolve_tiene_contrato(obj):
+        return obj.contrato_notarial_existe()
+
     hitos_pago: List[HitoPagoSchema] = []
     detalles_insumo: List[DetalleCotizacionInsumoSchema] = []
     obras_ejecucion: List[ObraEjecucionSchema] = []
@@ -361,6 +484,14 @@ class PortafolioProyectoInSchema(Schema):
     cotizacion_id: Optional[int] = None
     imagenes: List[str] = []  # imágenes como data URL (data:image/jpeg;base64,...)
 
+    @field_validator("imagen_url")
+    @classmethod
+    def _imagen_url(cls, x):
+        x = (x or "").strip()
+        if x and not x.startswith(("http://", "https://")):
+            raise ValueError("La dirección de la imagen debe comenzar con http:// o https://")
+        return x or None
+
 
 class PortafolioProyectoUpdateSchema(Schema):
     titulo: Optional[str] = Field(None, min_length=3, max_length=150)
@@ -377,6 +508,20 @@ class ProgresoObraSchema(Schema):
     codigo_cotizacion: str
     cliente_nombre: str
     avance: float
+
+
+class TrimestreSchema(Schema):
+    clave: str
+    etiqueta: str
+    creados: int
+    terminados: int
+
+
+class EstadisticasSchema(Schema):
+    cotizados: int
+    en_ejecucion: int
+    terminados: int
+    trimestres: List[TrimestreSchema]
 
 
 # --- Motor de cálculo ---
@@ -399,6 +544,12 @@ class CalculoInSchema(Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    traslados: List[TrasladoInSchema] = Field([], max_length=3)
+
+    @field_validator("traslados")
+    @classmethod
+    def _traslados_unicos(cls, x):
+        return _sin_traslados_repetidos(x)
 
 
 class NivelacionInSchema(Schema):
@@ -414,32 +565,86 @@ class GananciasSchema(Schema):
     costo_presupuestado: float
     ganancia_estimada: float
     avance_real: float
-    hito_avance_exigible: bool
+    avance_minimo: int  # límites de avance que permiten los pagos registrados
+    avance_maximo: int
 
 
 # --- Vista pública (sin datos internos: usuario, ganancia, ajustes, observaciones de obra) ---
 class CotizacionPublicaSchema(Schema):
+    """Lo que ve el cliente: resumen general del proyecto. No incluye materiales ni el desglose de costos de la empresa."""
     id: int
     codigo_cotizacion: str
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     direccion_terreno: str
     superficie_m2: float
-    distancia_flete_km: float
-    base_terreno: Optional[CatalogoTipoSchema] = None
-    revestimiento: Optional[CatalogoTipoSchema] = None
-    costo_materiales: float
-    costo_mano_obra: float
-    costo_flete: float
     costo_total: float
     estado: str
     tipo_proyecto: str = "CASA"
     nivelacion_modalidad: str = ""
     nivelacion_m3: float = 0
-    costo_nivelacion: float = 0
     fecha_creacion: datetime
     hitos_pago: List[HitoPagoSchema] = []
-    detalles_insumo: List[DetalleCotizacionInsumoSchema] = []
+    avance: float = 0  # % de avance de la obra
+
+    tiene_contrato: bool = False
+
+    @staticmethod
+    def resolve_tiene_contrato(obj):
+        return obj.contrato_notarial_existe()
+
+    @staticmethod
+    def resolve_avance(obj):
+        obra = obj.obras_ejecucion.all()[0] if obj.obras_ejecucion.all() else None
+        return float(obra.porcentaje_avance_real) if obra else 0
+
+
+class TarifaSchema(Schema):
+    clave: str
+    grupo: str
+    nombre: str
+    unidad: str
+    descripcion: str
+    valor: float
+    valor_de_fabrica: float
+    modificada: bool
+
+
+class TarifaInSchema(Schema):
+    valor: float = Field(ge=0, le=1_000_000_000)
+
+
+class ContratoInSchema(Schema):
+    nombre_archivo: str = "contrato.pdf"
+    pdf: str  # data URL base64 (application/pdf)
+
+
+# --- Bitácora de avance de obra ---
+class BitacoraInSchema(Schema):
+    porcentaje: float = Field(ge=0, le=100)
+    comentario: str = Field(min_length=3, max_length=1000)
+    imagenes: List[str] = Field([], max_length=2)  # data URL; si hay más fotos se agregan después con PATCH
+
+
+class BitacoraFotosInSchema(Schema):
+    agregar_imagenes: List[str] = Field(max_length=2)
+
+
+class BitacoraSchema(Schema):
+    id: int
+    porcentaje: float
+    comentario: str
+    fecha: datetime
+    usuario: Optional[str] = None
+    fotos: List[str] = []
+
+    @staticmethod
+    def resolve_usuario(obj):
+        return obj.usuario.nombre_completo if obj.usuario else None
+
+    @staticmethod
+    def resolve_fotos(obj):
+        return [f"/api/bitacora/fotos/{f.id}/" for f in obj.fotos.all()]
 
 
 # --- Edición / reajuste de una cotización emitida ---

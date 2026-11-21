@@ -6,6 +6,8 @@ from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, Obra
 
 class DenaServMigrationTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # los límites de peticiones se cuentan en la caché
         self.client = Client()
         self.usuario = Usuario.objects.create(
             rut="12345678-9",
@@ -207,10 +209,13 @@ class GananciasWhatsappTests(TestCase):
         cot = c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente X", "direccion_terreno": "Calle Uno 1", "superficie_m2": 50},
                      content_type="application/json", **h).json()
         obra = ObraEjecucion.objects.get(cotizacion_id=cot["id"])
-        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55},
-                content_type="application/json", **h)
+        self.assertEqual(c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55},
+                                 content_type="application/json", **h).status_code, 409)  # sin pagos no hay avance
+        for hito in HitoPago.objects.filter(cotizacion_id=cot["id"]).order_by("id")[:2]:
+            c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **h)
+        c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 55}, content_type="application/json", **h)
         g = c.get(f"/api/cotizaciones/{cot['id']}/ganancias/", **h).json()
-        self.assertTrue(g["hito_avance_exigible"])
+        self.assertEqual((g["avance_real"], g["avance_minimo"], g["avance_maximo"]), (55, 50, 99))
         self.assertNotIn("gasto_real", g)
         self.assertEqual(g["ganancia_estimada"], g["neto_cobrado"] - g["costo_presupuestado"])
         from .models import PortafolioProyecto
@@ -261,11 +266,19 @@ class ExtraccionTests(TestCase):
         import requests
         from unittest import mock
         from . import scraper
-        ok = mock.Mock(status_code=200, text="<html/>")
+        ok = mock.Mock(status_code=200, text="<html/>", url="https://www.easy.cl/x/p")
         with mock.patch("core.scraper.requests.get", side_effect=[requests.ConnectionError("x"), ok]) as g:
             self.assertEqual(scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None), "<html/>")
         self.assertEqual(g.call_count, 2)
         with mock.patch("core.scraper.requests.get", side_effect=requests.ConnectionError("x")):
+            with self.assertRaises(scraper.ErrorExtraccion):
+                scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None)
+
+    def test_no_sigue_una_redireccion_a_un_sitio_que_no_es_tienda(self):
+        from unittest import mock
+        from . import scraper
+        desviada = mock.Mock(status_code=200, text="<html/>", url="http://169.254.169.254/latest/meta-data/")
+        with mock.patch("core.scraper.requests.get", return_value=desviada):
             with self.assertRaises(scraper.ErrorExtraccion):
                 scraper.descargar("https://www.easy.cl/x/p", pausa=lambda s: None)
 
@@ -548,8 +561,10 @@ class EdicionCotizacionTests(TestCase):
     def test_vista_publica_no_expone_datos_internos(self):
         self.assertEqual(self.c.get(f"/api/cotizaciones/public/{self.cot['codigo_cotizacion']}").status_code, 422)  # el folio ya no abre la ficha
         pub = self.c.get(f"/api/cotizaciones/public/{self.cot['token_publico']}").json()
-        for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto"):
+        for k in ("usuario", "obras_ejecucion", "ganancia_m2", "ajuste_monto", "detalles_insumo", "base_terreno",
+                  "revestimiento", "costo_materiales", "costo_mano_obra", "costo_flete", "distancia_flete_km"):
             self.assertNotIn(k, pub)
+        self.assertEqual(pub["avance"], 0)
 
 
 class MapeoCatalogoTests(TestCase):
@@ -623,26 +638,103 @@ class PagosEstadosPortafolioTests(TestCase):
         self.assertEqual(self.pagar(h, pago_completo=False, monto_abonado=float(h.monto_pago) + 1).status_code, 400)
         self.assertEqual(self.pagar(h, pago_completo=False).status_code, 400)
 
-    def test_no_finaliza_con_pagos_pendientes_ni_sin_ejecucion(self):
-        self.assertEqual(self.estado("FINALIZADA").status_code, 409)       # aún borrador
-        self.assertEqual(self.estado("ACEPTADA").status_code, 200)
-        r = self.estado("FINALIZADA")
-        self.assertEqual(r.status_code, 409)                                 # pagos pendientes
-        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "ACEPTADA")
-        for h in self.hitos[:-1]:
-            self.pagar(h, pago_completo=True)
-        self.pagar(self.hitos[-1], pago_completo=False, monto_abonado=1)    # un abono no basta
+    def estado_actual(self):
+        return Cotizacion.objects.get(id=self.cot["id"]).estado
+
+    def avance(self):
+        return float(ObraEjecucion.objects.get(cotizacion_id=self.cot["id"]).porcentaje_avance_real)
+
+    def test_estado_automatico_segun_pagos(self):
+        self.assertEqual(self.cot["estado"], "BORRADOR")                       # al crearse: Cotizado
+        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=1)        # anticipo con saldo pendiente
+        self.assertEqual(self.estado_actual(), "BORRADOR")                     # sigue Cotizado hasta pagar todo el 40 %
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # anticipo completo: En ejecución
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # faltan pagos: sigue en ejecución
+        self.pagar(self.hitos[2], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "FINALIZADA")                   # todos pagados: Obra terminada
+        self.assertEqual(self.avance(), 100)
+
+    def test_el_estado_no_se_cambia_a_mano(self):
         self.assertEqual(self.estado("FINALIZADA").status_code, 409)
-        self.pagar(self.hitos[-1], pago_completo=True)
-        self.assertEqual(self.estado("FINALIZADA").status_code, 200)
+        self.assertEqual(self.estado("ACEPTADA").status_code, 409)
+        self.assertEqual(self.estado("BORRADOR").status_code, 200)             # el que ya corresponde se acepta
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.estado("ACEPTADA").status_code, 200)
+        self.assertEqual(self.estado("FINALIZADA").status_code, 409)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")
+
+    def test_anular_pagos_devuelve_el_estado(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.pagar(self.hitos[0], estado="PENDIENTE")
+        self.assertEqual(self.estado_actual(), "BORRADOR")
 
     def test_progreso_solo_obras_en_ejecucion(self):
         self.assertEqual(self.c.get("/api/cotizaciones/progreso/", **self.h).json(), [])
-        self.estado("ACEPTADA")
+        self.pagar(self.hitos[0], pago_completo=True)
         obra = ObraEjecucion.objects.get(cotizacion_id=self.cot["id"])
         self.c.patch(f"/api/obras/{obra.id}/", {"porcentaje_avance_real": 35}, content_type="application/json", **self.h)
         p = self.c.get("/api/cotizaciones/progreso/", **self.h).json()
         self.assertEqual([(x["id"], x["avance"]) for x in p], [(self.cot["id"], 35)])
+
+    # ---- bitácora y coherencia entre pagos y avance
+    def bitacora(self, pct, comentario="Avance de radier", **extra):
+        return self.c.post(f"/api/cotizaciones/{self.cot['id']}/bitacora/", {"porcentaje": pct, "comentario": comentario, **extra},
+                           content_type="application/json", **self.h)
+
+    def test_sin_pagos_no_hay_avance(self):
+        r = self.bitacora(10)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("anticipo", r.json()["message"])
+
+    def test_avance_limitado_por_los_pagos(self):
+        self.pagar(self.hitos[0], pago_completo=True)                           # solo el anticipo (40 %)
+        self.assertEqual(self.bitacora(50).status_code, 409)                   # 50 % exige el 2.º pago
+        self.assertEqual(self.bitacora(30).status_code, 200)
+        self.assertEqual(self.avance(), 30)
+        self.assertEqual(self.bitacora(20).status_code, 409)                   # no retrocede
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.assertEqual(self.avance(), 50)                                    # el 2.º pago sube el avance al 50 %
+        self.assertEqual(self.bitacora(99).status_code, 200)
+        self.assertEqual(self.bitacora(100).status_code, 409)                  # 100 % exige el último pago
+        self.pagar(self.hitos[2], pago_completo=True)
+        self.assertEqual(self.avance(), 100)
+
+    def test_no_se_anula_un_pago_que_respalda_el_avance(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.pagar(self.hitos[1], pago_completo=True)
+        self.bitacora(70)
+        r = self.pagar(self.hitos[1], estado="PENDIENTE")
+        self.assertEqual(r.status_code, 409)
+        self.hitos[1].refresh_from_db()
+        self.assertEqual((self.hitos[1].estado, self.avance()), ("PAGADO", 70))   # nada cambió
+
+    def test_bitacora_con_fotos_historial_y_eliminacion(self):
+        import base64
+        png = "data:image/png;base64," + base64.b64encode(b"PNG-fake" + b"0" * 20).decode()
+        self.pagar(self.hitos[0], pago_completo=True)
+        b1 = self.bitacora(20, "Avance de radier", imagenes=[png]).json()
+        b2 = self.bitacora(35, "Levantamiento de vigas").json()
+        self.assertEqual((len(b1["fotos"]), b2["porcentaje"]), (1, 35))
+        self.assertEqual(self.c.patch(f"/api/bitacora/{b2['id']}/", {"agregar_imagenes": [png, png]},
+                                      content_type="application/json", **self.h).json()["fotos"].__len__(), 2)
+        hist = self.c.get(f"/api/cotizaciones/{self.cot['id']}/bitacora/", **self.h).json()
+        self.assertEqual([x["porcentaje"] for x in hist], [35, 20])          # la más reciente primero
+        self.assertEqual(self.c.get(hist[1]["fotos"][0], **self.h).status_code, 200)
+        self.assertEqual(Client().get(hist[1]["fotos"][0]).status_code, 401)  # las fotos no son públicas
+        self.c.delete(f"/api/bitacora/{b2['id']}/", **self.h)
+        self.assertEqual(self.avance(), 20)                                     # vuelve al registro anterior
+
+    def test_bitacora_exige_comentario(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.bitacora(10, "").status_code, 422)
+
+    def test_desglose_para_la_ficha_de_la_empresa(self):
+        r = self.c.get(f"/api/cotizaciones/{self.cot['id']}/desglose/", **self.h).json()
+        self.assertEqual(r["total"], self.cot["costo_total"])
+        self.assertEqual(r["neto"] + r["iva"], round(r["total"]))
+        self.assertEqual(self.c.get(f"/api/cotizaciones/{self.cot['id']}/desglose/").status_code, 401)
 
     def test_portafolio_con_varias_imagenes(self):
         import base64
@@ -699,6 +791,17 @@ class CargarMaterialesTests(TestCase):
         call_command("cargar_materiales", str(archivo))
         self.assertEqual(CatalogoTipo.objects.filter(categoria="INSUMO").count(), 2)
         self.assertEqual(Proveedor.objects.filter(razon_social="Homecenter").count(), 1)
+
+    def test_presupuesto_de_referencia_carga_las_categorias_nuevas(self):
+        from django.core.management import call_command
+        from pathlib import Path
+        archivo = Path(__file__).parent / "fixtures" / "materiales_presupuesto.json"
+        call_command("cargar_materiales", str(archivo))
+        call_command("cargar_materiales", str(archivo))  # repetible
+        cats = set(CatalogoTipo.objects.values_list("categoria", flat=True))
+        self.assertTrue({"RADIER_CASA", "TABIQUES", "ESTRUCTURA_TECHO", "FORRO_EXTERIOR", "ALEROS", "FORRO_INTERIOR",
+                         "VENTANAS_PUERTAS", "SERVICIOS"} <= cats)
+        self.assertEqual(CatalogoTipo.objects.filter(categoria="RADIER_CASA", nombre="Hormigón").get().precio_base_unitario, 1012000)
 
 
 class MaterialesAdicionalesTests(TestCase):
@@ -944,3 +1047,497 @@ class SelectorMaterialesApiTests(TestCase):
         self.assertEqual(len(mats), 1)
         self.assertEqual((mats[0]["catalogo_tipo"]["nombre"], mats[0]["catalogo_tipo"]["proveedor"]["razon_social"], float(mats[0]["cantidad_calculada"])),
                          ("Pino 2x4", "Maderas SpA", 3.0))
+
+
+class UsuariosAutorizadosTests(TestCase):
+    def setUp(self):
+        self.u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.nuevo = {"rut": "12.345.678-5", "nombre_completo": "Nuevo Usuario", "email": "Nuevo@X.cl"}
+
+    def _post(self, d):
+        return self.client.post("/api/usuarios/", d, content_type="application/json", **self.h)
+
+    def test_crear_normaliza_y_permite_login(self):
+        r = self._post(self.nuevo)
+        self.assertEqual((r.status_code, r.json()["email"]), (200, "nuevo@x.cl"))
+        self.assertEqual(Usuario.objects.get(email="nuevo@x.cl").rut, "12.345.678-5")
+
+    def test_rechaza_run_invalido_y_duplicados(self):
+        self.assertEqual(self._post({**self.nuevo, "rut": "12.345.678-9"}).status_code, 422)
+        self._post(self.nuevo)
+        self.assertEqual(self._post(self.nuevo).status_code, 400)
+
+    def test_no_puede_desactivar_ni_eliminar_su_propio_acceso(self):
+        r = self.client.put(f"/api/usuarios/{self.u.id}", {"rut": self.u.rut, "nombre_completo": "Admin", "email": self.u.email, "activo": False},
+                            content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.client.delete(f"/api/usuarios/{self.u.id}", **self.h).status_code, 400)
+
+
+class ContratoNotarialTests(TestCase):
+    def setUp(self):
+        self.u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+        self.cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Uno", "direccion_terreno": "Calle Uno 1",
+                                    "superficie_m2": 40, "modo_lista": True}, content_type="application/json", **self.h).json()
+
+    def _subir(self, pdf):
+        import base64
+        return self.client.post(f"/api/cotizaciones/{self.cot['id']}/contrato/", {"nombre_archivo": "c.pdf",
+                                "pdf": "data:application/pdf;base64," + base64.b64encode(pdf).decode()}, content_type="application/json", **self.h)
+
+    def test_adjuntar_ver_y_quitar(self):
+        self.assertFalse(self.client.get(f"/api/cotizaciones/{self.cot['id']}/", **self.h).json()["tiene_contrato"])
+        self.assertEqual(self._subir(b"%PDF-1.4 x").status_code, 200)
+        self.assertTrue(self.client.get(f"/api/cotizaciones/{self.cot['id']}/", **self.h).json()["tiene_contrato"])
+        self.assertEqual(self.client.get(f"/api/cotizaciones/public/{self.cot['token_publico']}/contrato").content, b"%PDF-1.4 x")
+        self.assertEqual(self.client.delete(f"/api/cotizaciones/{self.cot['id']}/contrato/", **self.h).status_code, 200)
+
+    def test_rechaza_lo_que_no_es_pdf(self):
+        self.assertEqual(self._subir(b"hola").status_code, 400)
+
+
+class ValidacionCrudsTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def _prov(self, rut):
+        return self.client.post("/api/proveedores/", {"rut_empresa": rut, "razon_social": "Maderas SpA"}, content_type="application/json", **self.h)
+
+    def test_proveedor_exige_rut_real_y_no_duplicado(self):
+        self.assertEqual(self._prov("76.123.456-7").status_code, 422)
+        self.assertEqual(self._prov("abc").status_code, 422)
+        self.assertEqual(self._prov("76123456-0").json()["rut_empresa"], "76.123.456-0")
+        self.assertEqual(self._prov("76.123.456-0").status_code, 400)
+
+    def test_catalogo_rechaza_valores_invalidos(self):
+        def post(**d):
+            return self.client.post("/api/catalogo-tipos/", {"categoria": "TABIQUERIA", "nombre": "Pino", "unidad_medida": "UN", **d}, content_type="application/json", **self.h)
+        self.assertEqual(post(precio_base_unitario=-1).status_code, 422)
+        self.assertEqual(post(fuente_url="ftp://x").status_code, 422)
+        self.assertEqual(post(precio_base_unitario=1000).status_code, 200)
+
+
+class TarifasEditablesTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="11.111.111-1", nombre_completo="Admin", email="admin@x.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def test_cambiar_tarifa_modifica_el_calculo_y_se_restablece(self):
+        from . import calculo
+        base = calculo.calcular(50, 10, modo_lista=True)["total"]
+        r = self.client.put("/api/tarifas/ganancia_m2", {"valor": 40000}, content_type="application/json", **self.h)
+        self.assertEqual((r.status_code, r.json()["modificada"]), (200, True))
+        self.assertEqual(calculo.calcular(50, 10, modo_lista=True)["total"] - base, 500000)  # 10.000 más por m² × 50 m²
+        self.assertEqual(self.client.delete("/api/tarifas/ganancia_m2", **self.h).json()["modificada"], False)
+        self.assertEqual(calculo.calcular(50, 10, modo_lista=True)["total"], base)
+
+    def test_lista_todas_y_rechaza_negativos(self):
+        self.assertEqual(len(self.client.get("/api/tarifas/", **self.h).json()), len(__import__("core.calculo").calculo.TARIFAS_META))
+        self.assertEqual(self.client.put("/api/tarifas/ganancia_m2", {"valor": -1}, content_type="application/json", **self.h).status_code, 422)
+        self.assertEqual(self.client.put("/api/tarifas/inventada", {"valor": 1}, content_type="application/json", **self.h).status_code, 404)
+
+
+class LibroDePagosTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="Cajero", email="c@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Pagos", "direccion_terreno": "Calle Uno 1",
+                               "superficie_m2": 40}, content_type="application/json", **self.h).json()
+        self.hito = HitoPago.objects.filter(cotizacion_id=cot["id"]).order_by("id").first()
+
+    def abonar(self, monto, metodo="TRANSFERENCIA", **extra):
+        return self.client.post(f"/api/hitos-pago/{self.hito.id}/registros/", {"monto": monto, "metodo": metodo, **extra},
+                                content_type="application/json", **self.h)
+
+    def test_abonos_suman_y_calculan_saldo(self):
+        total = int(self.hito.monto_pago)
+        r = self.abonar(1000).json()
+        self.assertEqual((r["estado"], r["monto_abonado"], r["monto_pendiente"]), ("ABONADO", 1000, total - 1000))
+        r = self.abonar(2000, "EFECTIVO").json()
+        self.assertEqual([(x["monto"], x["acumulado"], x["saldo"], x["metodo_etiqueta"]) for x in r["registros"]],
+                         [(1000, 1000, total - 1000, "Transferencia"), (2000, 3000, total - 3000, "Efectivo")])
+        r = self.abonar(total - 3000).json()
+        self.assertEqual((r["estado"], r["monto_pendiente"]), ("PAGADO", 0))
+
+    def test_rechaza_monto_mayor_al_saldo_y_metodo_invalido(self):
+        self.assertEqual(self.abonar(int(self.hito.monto_pago) + 1).status_code, 400)
+        self.assertEqual(self.abonar(0).status_code, 422)
+        self.assertEqual(self.abonar(1000, "TRUEQUE").status_code, 422)
+
+    def test_comprobante_se_guarda_y_se_sirve(self):
+        import base64
+        r = self.abonar(1000, comprobante="data:application/pdf;base64," + base64.b64encode(b"%PDF-1 x").decode(), comprobante_nombre="c.pdf").json()
+        reg = r["registros"][0]
+        self.assertTrue(reg["tiene_comprobante"])
+        self.assertEqual(self.client.get(f"/api/registros-pago/{reg['id']}/comprobante/", **self.h).content, b"%PDF-1 x")
+        self.assertEqual(self.abonar(1000, comprobante="data:text/html;base64,AAAA").status_code, 400)
+
+    def test_anular_un_abono_recalcula_el_hito(self):
+        self.abonar(1000)
+        reg = self.abonar(2000).json()["registros"][1]
+        r = self.client.delete(f"/api/registros-pago/{reg['id']}/", **self.h).json()
+        self.assertEqual((r["monto_abonado"], r["estado"], len(r["registros"])), (1000, "ABONADO", 1))
+
+
+class ConteoDePagosTests(TestCase):
+    """Recorrido completo: abonos parciales en los tres hitos, ajuste de valor y anulaciones; los números siempre cuadran."""
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="Cajero", email="c@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Pagos", "direccion_terreno": "Calle Uno 1",
+                                    "superficie_m2": 40}, content_type="application/json", **self.h).json()
+
+    def hitos(self):
+        return self.client.get(f"/api/cotizaciones/{self.cot['id']}/hitos/", **self.h).json()
+
+    def abonar(self, hito, monto, metodo="EFECTIVO"):
+        return self.client.post(f"/api/hitos-pago/{hito['id']}/registros/", {"monto": monto, "metodo": metodo}, content_type="application/json", **self.h)
+
+    def test_cada_hito_cuadra_con_su_libro(self):
+        for h in self.hitos():
+            tercio = int(h["monto_pago"]) // 3
+            for _ in range(2):
+                self.assertEqual(self.abonar(h, tercio).status_code, 200)
+        for h in self.hitos():
+            filas = h["registros"]
+            self.assertEqual(h["monto_abonado"], sum(r["monto"] for r in filas))
+            self.assertEqual(h["monto_pendiente"], h["monto_pago"] - h["monto_abonado"])
+            self.assertEqual((h["estado"], filas[-1]["saldo"]), ("ABONADO", h["monto_pendiente"]))
+        ult = self.hitos()[0]
+        self.abonar(ult, int(ult["monto_pendiente"]))
+        self.assertEqual(self.hitos()[0]["estado"], "PAGADO")
+        self.assertEqual(self.hitos()[0]["monto_pendiente"], 0)
+
+    def test_el_ajuste_de_valor_solo_toca_lo_pendiente(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, 1000)
+        self.client.patch(f"/api/cotizaciones/{self.cot['id']}/", {"ajuste_monto": 100000, "aplicar": True, "motivo": "alza"},
+                          content_type="application/json", **self.h)
+        nuevos = self.hitos()
+        self.assertEqual(nuevos[0]["monto_abonado"], 1000)                       # lo cobrado no cambia
+        self.assertGreater(nuevos[0]["monto_pago"], h0["monto_pago"])            # el aumento se reparte entre los hitos pendientes
+        self.assertEqual(nuevos[0]["monto_pendiente"], nuevos[0]["monto_pago"] - 1000)
+        self.assertEqual(sum(x["monto_pago"] for x in nuevos), float(Cotizacion.objects.get(id=self.cot["id"]).costo_total))
+
+    def test_anular_todos_los_abonos_deja_el_hito_pendiente(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, 1000)
+        self.abonar(h0, 2000)
+        for r in self.hitos()[0]["registros"]:
+            self.client.delete(f"/api/registros-pago/{r['id']}/", **self.h)
+        h0 = self.hitos()[0]
+        self.assertEqual((h0["estado"], h0["monto_abonado"], h0["fecha_pago"], h0["registros"]), ("PENDIENTE", 0, None, []))
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "BORRADOR")
+
+    def test_una_rebaja_no_puede_dejar_un_hito_bajo_lo_ya_cobrado(self):
+        h0 = self.hitos()[0]
+        self.abonar(h0, int(h0["monto_pago"]) - 1000)                            # casi todo el anticipo cobrado
+        r = self.client.patch(f"/api/cotizaciones/{self.cot['id']}/", {"ajuste_monto": -3_000_000, "aplicar": True, "motivo": "rebaja"},
+                              content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("ya se cobraron", r.json()["message"])
+        self.assertEqual([h["monto_pago"] for h in self.hitos()][0], h0["monto_pago"])   # nada cambió
+
+
+class TrasladosConCombustibleTests(TestCase):
+    def setUp(self):
+        from . import combustibles
+        from .models import PrecioCombustible
+        u = Usuario.objects.create(rut="7-7", nombre_completo="T", email="t@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        for tipo, precio in (("93", 1000), ("95", 1100), ("97", 1200), ("DIESEL", 900)):
+            PrecioCombustible.objects.create(tipo=tipo, precio=precio)   # vigentes: no se consulta a la CNE
+        self.base = {"cliente_nombre": "Cliente Uno", "direccion_terreno": "Calle Uno 1", "superficie_m2": 40, "distancia_flete_km": 30,
+                     "modo_tarifas": True, "n_trabajadores": 3}
+
+    def calcular(self, traslados):
+        return self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 3,
+                                "traslados": traslados}, content_type="application/json", **self.h).json()
+
+    def test_cada_traslado_usa_su_combustible_y_sus_dias(self):
+        r = self.calcular([{"tipo": "MAESTROS", "combustible": "93", "dias": 30}, {"tipo": "MATERIALES", "combustible": "DIESEL", "dias": 15},
+                           {"tipo": "FLETE", "combustible": "97", "dias": 2}])
+        costos = {l["tipo"]: float(l["costo"]) for l in r["traslado"]["lineas"]}
+        # 30 km / 10 = 3 L por día: 3 x 1.000 x 30 = 90.000; 3 x 900 x 15 = 40.500; 3 x 1.200 x 2 = 7.200
+        self.assertEqual(costos, {"MAESTROS": 90000, "MATERIALES": 40500, "FLETE": 7200})
+        self.assertEqual(float(r["costo_flete"]), 137700)
+        self.assertEqual(float(r["traslado"]["lineas"][0]["costo_por_dia"]), 3000)
+
+    def test_se_guarda_con_el_precio_del_litro_de_ese_dia_y_el_desglose_lo_muestra(self):
+        tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 10}, {"tipo": "MATERIALES", "combustible": "95", "dias": 5},
+              {"tipo": "FLETE", "combustible": "DIESEL", "dias": 1}]
+        cot = self.client.post("/api/cotizaciones/", {**self.base, "traslados": tr}, content_type="application/json", **self.h).json()
+        from .models import PrecioCombustible
+        PrecioCombustible.objects.filter(tipo="93").update(precio=2000)        # el combustible sube después
+        d = self.client.get(f"/api/cotizaciones/{cot['id']}/desglose/", **self.h).json()
+        self.assertEqual([(l["tipo"], l["precio_litro"], l["costo"]) for l in d["traslado"]["lineas"]],
+                         [("MAESTROS", 1000, 30000), ("MATERIALES", 1100, 16500), ("FLETE", 900, 2700)])
+        self.assertEqual(d["costo_flete"], 49200)
+
+    def test_rechaza_tipo_combustible_y_repetidos(self):
+        mal = lambda tr: self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "traslados": tr}, content_type="application/json", **self.h).status_code
+        self.assertEqual(mal([{"tipo": "AVION", "combustible": "93", "dias": 1}]), 422)
+        self.assertEqual(mal([{"tipo": "FLETE", "combustible": "91", "dias": 1}]), 422)
+        self.assertEqual(mal([{"tipo": "FLETE", "combustible": "93", "dias": 1}, {"tipo": "FLETE", "combustible": "95", "dias": 1}]), 422)
+
+    def test_sin_radier_en_el_terreno_los_maestros_suman_4_dias(self):
+        tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 10}, {"tipo": "MATERIALES", "combustible": "93", "dias": 10},
+              {"tipo": "FLETE", "combustible": "93", "dias": 1}]
+        r = self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 3,
+                             "lleva_radier": True, "tarifa_radier_m2": 35000, "traslados": tr}, content_type="application/json", **self.h).json()
+        lin = {l["tipo"]: l for l in r["traslado"]["lineas"]}
+        self.assertEqual((lin["MAESTROS"]["dias_total"], float(lin["MAESTROS"]["costo"])), (14, 3 * 1000 * 14))   # 10 + 4 días de fabricación
+        self.assertEqual((lin["MATERIALES"]["dias_total"], lin["FLETE"]["dias_total"]), (10, 1))                   # solo los maestros
+
+
+class CombustiblesCneTests(TestCase):
+    FILAS = [{"zona_geografica_nombre": z, "combustible_nombre_largo": n, "precio_promedio": p}
+             for z in ("Zona Centro", "Zona Sur") for n, p in (("Gasolina 93", "1614.4"), ("Gasolina 95", "1649"), ("Gasolina 97", "1688"),
+                                                                ("Petroleo Diesel", "1619"), ("GLP Vehicular", "710"))]
+
+    def _cne(self, filas):
+        from unittest import mock
+        r = mock.Mock(); r.json.return_value = {"data": filas}; r.raise_for_status.return_value = None
+        return mock.patch("core.combustibles.requests.get", return_value=r)
+
+    def test_lee_la_zona_configurada_y_guarda_los_precios(self):
+        from . import combustibles
+        with self._cne(self.FILAS):
+            precios = combustibles.listar()
+        self.assertEqual({p["tipo"]: p["precio"] for p in precios}, {"93": 1614, "95": 1649, "97": 1688, "DIESEL": 1619})
+        with self._cne([]) as sin_red:   # vigentes: no vuelve a consultar
+            combustibles.listar()
+        sin_red.assert_not_called()
+
+    def test_si_la_cne_falla_se_usa_el_ultimo_precio_guardado(self):
+        import requests
+        from unittest import mock
+        from . import combustibles
+        from .models import PrecioCombustible
+        from django.utils import timezone
+        from datetime import timedelta
+        for t, p in (("93", 1), ("95", 2), ("97", 3), ("DIESEL", 4)):
+            PrecioCombustible.objects.create(tipo=t, precio=p, actualizado_en=timezone.now() - timedelta(days=2))
+        with mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError()):
+            self.assertEqual([p["precio"] for p in combustibles.listar()], [1, 2, 3, 4])
+
+    def test_sin_precios_guardados_ni_cne_da_error_claro(self):
+        import requests
+        from unittest import mock
+        from . import combustibles
+        with mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError()):
+            with self.assertRaises(ValueError):
+                combustibles.listar()
+
+
+class CombustibleManualTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="7-7", nombre_completo="T", email="t@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def caida(self):
+        import requests
+        from unittest import mock
+        return mock.patch("core.combustibles.requests.get", side_effect=requests.ConnectionError())
+
+    def fijar(self, tipo, valor):
+        return self.client.put(f"/api/combustibles/{tipo}", {"valor": valor}, content_type="application/json", **self.h)
+
+    def test_con_la_cne_caida_se_cotiza_con_los_precios_manuales(self):
+        with self.caida():
+            estado = self.client.get("/api/combustibles/estado/", **self.h).json()
+            self.assertIn("CNE", estado["error"])
+            self.assertEqual([f["precio"] for f in estado["filas"]], [None] * 4)      # se pueden editar aunque no haya ninguno
+            for tipo, v in (("93", 1500), ("95", 1600), ("97", 1700), ("DIESEL", 1400)):
+                self.assertEqual(self.fijar(tipo, v).status_code, 200)
+            r = self.client.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 2,
+                                 "traslados": [{"tipo": "FLETE", "combustible": "DIESEL", "dias": 2}]}, content_type="application/json", **self.h)
+        self.assertEqual((r.status_code, float(r.json()["costo_flete"])), (200, 3 * 1400 * 2))
+
+    def test_la_consulta_a_la_cne_no_pisa_un_precio_manual_y_se_puede_volver(self):
+        from unittest import mock
+        from . import combustibles
+        filas = [{"zona_geografica_nombre": "Zona Centro", "combustible_nombre_largo": n, "precio_promedio": "1000"}
+                 for n in ("Gasolina 93", "Gasolina 95", "Gasolina 97", "Petroleo Diesel")]
+        resp = mock.Mock(); resp.json.return_value = {"data": filas}; resp.raise_for_status.return_value = None
+        with mock.patch("core.combustibles.requests.get", return_value=resp):
+            combustibles.actualizar()
+            self.fijar("93", 2000)
+            combustibles.actualizar()
+            precios = {f["tipo"]: (f["precio"], f["manual"]) for f in combustibles.listar()}
+            self.assertEqual((precios["93"], precios["95"]), ((2000, True), (1000, False)))
+            r = self.client.delete("/api/combustibles/93", **self.h)
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual({f["tipo"]: f["precio"] for f in r.json()["filas"]}["93"], 1000)
+        with self.caida():
+            self.fijar("93", 2000)
+            self.assertEqual(self.client.delete("/api/combustibles/93", **self.h).status_code, 503)   # sigue el manual
+
+    def test_rechaza_precio_cero_y_combustible_desconocido(self):
+        self.assertEqual(self.fijar("93", 0).status_code, 400)
+        self.assertEqual(self.fijar("91", 1000).status_code, 404)
+
+
+class SeguridadTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.u = Usuario.objects.create(rut="7-7", nombre_completo="Seg", email="seg@d.cl")
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+
+    def login(self, **extra):
+        return self.client.post("/api/auth/google", {"email": "intruso@x.cl"}, content_type="application/json", **extra)
+
+    def test_el_inicio_de_sesion_se_limita_por_ip(self):
+        for _ in range(10):
+            self.login()
+        self.assertEqual(self.login().status_code, 429)                       # a la 11.ª en un minuto
+        self.assertNotEqual(self.login(REMOTE_ADDR="10.9.9.9").status_code, 429)  # otra IP no se ve afectada
+
+    def test_la_ip_informada_por_el_proxy_solo_vale_con_la_clave(self):
+        from django.test import override_settings
+        with override_settings(PROXY_SECRET="clave-compartida"):
+            for _ in range(10):
+                self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="clave-compartida")
+            self.assertEqual(self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="clave-compartida").status_code, 429)
+            self.assertNotEqual(self.login(HTTP_X_CLIENT_IP="2.2.2.2", HTTP_X_PROXY_SECRET="clave-compartida").status_code, 429)   # otra IP real
+            # sin la clave el encabezado se ignora: no se puede fingir otra IP ni cargar el límite a una ajena
+            self.assertNotEqual(self.login(HTTP_X_CLIENT_IP="1.1.1.1", HTTP_X_PROXY_SECRET="mala").status_code, 429)
+
+    def test_los_errores_internos_no_se_filtran(self):
+        from unittest import mock
+        with mock.patch("core.api.Proveedor.objects.create", side_effect=Exception('relation "proveedor" does not exist: SELECT * FROM x')):
+            r = self.client.post("/api/proveedores/", {"rut_empresa": "76123456-0", "razon_social": "Maderas SpA"},
+                                 content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 400)
+        self.assertNotIn("SELECT", r.json()["message"])
+        self.assertNotIn("relation", r.json()["message"])
+
+    def test_token_vencido_o_sin_expiracion_se_rechaza(self):
+        import jwt
+        from django.conf import settings
+        from datetime import datetime, timedelta, timezone as tz
+        vencido = jwt.encode({"user_id": self.u.id, "exp": datetime.now(tz.utc) - timedelta(minutes=1)}, settings.SECRET_KEY, algorithm="HS256")
+        sin_exp = jwt.encode({"user_id": self.u.id}, settings.SECRET_KEY, algorithm="HS256")
+        for token in (vencido, sin_exp):
+            self.assertEqual(self.client.get("/api/auth/me", HTTP_AUTHORIZATION=f"Bearer {token}").status_code, 401)
+        self.assertEqual(self.client.get("/api/auth/me", **self.h).status_code, 200)
+
+    def test_la_documentacion_de_la_api_no_se_publica_en_produccion(self):
+        from django.conf import settings
+        if not settings.DEBUG:
+            self.assertEqual(self.client.get("/api/openapi.json").status_code, 404)
+
+    def test_los_datos_se_pasan_como_parametros_no_como_sql(self):
+        r = self.client.get("/api/catalogo-tipos/?categoria=' OR '1'='1&activo=true", **self.h)
+        self.assertEqual((r.status_code, r.json()), (200, []))
+        r = self.client.post("/api/proveedores/", {"rut_empresa": "76123456-0", "razon_social": "x'); DROP TABLE proveedor;--"},
+                             content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(Proveedor.objects.filter(razon_social__startswith="x'); DROP").exists())
+
+    def test_imagen_de_portafolio_solo_acepta_http(self):
+        r = self.client.post("/api/portafolio/", {"titulo": "Casa uno", "imagen_url": "javascript:alert(1)"},
+                             content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 422)
+
+
+class MapeoPresupuestoTests(TestCase):
+    def test_las_fichas_del_presupuesto_son_de_tiendas_conocidas_y_no_se_repiten(self):
+        from . import scraper
+        from .catalogo_mapeo import MAPEO_PRESUPUESTO
+        categorias = {"RADIER_CASA", "TABIQUES", "ESTRUCTURA_TECHO", "FORRO_EXTERIOR", "ALEROS", "FORRO_INTERIOR", "VENTANAS_PUERTAS"}
+        for cat, url, nombre, etapa, ok in MAPEO_PRESUPUESTO:
+            self.assertIn(cat, categorias)
+            scraper.tienda_de(url)  # lanza si no es Easy, Sodimac, MCT o Ferrelan
+        pares = [(c, u) for c, u, *_ in MAPEO_PRESUPUESTO]
+        self.assertEqual(len(pares), len(set(pares)))
+
+    def test_mapear_agrega_los_materiales_y_es_repetible_sin_mover_los_insumos(self):
+        from .catalogo_mapeo import MAPEO, MAPEO_PRESUPUESTO, mapear
+        mapear()
+        total = CatalogoTipo.objects.count()
+        self.assertEqual(total, len(MAPEO) + len(MAPEO_PRESUPUESTO))
+        self.assertEqual(mapear()["creados"], 0)                       # repetirlo no crea ni mueve nada
+        self.assertEqual(CatalogoTipo.objects.count(), total)
+        self.assertTrue(CatalogoTipo.objects.filter(categoria="INSUMO", fuente_url__contains="296449").exists())  # sigue como insumo
+        self.assertTrue(CatalogoTipo.objects.filter(categoria="TABIQUES", fuente_url__contains="296449").exists())
+        self.assertFalse(CatalogoTipo.objects.filter(categoria="VENTANAS_PUERTAS", fuente_url="").exists())
+
+
+class AnticipoIniciaObraTests(TestCase):
+    """La obra pasa a «En ejecución» solo cuando el anticipo del 40 % se paga por completo."""
+
+    def setUp(self):
+        u = Usuario.objects.create(rut="3-9", nombre_completo="Anticipo", email="anticipo@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Anticipo", "direccion_terreno": "Calle Uno 1",
+                               "superficie_m2": 40}, content_type="application/json", **self.h).json()
+        self.hitos = list(HitoPago.objects.filter(cotizacion_id=self.cot["id"]).order_by("id"))
+
+    def pagar(self, hito, **body):
+        return self.c.patch(f"/api/hitos-pago/{hito.id}/", body, content_type="application/json", **self.h)
+
+    def test_un_abono_del_anticipo_no_inicia_la_obra_ni_el_avance(self):
+        monto = float(self.hitos[0].monto_pago)
+        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=monto - 1)          # falta $1 del 40 %
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "BORRADOR")
+        self.assertEqual(self.c.get("/api/cotizaciones/progreso/", **self.h).json(), [])
+        r = self.c.post(f"/api/cotizaciones/{self.cot['id']}/bitacora/", {"porcentaje": 10, "comentario": "Inicio de obra"},
+                        content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("anticipo", r.json()["message"])
+
+    def test_el_anticipo_completo_inicia_la_obra(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "ACEPTADA")
+        self.assertEqual(len(self.c.get("/api/cotizaciones/progreso/", **self.h).json()), 1)
+
+
+class EstadisticasPanelTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="3-9", nombre_completo="Panel", email="panel@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def crear(self, nombre):
+        return self.c.post("/api/cotizaciones/", {"cliente_nombre": nombre, "direccion_terreno": "Calle Uno 1", "superficie_m2": 40},
+                           content_type="application/json", **self.h).json()
+
+    def test_cuenta_por_estado_y_por_trimestre(self):
+        self.crear("Cliente Uno")                                              # Cotizado
+        en_obra = self.crear("Cliente Dos")
+        listo = self.crear("Cliente Tres")
+        for hito in HitoPago.objects.filter(cotizacion_id=en_obra["id"]).order_by("id")[:1]:
+            self.c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **self.h)
+        for hito in HitoPago.objects.filter(cotizacion_id=listo["id"]).order_by("id"):
+            self.c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **self.h)
+        e = self.c.get("/api/cotizaciones/estadisticas/", **self.h).json()
+        self.assertEqual((e["cotizados"], e["en_ejecucion"], e["terminados"]), (1, 1, 1))
+        self.assertEqual(len(e["trimestres"]), 4)
+        actual = e["trimestres"][-1]                                           # el trimestre en curso es el último
+        self.assertEqual((actual["creados"], actual["terminados"]), (3, 1))
+
+    def test_requiere_sesion(self):
+        self.assertEqual(self.client.get("/api/cotizaciones/estadisticas/").status_code, 401)
+
+
+class CombustibleCentroSurTests(TestCase):
+    def test_promedia_la_zona_centro_y_la_zona_sur_e_ignora_las_demas(self):
+        from unittest import mock
+        from . import combustibles
+        filas = [{"zona_geografica_nombre": z, "combustible_nombre_largo": n, "precio_promedio": str(p)}
+                 for z, p in (("Zona Centro", 1600), ("Zona Sur", 1700), ("Zona Norte", 9999))
+                 for n in ("Gasolina 93", "Gasolina 95", "Gasolina 97", "Petroleo Diesel")]
+        r = mock.Mock(); r.json.return_value = {"data": filas}; r.raise_for_status.return_value = None
+        with mock.patch("core.combustibles.requests.get", return_value=r):
+            precios = combustibles.leer_cne()
+        self.assertEqual(precios, {"93": 1650, "95": 1650, "97": 1650, "DIESEL": 1650})
+        self.assertEqual(combustibles.nombre_zona(), "Zona Centro + Zona Sur")
+
+    def test_el_catalogo_de_tarifas_ya_no_muestra_traslado_por_tramo_ni_bencina(self):
+        from .calculo import TARIFAS_META
+        claves = {t[0] for t in TARIFAS_META}
+        self.assertFalse({"traslado_m2_hasta_35km", "traslado_m2_hasta_100km", "precio_litro"} & claves)

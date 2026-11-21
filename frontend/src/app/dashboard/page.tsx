@@ -1,17 +1,7 @@
 "use client";
 
-import { useDialogo } from "@/components/ConfirmDialog";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import PagoModal, { COLOR_ESTADO, ETIQUETA_ESTADO, NOMBRE_HITO, clp, textoBotonPago, type HitoPago } from "@/components/PagoModal";
-
-interface CatalogoTipo {
-  id: number;
-  nombre: string;
-  categoria: string;
-}
 
 interface ProgresoObra {
   id: number;
@@ -20,501 +10,195 @@ interface ProgresoObra {
   avance: number;
 }
 
-interface Cotizacion {
-  id: number;
-  codigo_cotizacion: string;
-  token_publico: string;
-  cliente_nombre: string;
-  cliente_telefono: string | null;
-  cliente_rut?: string | null;
-  direccion_terreno: string;
-  superficie_m2: number;
-  costo_total: number;
-  estado: string;
-  tipo_proyecto?: string;
-  nivelacion_modalidad?: string;
-  nivelacion_m3?: number;
-  costo_nivelacion?: number;
-  fecha_creacion: string;
-  base_terreno?: CatalogoTipo | null;
-  revestimiento?: CatalogoTipo | null;
-  hitos_pago?: HitoPago[];
+interface Trimestre {
+  clave: string;
+  etiqueta: string;
+  creados: number;
+  terminados: number;
+}
+
+interface Estadisticas {
+  cotizados: number;
+  en_ejecucion: number;
+  terminados: number;
+  trimestres: Trimestre[];
+}
+
+const SEGMENTOS = 20;
+
+/** Etapa y color de la barra según el avance. El 50 % es cuando corresponde el 2.º pago. */
+function etapa(av: number) {
+  if (av >= 100) return { texto: "Terminada", barra: "bg-green-500", chip: "bg-green-100 text-green-800" };
+  if (av >= 50) return { texto: "Más de la mitad", barra: "bg-blue-500", chip: "bg-blue-100 text-blue-800" };
+  if (av > 0) return { texto: "En construcción", barra: "bg-amber-400", chip: "bg-amber-100 text-amber-800" };
+  return { texto: "Por iniciar", barra: "bg-slate-300", chip: "bg-slate-100 text-slate-600" };
+}
+
+/** Barra de avance dividida en 20 tramos de 5 %; un espacio marca la mitad de la obra. */
+function BarraSegmentada({ av, nombre }: { av: number; nombre: string }) {
+  const llenos = Math.round((av / 100) * SEGMENTOS);
+  const { barra } = etapa(av);
+  return (
+    <div className="flex gap-[3px]" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${nombre}`}>
+      {Array.from({ length: SEGMENTOS }, (_, i) => (
+        <span
+          key={i}
+          className={`h-7 flex-1 rounded-[5px] transition-colors duration-500 ${i < llenos ? `${barra} shadow-sm` : "bg-slate-100"} ${i === SEGMENTOS / 2 - 1 ? "mr-1.5" : ""}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Columnas por trimestre (los 4 más recientes). */
+function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
+  titulo: string; ayuda: string; datos: Trimestre[]; campo: "creados" | "terminados"; color: string;
+}) {
+  const max = Math.max(1, ...datos.map((d) => d[campo]));
+  const total = datos.reduce((t, d) => t + d[campo], 0);
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{titulo}</h2>
+          <p className="text-sm text-slate-500">{ayuda}</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700 whitespace-nowrap">{total} en 4 trimestres</span>
+      </div>
+      <div className="mt-5 flex gap-3 sm:gap-5" role="img" aria-label={`${titulo}: ${datos.map((d) => `${d.etiqueta} ${d[campo]}`).join(", ")}`}>
+        {datos.map((d) => {
+          const valor = d[campo];
+          return (
+            <div key={d.clave} className="flex-1 flex flex-col items-center">
+              <div className="h-40 w-full flex flex-col items-center justify-end">
+                <span className="mb-1 text-sm font-extrabold tabular-nums text-slate-800">{valor}</span>
+                <div className={`w-full max-w-16 rounded-t-xl ${valor ? color : "bg-slate-200"} transition-[height] duration-700`} style={{ height: `${valor ? Math.max((valor / max) * 82, 8) : 3}%` }} />
+              </div>
+              <span className="mt-2 text-xs font-semibold text-slate-500">{d.etiqueta}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Tarjeta({ icono, titulo, valor, detalle, acento }: { icono: string; titulo: string; valor: number | string; detalle: string; acento: string }) {
+  return (
+    <Link href="/dashboard/proyectos" className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition">
+      <span aria-hidden className={`absolute left-0 top-0 h-full w-1.5 ${acento}`} />
+      <div className="flex items-center gap-4">
+        <span aria-hidden className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-2xl">{icono}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-500">{titulo}</p>
+          <p className="text-3xl font-black tabular-nums text-slate-900 leading-tight">{valor}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-slate-500">{detalle}</p>
+    </Link>
+  );
 }
 
 export default function DashboardPage() {
-  const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null);
-  const [modalHitosAbierto, setModalHitosAbierto] = useState(false);
-  const [hitos, setHitos] = useState<HitoPago[]>([]);
-  const [pagando, setPagando] = useState<HitoPago | null>(null);
   const [progreso, setProgreso] = useState<ProgresoObra[]>([]);
-  const [hitosCargando, setHitosCargando] = useState(false);
+  const [stats, setStats] = useState<Estadisticas | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errores, setErrores] = useState<string[]>([]);
 
-  // Visita técnica al terreno: cubicación del estabilizado (no va en la cotización inicial)
-  const [visita, setVisita] = useState<Cotizacion | null>(null);
-  const [espesor, setEspesor] = useState(10);
-  const [aridoEmpresa, setAridoEmpresa] = useState(true);
-  const [previa, setPrevia] = useState<{ m3: number; costo: number; total_nuevo: number } | null>(null);
-  const [guardandoVisita, setGuardandoVisita] = useState(false);
-
-  const llamarNivelacion = async (cot: Cotizacion, aplicar: boolean) => {
-    const res = await fetch(`/api/cotizaciones/${cot.id}/nivelacion`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("token")}` },
-      body: JSON.stringify({ espesor_cm: espesor, arido_empresa: aridoEmpresa, aplicar }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Error al calcular");
-    return data;
-  };
-
-  useEffect(() => {
-    if (!visita) return;
-    const t = setTimeout(() => {
-      llamarNivelacion(visita, false).then(setPrevia).catch(() => setPrevia(null));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [visita, espesor, aridoEmpresa]);
-
-  const abrirVisita = (c: Cotizacion) => {
-    setVisita(c);
-    setEspesor(10);
-    setAridoEmpresa(c.nivelacion_modalidad !== "CLIENTE");
-    setPrevia(null);
-  };
-
-  const guardarVisita = async () => {
-    if (!visita) return;
-    setGuardandoVisita(true);
+  const cargar = useCallback(async () => {
+    const fallos: string[] = [];
     try {
-      await llamarNivelacion(visita, true);
-      setVisita(null);
-      fetchCotizaciones();
-    } catch (e: any) {
-      void preguntar({ titulo: "No se pudo guardar", mensaje: e.message, soloAviso: true });
-    } finally {
-      setGuardandoVisita(false);
+      const [p, e] = await Promise.all([fetch("/api/cotizaciones/progreso"), fetch("/api/cotizaciones/estadisticas/")]);
+      if (p.ok) setProgreso(await p.json());
+      else fallos.push("el avance de las obras");
+      if (e.ok) setStats(await e.json());
+      else fallos.push("las estadísticas de proyectos");
+    } catch {
+      fallos.push("los datos del panel (sin conexión con el servidor)");
     }
-  };
-  const router = useRouter();
-  const [busqueda, setBusqueda] = useState("");
-  const { preguntar, dialogo } = useDialogo();
-
-  const fetchCotizaciones = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const res = await fetch("/api/cotizaciones", { headers });
-      fetch("/api/cotizaciones/progreso", { headers })
-        .then((r) => (r.ok ? r.json() : []))
-        .then(setProgreso)
-        .catch(() => setProgreso([]));
-
-      if (res.ok) {
-        const data = await res.json();
-        setCotizaciones(data);
-      } else if (res.status === 401) {
-        localStorage.removeItem("token");
-        router.push("/login");
-      } else {
-        setError("Error al obtener la lista de cotizaciones.");
-      }
-    } catch (err) {
-      setError("Error de red al conectar con el servidor backend.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCotizaciones();
+    setErrores(fallos);
+    setLoading(false);
   }, []);
 
-  const handleCambiarEstadoCotizacion = async (cotizacionId: number, nuevoEstado: string) => {
-    setError("");
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/cotizaciones/${cotizacionId}/estado`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ estado: nuevoEstado }),
-      });
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
 
-      if (res.ok) {
-        setCotizaciones((prev) =>
-          prev.map((c) => (c.id === cotizacionId ? { ...c, estado: nuevoEstado } : c))
-        );
-        fetchCotizaciones();
-      } else {
-        // El servidor explica por qué no se pudo (por ejemplo, pagos pendientes); la obra sigue en su estado anterior.
-        const data = await res.json().catch(() => ({}));
-        setError(data.message || "No se pudo cambiar el estado de la cotización.");
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    } catch (e) {
-      setError("No hay conexión con el servidor. Intente de nuevo.");
-    }
+  const reintentar = () => {
+    setLoading(true);
+    cargar();
   };
-
-  const abrirGestionHitos = async (cotizacion: Cotizacion) => {
-    setSelectedCotizacion(cotizacion);
-    setModalHitosAbierto(true);
-    setHitos([]);
-    setHitosCargando(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/hitos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        setHitos(await res.json());
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setHitosCargando(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="text-xl p-12 text-center text-slate-500 font-semibold">
-        Cargando cotizaciones...
-      </div>
-    );
-  }
-
-  const q = busqueda.trim().toLowerCase();
-  const visibles = q
-    ? cotizaciones.filter((c) =>
-        `${c.codigo_cotizacion} ${c.cliente_nombre} ${c.direccion_terreno} ${c.cliente_telefono || ""} ${c.cliente_rut || ""}`.toLowerCase().includes(q)
-      )
-    : cotizaciones;
 
   return (
-    <div className="space-y-4">
-      {dialogo}
-      {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 w-full sm:w-auto sm:mr-auto">
-          Cotizaciones <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
-        </h1>
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar cliente, código o dirección"
-          aria-label="Buscar cotización"
-          className="flex-1 min-w-0 sm:!w-80 sm:flex-none"
-        />
-        <Link
-          href="/dashboard/cotizador"
-          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 sm:px-5 h-11 inline-flex items-center justify-center rounded-lg shadow-sm transition whitespace-nowrap"
-        >
-          + Nueva cotización
+        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mr-auto">Panel principal</h1>
+        <Link href="/dashboard/proyectos" className="font-semibold text-blue-800 border border-blue-200 hover:bg-blue-50 px-4 h-11 inline-flex items-center rounded-lg transition">
+          Ver proyectos
+        </Link>
+        <Link href="/dashboard/cotizador" className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 inline-flex items-center rounded-lg shadow-sm transition whitespace-nowrap">
+          + Nuevo proyecto
         </Link>
       </div>
 
-      {error && (
-        <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-r-md text-base font-semibold">
-          {error}
+      {/* Aviso si algo no pudo cargarse */}
+      {errores.length > 0 && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-r-md">
+          <p className="font-semibold mr-auto">No se pudo cargar {errores.join(" ni ")}.</p>
+          <button type="button" onClick={reintentar} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 h-10 rounded-lg cursor-pointer">Reintentar</button>
         </div>
       )}
 
+      {/* Resumen por estado */}
+      <div className="grid sm:grid-cols-3 gap-4">
+        <Tarjeta icono="📝" titulo="Proyectos cotizados" valor={stats ? stats.cotizados : "—"} detalle="Esperando que se pague por completo el anticipo del 40 %." acento="bg-amber-400" />
+        <Tarjeta icono="🏗️" titulo="Obras en ejecución" valor={stats ? stats.en_ejecucion : "—"} detalle="Con el anticipo pagado y la obra en marcha." acento="bg-blue-500" />
+        <Tarjeta icono="✅" titulo="Obras terminadas" valor={stats ? stats.terminados : "—"} detalle="Con todos sus pagos completos." acento="bg-green-500" />
+      </div>
+
       {/* Avance físico de las obras en ejecución */}
-      <section aria-labelledby="progreso-titulo" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-        <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
-        {progreso.length === 0 ? (
-          <p className="text-slate-500 text-sm mt-1">
-            No existen obras en ejecución. Al pasar una cotización al estado «En ejecución», su avance se mostrará en este gráfico.
+      <section aria-labelledby="progreso-titulo" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
+          <p className="text-xs text-slate-500">Cada tramo es un 5 % de avance; el espacio marca el 50 %, cuando corresponde el 2.º pago.</p>
+        </div>
+        {loading ? (
+          <p className="text-slate-500 text-sm mt-3">Cargando…</p>
+        ) : progreso.length === 0 ? (
+          <p className="text-slate-500 text-sm mt-3">
+            No existen obras en ejecución. Cuando se pague por completo el anticipo (40 %) de un proyecto, pasará a «En ejecución» y su avance se mostrará aquí.
           </p>
         ) : (
-          <>
-            <ul className="mt-3 space-y-3" aria-label="Avance de cada obra">
-              {progreso.map((p) => {
-                const av = Math.max(0, Math.min(100, Number(p.avance)));
-                // Color según el avance: ámbar al inicio, verde azulado en el tramo medio y verde al terminar
-                const color = av >= 100 ? "from-green-600 to-green-500" : av >= 50 ? "from-blue-700 to-blue-500" : "from-amber-600 to-amber-400";
-                return (
-                  <li key={p.id}>
-                    <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="font-semibold text-slate-800 truncate">
-                        {p.cliente_nombre} <span className="font-normal text-slate-400">{p.codigo_cotizacion}</span>
-                      </span>
-                      <span className="font-extrabold tabular-nums text-slate-900">{av}%</span>
+          <ul className="mt-4 grid lg:grid-cols-2 gap-4" aria-label="Avance de cada obra">
+            {progreso.map((p) => {
+              const av = Math.max(0, Math.min(100, Number(p.avance)));
+              const e = etapa(av);
+              return (
+                <li key={p.id} className="rounded-xl border border-slate-200 p-4 bg-slate-50/60">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/dashboard/proyecto/${p.id}`} className="font-bold text-slate-900 hover:underline truncate block">{p.cliente_nombre}</Link>
+                      <p className="text-xs font-mono text-slate-400">{p.codigo_cotizacion}</p>
                     </div>
-                    <div className="mt-1 h-3 rounded-full bg-slate-100 overflow-hidden" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${p.cliente_nombre}`}>
-                      <div className={`h-full rounded-full bg-gradient-to-r ${color} transition-[width] duration-700`} style={{ width: `${av}%` }} />
+                    <div className="text-right shrink-0">
+                      <p className="text-3xl font-black tabular-nums leading-none text-slate-900">{av}<span className="text-lg">%</span></p>
+                      <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${e.chip}`}>{e.texto}</span>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
+                  </div>
+                  <div className="mt-3"><BarraSegmentada av={av} nombre={p.cliente_nombre} /></div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse block md:table">
-            <thead className="hidden md:table-header-group">
-              <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Terreno</th>
-                <th className="px-4 py-3 text-right">Valor total</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm block md:table-row-group">
-              {visibles.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-500">
-                    {cotizaciones.length === 0
-                      ? "No existen cotizaciones registradas. Cree la primera mediante «Nueva cotización»."
-                      : "Ninguna cotización coincide con la búsqueda."}
-                  </td>
-                </tr>
-              ) : (
-                visibles.map((cotizacion) => (
-                  <tr key={cotizacion.id} className="hover:bg-slate-50 transition-colors block md:table-row p-2 md:p-0">
-                    <td className="px-4 py-2 md:py-3 block md:table-cell">
-                      <div className="font-bold text-slate-900">{cotizacion.cliente_nombre}</div>
-                      <div className="text-xs text-slate-500">
-                        <span className="font-mono font-semibold text-blue-800">{cotizacion.codigo_cotizacion}</span>
-                        {" · "}{cotizacion.tipo_proyecto === "SOLO_RADIER" ? "Solo radier" : "Casa"}
-                        {" · "}{new Date(cotizacion.fecha_creacion).toLocaleDateString("es-CL")}
-                        {cotizacion.cliente_telefono ? ` · ${cotizacion.cliente_telefono}` : ""}
-                      </div>
-                    </td>
-                    <td className="px-4 py-1 md:py-3 md:max-w-xs block md:table-cell">
-                      <div className="text-slate-800 truncate" title={cotizacion.direccion_terreno}>
-                        {cotizacion.direccion_terreno}
-                      </div>
-                      <div className="text-xs text-slate-500">{cotizacion.superficie_m2} m²</div>
-                    </td>
-                    <td className="px-4 py-1 md:py-3 md:text-right font-bold text-slate-900 tabular-nums whitespace-nowrap block md:table-cell">
-                      ${Number(cotizacion.costo_total).toLocaleString("es-CL")}
-                    </td>
-                    <td className="px-4 py-2 md:py-3 block md:table-cell">
-                      <select
-                        value={cotizacion.estado}
-                        onChange={(e) => handleCambiarEstadoCotizacion(cotizacion.id, e.target.value)}
-                        aria-label="Estado de la cotización"
-                        className={`!min-h-0 !w-auto text-sm font-semibold !px-2 !py-1 rounded-md border cursor-pointer ${
-                          cotizacion.estado === "ACEPTADA"
-                            ? "bg-green-50 text-green-800 border-green-300"
-                            : cotizacion.estado === "FINALIZADA"
-                            ? "bg-blue-50 text-blue-800 border-blue-300"
-                            : "bg-amber-50 text-amber-800 border-amber-300"
-                        }`}
-                      >
-                        <option value="BORRADOR">En preparación</option>
-                        <option value="ACEPTADA">En ejecución</option>
-                        <option value="FINALIZADA">Obra terminada</option>
-                      </select>
-                      {cotizacion.tipo_proyecto !== "SOLO_RADIER" && (
-                        <button
-                          onClick={() => abrirVisita(cotizacion)}
-                          className="!min-h-0 block mt-1 text-xs font-semibold text-blue-700 hover:underline"
-                          title="Medir el relleno de estabilizado tras la visita al terreno"
-                        >
-                          {cotizacion.nivelacion_modalidad
-                            ? cotizacion.nivelacion_modalidad === "EMPRESA"
-                              ? "Estabilizado: lo pone la empresa"
-                              : "Estabilizado: lo compra el cliente"
-                            : "Medir estabilizado"}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 md:py-3 block md:table-cell">
-                      <div className="flex flex-wrap items-center md:justify-end gap-2">
-                        <button
-                          onClick={() => abrirGestionHitos(cotizacion)}
-                          className="!min-h-0 text-sm font-semibold bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 transition"
-                        >
-                          Ver pagos
-                        </button>
-                        <Link
-                          href={`/cotizacion/${cotizacion.token_publico}`}
-                          className="text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition"
-                          title="Abrir la ficha que ve el cliente"
-                        >
-                          Ver ficha del cliente
-                        </Link>
-                        <Link
-                          href={`/dashboard/proyecto/${cotizacion.id}`}
-                          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold text-sm px-4 py-1.5 rounded-lg transition"
-                        >
-                          Ver proyecto
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* Proyectos por trimestre */}
+      {stats && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          <GraficoTrimestres titulo="Proyectos cotizados por trimestre" ayuda="Proyectos creados en cada trimestre." datos={stats.trimestres} campo="creados" color="bg-blue-500" />
+          <GraficoTrimestres titulo="Proyectos terminados por trimestre" ayuda="Obras con todos sus pagos completos, según la fecha del último pago." datos={stats.trimestres} campo="terminados" color="bg-amber-400" />
         </div>
-      </div>
-
-      {/* Modal de visita técnica (estabilizado) */}
-      {visita && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 border border-slate-200 space-y-4">
-            <div className="flex justify-between items-start border-b pb-3">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Visita técnica: {visita.codigo_cotizacion}</h2>
-                <p className="text-xs text-slate-500">
-                  Cubicación del estabilizado (polvo de roca) para la base del radier ({visita.superficie_m2} m²).
-                </p>
-              </div>
-              <button onClick={() => setVisita(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">
-                ✕
-              </button>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Espesor de la capa (cm)</label>
-              <input type="number" min="1" value={espesor} onChange={(e) => setEspesor(parseFloat(e.target.value) || 0)} />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Quién lo adquiere</label>
-              <select value={String(aridoEmpresa)} onChange={(e) => setAridoEmpresa(e.target.value === "true")}>
-                <option value="true">La empresa (se suma al valor informado)</option>
-                <option value="false">El cliente lo compra directamente</option>
-              </select>
-            </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm space-y-1">
-              {previa ? (
-                <>
-                  <div>Volumen a informar al cliente: <strong>{Number(previa.m3).toLocaleString("es-CL")} m³</strong></div>
-                  <div>Costo sumado: <strong>${Number(previa.costo).toLocaleString("es-CL")}</strong></div>
-                  <div>Nuevo total (IVA incl.): <strong>${Number(previa.total_nuevo).toLocaleString("es-CL")}</strong></div>
-                </>
-              ) : (
-                <div className="text-slate-400">Calculando...</div>
-              )}
-              <p className="text-[11px] text-slate-500 pt-1">
-                La diferencia se reparte entre los hitos de pago aún pendientes.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <button onClick={() => setVisita(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm cursor-pointer">
-                Cancelar
-              </button>
-              <button
-                onClick={guardarVisita}
-                disabled={guardandoVisita || !previa}
-                className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-sm disabled:opacity-50 cursor-pointer"
-              >
-                {guardandoVisita ? "Guardando..." : "Guardar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Hitos de Pago */}
-      {modalHitosAbierto && selectedCotizacion && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 border border-slate-200 space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  Pagos del contrato: {selectedCotizacion.codigo_cotizacion}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Cliente: {selectedCotizacion.cliente_nombre} | Total: ${Number(selectedCotizacion.costo_total).toLocaleString("es-CL")}
-                </p>
-              </div>
-              <button
-                onClick={() => setModalHitosAbierto(false)}
-                className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {hitos.length === 0 ? (
-                <div className="p-6 text-center text-slate-400">{hitosCargando ? "Cargando hitos..." : "No se pudieron cargar los hitos de pago."}</div>
-              ) : (
-                hitos.map((hito, idx) => (
-                  <div
-                    key={hito.id}
-                    className={`p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-colors ${
-                      hito.estado === "PAGADO"
-                        ? "bg-green-50/60 border-green-200"
-                        : hito.estado === "ABONADO"
-                        ? "bg-orange-50/60 border-orange-200"
-                        : "bg-slate-50 border-slate-200"
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold text-slate-800">
-                        {idx + 1}. {NOMBRE_HITO[hito.fase] || hito.fase.replace(/_/g, " ")}
-                      </div>
-                      <div className="text-lg font-black text-slate-900 mt-1">{clp(hito.monto_pago)}</div>
-                      {hito.estado === "ABONADO" && (
-                        <div className="text-sm text-orange-900 font-semibold">
-                          Abonado {clp(hito.monto_abonado)} · falta {clp(hito.monto_pendiente)}
-                        </div>
-                      )}
-                      {hito.fecha_pago && hito.estado !== "PENDIENTE" && (
-                        <div className="text-xs text-slate-500 mt-0.5">Último pago: {hito.fecha_pago}</div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className={`px-2.5 py-1 rounded border text-sm font-bold ${COLOR_ESTADO[hito.estado] || ""}`}>
-                        {ETIQUETA_ESTADO[hito.estado] || hito.estado}
-                      </span>
-                      <button
-                        onClick={() => setPagando(hito)}
-                        className={`text-sm font-semibold px-3 py-2 rounded-lg border transition cursor-pointer ${
-                          hito.estado === "PAGADO"
-                            ? "bg-white text-slate-700 hover:bg-slate-100 border-slate-300"
-                            : "bg-green-700 text-white hover:bg-green-800 border-green-700"
-                        }`}
-                      >
-                        {textoBotonPago(hito)}
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="flex justify-end pt-3 border-t">
-              <button
-                onClick={() => setModalHitosAbierto(false)}
-                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-lg text-sm cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {pagando && (
-        <PagoModal
-          hito={pagando}
-          onClose={() => setPagando(null)}
-          onSaved={(h) => {
-            setHitos((prev) => prev.map((x) => (x.id === h.id ? h : x)));
-            fetchCotizaciones();
-          }}
-        />
       )}
     </div>
   );
