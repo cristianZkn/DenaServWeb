@@ -309,6 +309,20 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
   const [pagando, setPagando] = useState<Hito | null>(null);
   const router = useRouter();
+  const [resumen, setResumen] = useState<{ texto: string; origen: string; para: string } | null>(null);
+  const [resumiendo, setResumiendo] = useState(false);
+  const avisarResumen = (t: string) => avisar(t);
+  const resumir = async (para: "interno" | "cliente") => {
+    setResumiendo(true);
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/resumen/?para=${para}`, { method: "POST", headers: JSON_HDR });
+      const d = await res.json().catch(() => null);
+      if (!res.ok) return avisar(d?.message || "No se pudo generar el resumen.", true);
+      setResumen({ ...d, para });
+    } finally {
+      setResumiendo(false);
+    }
+  };
 
   const cancelarCotizacion = async () => {
     if (!cot) return;
@@ -392,6 +406,12 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             <button onClick={descargarPdf} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">
               Descargar ficha de la empresa (PDF)
             </button>
+            <button onClick={() => resumir("interno")} disabled={resumiendo} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-60">
+              {resumiendo ? "Resumiendo…" : "Resumir proyecto"}
+            </button>
+            <button onClick={() => resumir("cliente")} disabled={resumiendo} className="px-4 py-2.5 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer disabled:opacity-60">
+              Mensaje para el cliente
+            </button>
             <button onClick={cancelarCotizacion} className="px-4 py-2.5 text-base font-semibold text-red-700 border border-red-200 rounded-xl hover:bg-red-50 cursor-pointer">
               Eliminar proyecto
             </button>
@@ -400,6 +420,20 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       </aside>
 
       <div className="space-y-5 min-w-0">
+      {resumen && (
+        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">{resumen.para === "cliente" ? "Mensaje para el cliente" : "Resumen del proyecto"}</h2>
+              <p className="text-sm text-slate-500">{resumen.origen === "ia" ? "Redactado con IA a partir de los datos del proyecto. Revíselo antes de enviarlo." : "Resumen automático con los datos del proyecto."}</p>
+            </div>
+            <button onClick={() => setResumen(null)} className="!min-h-0 text-sm font-semibold text-slate-600 hover:underline cursor-pointer">Cerrar</button>
+          </div>
+          <p className="whitespace-pre-line text-base text-slate-800">{resumen.texto}</p>
+          <button onClick={() => navigator.clipboard.writeText(resumen.texto).then(() => avisarResumen("Texto copiado."))}
+            className="px-4 py-2 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">Copiar texto</button>
+        </section>
+      )}
       {msg && <div className="bg-green-50 border-l-8 border-green-600 text-green-900 p-4 rounded-r-xl text-lg font-semibold">{msg}</div>}
       {error && <div className="bg-red-50 border-l-8 border-red-600 text-red-800 p-4 rounded-r-xl text-lg font-semibold">{error}</div>}
 

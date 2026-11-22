@@ -36,7 +36,7 @@ from .schemas import (
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
-from . import calculo, combustibles, precios, scraper
+from . import calculo, combustibles, precios, resumen, scraper
 from .limites import IpRateThrottle
 
 
@@ -698,6 +698,15 @@ def obtener_cotizacion_detalle(request, cotizacion_id: int):
         return 200, cotizacion
     except Cotizacion.DoesNotExist:
         return 404, {"message": "Cotización no encontrada"}
+
+
+@router.post("/cotizaciones/{cotizacion_id}/resumen/", response={200: dict, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("10/m")])
+def resumir_cotizacion(request, cotizacion_id: int, para: str = "interno"):
+    """Resumen del proyecto para la empresa (para=interno) o para enviar al cliente (para=cliente)."""
+    if para not in ("interno", "cliente"):
+        return 400, {"message": "Use para=interno o para=cliente."}
+    cot = Cotizacion.objects.filter(id=cotizacion_id).first()
+    return (200, resumen.resumir(cot, para)) if cot else (404, {"message": "Cotización no encontrada"})
 
 
 @router.delete("/cotizaciones/{cotizacion_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())

@@ -1541,3 +1541,44 @@ class CombustibleCentroSurTests(TestCase):
         from .calculo import TARIFAS_META
         claves = {t[0] for t in TARIFAS_META}
         self.assertFalse({"traslado_m2_hasta_35km", "traslado_m2_hasta_100km", "precio_litro"} & claves)
+
+
+class ResumenProyectoTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = Cotizacion.objects.create(codigo_cotizacion="COT-R", cliente_nombre="Juan Pérez", cliente_rut="12345678-5",
+                                             direccion_terreno="Calle Secreta 123", superficie_m2=60, costo_total=1000000, usuario=u)
+        HitoPago.objects.create(cotizacion=self.cot, fase="ANTICIPO_40", porcentaje=40, monto_pago=400000)
+
+    def pedir(self, para="interno"):
+        return self.client.post(f"/api/cotizaciones/{self.cot.id}/resumen/?para={para}", **self.h)
+
+    def test_sin_clave_entrega_el_resumen_base_sin_datos_personales(self):
+        r = self.pedir()
+        d = r.json()
+        self.assertEqual((r.status_code, d["origen"]), (200, "base"))
+        self.assertIn("60 m²", d["texto"])
+        self.assertIn("Pendiente: anticipo", d["texto"])
+        self.assertNotIn("Juan", d["texto"])
+
+    def test_con_ia_usa_su_texto_y_no_envia_datos_personales_y_si_falla_cae_al_base(self):
+        import requests
+        from unittest import mock
+        from django.test import override_settings
+        resp = mock.Mock(); resp.raise_for_status.return_value = None
+        resp.json.return_value = {"choices": [{"message": {"content": "Todo va bien."}}]}
+        with override_settings(GROQ_API_KEY="k"):
+            with mock.patch("core.resumen.requests.post", return_value=resp) as p:
+                d = self.pedir("cliente").json()
+            enviado = str(p.call_args.kwargs["json"])
+            self.assertEqual((d["origen"], d["texto"]), ("ia", "Todo va bien."))
+            self.assertNotIn("Secreta", enviado); self.assertNotIn("Juan", enviado); self.assertNotIn("12345678", enviado)
+            with mock.patch("core.resumen.requests.post", side_effect=requests.ConnectionError()):
+                self.assertEqual(self.pedir().json()["origen"], "base")
+
+    def test_valida_el_destino_y_la_cotizacion(self):
+        self.assertEqual(self.pedir("otro").status_code, 400)
+        self.assertEqual(self.client.post("/api/cotizaciones/99999/resumen/", **self.h).status_code, 404)
