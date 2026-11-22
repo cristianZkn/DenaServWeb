@@ -4,9 +4,12 @@ Los hechos salen siempre de la base de datos (resumen_base). Si hay GROQ_API_KEY
 los redacte mejor y sintetice la bitácora; si no hay clave, el servicio no responde o se acaba la cuota, se entrega el texto base.
 A la IA solo viajan montos, avances y notas: nunca el nombre, RUT, teléfono ni dirección del cliente.
 """
+import logging
+
 import requests
 from django.conf import settings
 
+log = logging.getLogger(__name__)
 URL_IA = "https://api.groq.com/openai/v1/chat/completions"
 ESTADOS = {"BORRADOR": "cotizado", "ACEPTADA": "en ejecución", "FINALIZADA": "terminado"}
 FASES = {"ANTICIPO_40": "anticipo (40 %)", "AVANCE_30": "avance de obra (30 %)", "ENTREGA_30": "entrega (30 %)"}
@@ -61,11 +64,16 @@ def _pedir_a_ia(frases: list, para: str) -> str:
 
 
 def resumir(cot, para: str = "interno") -> dict:
-    """{'texto', 'origen'}: origen es 'ia' o 'base' (datos sin redactar por IA)."""
+    """{'texto', 'origen', 'motivo'}: origen es 'ia' o 'base'; si es 'base', motivo dice por qué no se usó la IA."""
     frases = hechos(cot)
-    if settings.GROQ_API_KEY:
+    if not settings.GROQ_API_KEY:
+        motivo = "Falta configurar GROQ_API_KEY en el servidor."
+    else:
         try:
-            return {"texto": _pedir_a_ia(frases, para), "origen": "ia"}
-        except (requests.RequestException, ValueError, KeyError, IndexError):
-            pass  # shortcut: cualquier falla de la IA cae al texto base; registrar el motivo si se necesita diagnosticar
-    return {"texto": "\n".join(f"• {x}" for x in frases), "origen": "base"}
+            return {"texto": _pedir_a_ia(frases, para), "origen": "ia", "motivo": ""}
+        except requests.HTTPError as e:
+            motivo = f"Groq respondió {e.response.status_code}" + (" (clave o modelo no válidos)." if e.response.status_code in (400, 401, 403, 404) else ".")
+        except (requests.RequestException, ValueError, KeyError, IndexError) as e:
+            motivo = f"No se pudo consultar a Groq ({type(e).__name__})."
+        log.warning("Resumen sin IA: %s", motivo)
+    return {"texto": "\n".join(f"• {x}" for x in frases), "origen": "base", "motivo": motivo}

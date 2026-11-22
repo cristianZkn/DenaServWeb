@@ -309,7 +309,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
   const [pagando, setPagando] = useState<Hito | null>(null);
   const router = useRouter();
-  const [resumen, setResumen] = useState<{ texto: string; origen: string; para: string } | null>(null);
+  const [resumen, setResumen] = useState<{ texto: string; origen: string; motivo?: string; para: string } | null>(null);
   const [resumiendo, setResumiendo] = useState(false);
   const avisarResumen = (t: string) => avisar(t);
   const resumir = async (para: "interno" | "cliente") => {
@@ -425,7 +425,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-black text-slate-900">{resumen.para === "cliente" ? "Mensaje para el cliente" : "Resumen del proyecto"}</h2>
-              <p className="text-sm text-slate-500">{resumen.origen === "ia" ? "Redactado con IA a partir de los datos del proyecto. Revíselo antes de enviarlo." : "Resumen automático con los datos del proyecto."}</p>
+              <p className="text-sm text-slate-500">{resumen.origen === "ia" ? "Redactado con IA a partir de los datos del proyecto. Revíselo antes de enviarlo." : `Resumen automático sin IA. ${resumen.motivo || ""}`}</p>
             </div>
             <button onClick={() => setResumen(null)} className="!min-h-0 text-sm font-semibold text-slate-600 hover:underline cursor-pointer">Cerrar</button>
           </div>
