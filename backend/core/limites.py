@@ -2,7 +2,7 @@
 import hmac
 
 from django.conf import settings
-from ninja.throttling import SimpleRateThrottle
+from ninja.throttling import AuthRateThrottle, SimpleRateThrottle
 
 
 def ip_del_visitante(request) -> str:
@@ -23,3 +23,12 @@ class IpRateThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request):
         return f"throttle_ip_{self.rate}_{ip_del_visitante(request)}"
+
+
+class AuthRutaThrottle(AuthRateThrottle):
+    """Como AuthRateThrottle, pero con contador propio por límite: el de Ninja usa una sola llave por usuario, así que un
+    «6/m» en una ruta terminaba contando todas las peticiones del usuario y daba 429 con solo abrir la página."""
+
+    def get_cache_key(self, request):
+        key = super().get_cache_key(request)
+        return f"{key}_{self.rate}" if key else key

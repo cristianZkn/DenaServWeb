@@ -17,7 +17,6 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.security import APIKeyHeader, HttpBearer
-from ninja.throttling import AuthRateThrottle
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
@@ -37,7 +36,7 @@ from .schemas import (
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
 from . import calculo, combustibles, precios, resumen, scraper
-from .limites import IpRateThrottle
+from .limites import AuthRutaThrottle, IpRateThrottle
 
 
 def _neto(item):
@@ -376,7 +375,7 @@ def fijar_precio_combustible(request, tipo: str, data: TarifaInSchema):
     return 200, combustibles.estado()
 
 
-@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("12/m")])
+@router.delete("/combustibles/{tipo}", response={200: dict, 404: MessageSchema, 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRutaThrottle("12/m")])
 def volver_precio_cne(request, tipo: str):
     """Deja de usar el precio manual y vuelve al de la CNE."""
     if tipo not in combustibles.TIPOS:
@@ -388,7 +387,7 @@ def volver_precio_cne(request, tipo: str):
     return 200, combustibles.estado()
 
 
-@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("6/m")])
+@router.post("/combustibles/actualizar/", response={200: List[dict], 503: MessageSchema}, auth=AuthBearer(), throttle=[AuthRutaThrottle("6/m")])
 def actualizar_combustibles(request):
     try:
         return 200, combustibles.actualizar()
@@ -700,7 +699,7 @@ def obtener_cotizacion_detalle(request, cotizacion_id: int):
         return 404, {"message": "Cotización no encontrada"}
 
 
-@router.post("/cotizaciones/{cotizacion_id}/resumen/", response={200: dict, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer(), throttle=[AuthRateThrottle("10/m")])
+@router.post("/cotizaciones/{cotizacion_id}/resumen/", response={200: dict, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer(), throttle=[AuthRutaThrottle("10/m")])
 def resumir_cotizacion(request, cotizacion_id: int, para: str = "interno"):
     """Resumen del proyecto para la empresa (para=interno) o para enviar al cliente (para=cliente)."""
     if para not in ("interno", "cliente"):

@@ -1582,3 +1582,17 @@ class ResumenProyectoTests(TestCase):
     def test_valida_el_destino_y_la_cotizacion(self):
         self.assertEqual(self.pedir("otro").status_code, 400)
         self.assertEqual(self.client.post("/api/cotizaciones/99999/resumen/", **self.h).status_code, 404)
+
+
+class LimiteDeRutaTests(TestCase):
+    def test_el_limite_de_una_ruta_no_cuenta_las_demas_peticiones_del_usuario(self):
+        from django.core.cache import cache
+        from unittest import mock
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        for _ in range(9):
+            self.assertEqual(self.client.get("/api/cotizaciones/", **h).status_code, 200)
+        with mock.patch("core.combustibles.actualizar", return_value=[]):
+            codigos = [self.client.post("/api/combustibles/actualizar/", **h).status_code for _ in range(7)]
+        self.assertEqual(codigos, [200] * 6 + [429])   # «6/m» cuenta solo sus propias llamadas
