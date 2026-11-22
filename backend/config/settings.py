@@ -192,8 +192,8 @@ CORS_ALLOW_CREDENTIALS = False  # el navegador habla con el proxy de Next.js; el
 # (límite de peticiones por IP). Sin ella se usa la IP de la conexión.
 PROXY_SECRET = os.getenv('PROXY_SECRET', '')
 # Resúmenes con IA (plan gratuito de Groq, console.groq.com). Sin clave se entrega el resumen base, sin IA.
-GROQ_API_KEY = os.getenv('GROQ_API_KEY', '')
-GROQ_MODEL = os.getenv('GROQ_MODEL', 'llama-3.1-8b-instant')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY', '').strip()
+GROQ_MODEL = os.getenv('GROQ_MODEL', '').strip() or 'openai/gpt-oss-20b'  # vacío = el predeterminado
 
 # Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)
 WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '')
