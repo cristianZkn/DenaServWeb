@@ -49,8 +49,11 @@ export default function TarifasPage() {
   const cargarComb = async (forzar = false) => {
     setConsultando(true);
     try {
-      if (forzar) await fetch("/api/combustibles/actualizar/", { method: "POST" });
-      const res = await fetch("/api/combustibles/estado/");
+      if (forzar) {
+        const r = await fetch("/api/combustibles/actualizar/", { method: "POST" });
+        if (!r.ok) avisar((await r.json().catch(() => null))?.message || "La CNE no respondió; se mantienen los precios guardados.");
+      }
+      const res = await fetch("/api/combustibles/estado/", { cache: "no-store" });
       if (res.ok) setComb(await res.json());
       else avisar("No se pudo cargar el precio del combustible.");
     } finally {
