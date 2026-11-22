@@ -15,7 +15,7 @@ Plataforma web de **DenaServ**, empresa de construcción de casas prefabricadas 
 |---|---|
 | **Cotizador** | Se ingresan los datos del cliente y del terreno, y se arma una **lista de materiales** y la **mano de obra** (cantidad de trabajadores y cobro, con opción de pagos diferenciados). El valor se calcula en vivo. |
 | **Cálculo del valor** | `materiales + mano de obra + traslado (por distancia y m²) + vigas a la vista (solo casas) + margen de la empresa ($30.000 por m²)`. Los montos se tratan como IVA incluido y el IVA se desglosa. |
-| **Proyectos** | El estado cambia solo con los pagos: *Cotizado* al crearse, *En ejecución* al registrarse el primer pago y *Obra terminada* cuando todos están pagados. Se puede modificar el valor con motivo (queda historial) o eliminar el proyecto. |
+| **Proyectos** | El estado cambia solo con los pagos: *Cotizado* al crearse, *En ejecución* cuando el anticipo del 40 % se paga por completo y *Obra terminada* cuando todos están pagados. Se puede modificar el valor con motivo (queda historial) o eliminar el proyecto. |
 | **Pagos** | Tres pagos por contrato (anticipo 40 %, avance 30 %, entrega 30 %), con registro de **abonos parciales**. |
 | **Avance y bitácora** | Cada registro de la bitácora guarda el % de obra, un comentario y fotos opcionales. El avance debe ser coherente con los pagos (por ejemplo, 50 % exige el 2.º pago cobrado). El panel principal muestra el avance de las obras en ejecución. |
 | **Fichas** | La ficha del cliente es un resumen general (sin materiales). La ficha de la empresa (PDF) incluye el desglose completo de materiales, mano de obra, traslado, ganancia, pagos y bitácora con fotos. |
@@ -104,7 +104,7 @@ Crea el archivo `backend/.env` a partir de [`backend/.env.example`](backend/.env
 | `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | Orígenes permitidos (los valores por defecto sirven en local) |
 | `CRON_TOKEN` | Clave del actualizador semanal de precios (solo producción) |
 | `PROXY_SECRET` | Clave compartida con el frontend (el mismo valor en Vercel y en Render). Permite que el backend cuente las peticiones por la IP real del visitante; sin ella usa la IP de la conexión |
-| `COMBUSTIBLE_ZONA` | Zona de la CNE para el precio del combustible: `Zona Norte`, `Zona Centro` (por defecto), `Metropolitana` o `Zona Sur` |
+| `COMBUSTIBLE_ZONAS` | Zonas de la CNE cuyo precio del combustible se promedia, separadas por coma: `Zona Norte`, `Zona Centro`, `Metropolitana`, `Zona Sur` (por defecto `Zona Centro,Zona Sur`, la de Los Ángeles) |
 | `ENABLE_ADMIN` | `1` para habilitar el panel de Django en `/admin/` (en producción está apagado) |
 
 Luego aplica las migraciones y levanta el servidor:

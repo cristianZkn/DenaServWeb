@@ -23,9 +23,15 @@ TIPOS = {
 }
 
 
-def leer_cne(zona: str | None = None) -> dict:
-    """{tipo: precio por litro} de la zona indicada. Lanza ValueError si la CNE no responde o no trae los 4 combustibles."""
-    zona = (zona or settings.COMBUSTIBLE_ZONA).lower()
+def nombre_zona() -> str:
+    """Zonas de la CNE que se promedian, para mostrarlas (p. ej. «Zona Centro + Zona Sur»)."""
+    return " + ".join(settings.COMBUSTIBLE_ZONAS)
+
+
+def leer_cne(zonas: list | None = None) -> dict:
+    """{tipo: precio por litro}: promedio de las zonas indicadas (por defecto el centro-sur del país). Lanza ValueError si la
+    CNE no responde o no trae los 4 combustibles."""
+    zonas = [z.lower() for z in (zonas or settings.COMBUSTIBLE_ZONAS)]
     try:
         r = requests.get(URL_CNE, timeout=10, headers={"User-Agent": "Mozilla/5.0 DenaServ"})
         r.raise_for_status()
@@ -35,11 +41,11 @@ def leer_cne(zona: str | None = None) -> dict:
     precios = {}
     for tipo, (nombre_cne, _) in TIPOS.items():
         valores = [Decimal(str(f["precio_promedio"])) for f in filas
-                   if f["zona_geografica_nombre"].lower() == zona and f["combustible_nombre_largo"].lower() == nombre_cne]
+                   if f["zona_geografica_nombre"].lower() in zonas and f["combustible_nombre_largo"].lower() == nombre_cne]
         if valores:
             precios[tipo] = (sum(valores) / len(valores)).quantize(Decimal("1"))
     if len(precios) != len(TIPOS):
-        raise ValueError(f"La CNE no entregó todos los precios para «{settings.COMBUSTIBLE_ZONA}».")
+        raise ValueError(f"La CNE no entregó todos los precios para «{nombre_zona()}».")
     return precios
 
 
@@ -55,7 +61,7 @@ def actualizar() -> list:
     for tipo, precio in leer_cne().items():
         if tipo not in manuales:
             PrecioCombustible.objects.update_or_create(
-                tipo=tipo, defaults={"precio": precio, "zona": settings.COMBUSTIBLE_ZONA, "fuente": "Bencina en Línea (CNE)", "actualizado_en": ahora})
+                tipo=tipo, defaults={"precio": precio, "zona": nombre_zona(), "fuente": "Bencina en Línea (CNE)", "actualizado_en": ahora})
     return listar(refrescar=False)
 
 
@@ -94,7 +100,7 @@ def volver_a_cne(tipo: str) -> None:
     """Deja de usar el precio manual y toma el de la CNE. Lanza ValueError si la CNE no responde (se conserva el manual)."""
     precio = leer_cne()[tipo]
     PrecioCombustible.objects.update_or_create(
-        tipo=tipo, defaults={"precio": precio, "manual": False, "zona": settings.COMBUSTIBLE_ZONA, "fuente": "Bencina en Línea (CNE)",
+        tipo=tipo, defaults={"precio": precio, "manual": False, "zona": nombre_zona(), "fuente": "Bencina en Línea (CNE)",
                              "actualizado_en": timezone.now()})
 
 

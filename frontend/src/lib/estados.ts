@@ -1,6 +1,6 @@
 /**
  * Estados de un proyecto. Se guardan como BORRADOR / ACEPTADA / FINALIZADA y se muestran con estos nombres.
- * Cambian solos con los pagos: Cotizado (sin pagos) → En ejecución (primer pago) → Obra terminada (todos pagados).
+ * Cambian solos con los pagos: Cotizado → En ejecución (cuando el anticipo del 40 % está pagado por completo) → Obra terminada (todos pagados).
  */
 export const ESTADOS_PROYECTO = [
   { key: "BORRADOR", label: "Cotizado", plural: "Cotizados", clase: "bg-amber-50 text-amber-800 border-amber-300" },

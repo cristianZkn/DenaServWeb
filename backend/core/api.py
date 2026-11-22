@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router
@@ -33,7 +34,7 @@ from .schemas import (
     ObraEjecucionSchema, ObraEjecucionInSchema,
     MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
-    BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema
+    BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
 from . import calculo, combustibles, precios, scraper
 from .limites import IpRateThrottle
@@ -112,20 +113,25 @@ def _repartir_en_hitos(cot, delta):
 ETIQUETA_ESTADO = {"BORRADOR": "Cotizado", "ACEPTADA": "En ejecución", "FINALIZADA": "Obra terminada"}
 
 
+def _anticipo_pagado(hitos) -> bool:
+    """True si el primer pago (anticipo del 40 %) está pagado por completo."""
+    return any(h.fase == "ANTICIPO_40" and h.estado == "PAGADO" for h in hitos)
+
+
 def _estado_segun_pagos(hitos) -> str:
-    """Cotizado hasta registrar el primer pago (aunque sea parcial); En ejecución desde entonces; Obra terminada al
-    completarse TODOS los pagos."""
+    """Cotizado hasta pagar POR COMPLETO el anticipo del 40 % (un pago con saldo pendiente no cambia el estado); En
+    ejecución desde entonces; Obra terminada al completarse TODOS los pagos."""
     if hitos and all(h.estado == "PAGADO" for h in hitos):
         return "FINALIZADA"
-    return "ACEPTADA" if any(h.estado != "PENDIENTE" for h in hitos) else "BORRADOR"
+    return "ACEPTADA" if _anticipo_pagado(hitos) else "BORRADOR"
 
 
 def _limites_avance(hitos) -> tuple:
     """(mínimo, máximo) de avance permitido según lo pagado. El 2.º pago corresponde al 50 % de avance y el último al
-    100 %: sin el primer pago no hay avance; con solo el anticipo el avance llega hasta 49 %; hasta cobrar el último pago, 99 %."""
+    100 %: sin el anticipo completo no hay avance; con solo el anticipo el avance llega hasta 49 %; hasta cobrar el último pago, 99 %."""
     pagado = {h.fase for h in hitos if h.estado == "PAGADO"}
     todos = bool(hitos) and all(h.estado == "PAGADO" for h in hitos)
-    maximo = 100 if todos else 99 if "AVANCE_30" in pagado else 49 if any(h.estado != "PENDIENTE" for h in hitos) else 0
+    maximo = 100 if todos else 99 if "AVANCE_30" in pagado else 49 if "ANTICIPO_40" in pagado else 0
     minimo = 100 if todos else 50 if "AVANCE_30" in pagado else 0
     return min(minimo, maximo), maximo
 
@@ -156,7 +162,7 @@ def _reconciliar(cot):
 
 def _mensaje_tope_avance(maximo) -> str:
     if maximo == 0:
-        return "Aún no hay pagos registrados: la obra no ha iniciado. Registre el primer pago para comenzar."
+        return "El anticipo (40 %) aún no está pagado por completo: la obra no ha iniciado. Complete ese pago para comenzar."
     if maximo == 49:
         return "El avance no puede llegar al 50 % mientras el 2.º pago no esté cobrado completo."
     return "El 100 % de avance se registra al cobrar por completo el último pago."
@@ -648,6 +654,37 @@ def progreso_obras(request):
     obras = ObraEjecucion.objects.select_related("cotizacion").filter(cotizacion__estado="ACEPTADA").order_by("id")
     return [{"id": o.cotizacion_id, "codigo_cotizacion": o.cotizacion.codigo_cotizacion,
              "cliente_nombre": o.cotizacion.cliente_nombre, "avance": o.porcentaje_avance_real} for o in obras]
+
+
+def _trimestre(fecha) -> tuple:
+    return fecha.year, (fecha.month - 1) // 3 + 1
+
+
+@router.get("/cotizaciones/estadisticas/", response=EstadisticasSchema, auth=AuthBearer())
+def estadisticas_panel(request):
+    """Cifras del panel principal: proyectos por estado y, en los últimos 4 trimestres, cuántos se cotizaron y cuántos se
+    terminaron. Un proyecto se da por terminado en la fecha de su último pago."""
+    hoy = timezone.localdate()
+    año, trim = _trimestre(hoy)
+    ventana = []  # los 4 trimestres que terminan en el actual, del más antiguo al más reciente
+    for _ in range(4):
+        ventana.append((año, trim))
+        año, trim = (año, trim - 1) if trim > 1 else (año - 1, 4)
+    ventana.reverse()
+    filas = {t: {"clave": f"{t[0]}-T{t[1]}", "etiqueta": f"T{t[1]} {t[0]}", "creados": 0, "terminados": 0} for t in ventana}
+    conteo = {"BORRADOR": 0, "ACEPTADA": 0, "FINALIZADA": 0}
+    for c in Cotizacion.objects.prefetch_related("hitos_pago"):
+        conteo[c.estado] = conteo.get(c.estado, 0) + 1
+        creada = _trimestre(timezone.localtime(c.fecha_creacion).date())
+        if creada in filas:
+            filas[creada]["creados"] += 1
+        if c.estado == "FINALIZADA":
+            pagos = [h.fecha_pago for h in c.hitos_pago.all() if h.fecha_pago]
+            cierre = _trimestre(max(pagos) if pagos else timezone.localtime(c.fecha_creacion).date())
+            if cierre in filas:
+                filas[cierre]["terminados"] += 1
+    return {"cotizados": conteo["BORRADOR"], "en_ejecucion": conteo["ACEPTADA"], "terminados": conteo["FINALIZADA"],
+            "trimestres": [filas[t] for t in ventana]}
 
 
 @router.get("/cotizaciones/{cotizacion_id}/", response={200: CotizacionDetalladaSchema, 404: MessageSchema}, auth=AuthBearer())

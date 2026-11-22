@@ -37,8 +37,9 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 # Token de Apify para la actualización semanal de precios.
 # Llave del planificador semanal de precios (POST /api/insumos/actualizar-precios con cabecera X-Cron-Token).
 CRON_TOKEN = os.getenv('CRON_TOKEN', '')
-# Zona de la CNE de la que se toma el precio del combustible (Zona Norte, Zona Centro, Metropolitana o Zona Sur)
-COMBUSTIBLE_ZONA = os.getenv('COMBUSTIBLE_ZONA', 'Zona Centro')
+# Zonas de la CNE cuyo precio se promedia para el combustible: el centro-sur del país (Zona Centro: hasta el Maule; Zona Sur:
+# Ñuble, Biobío y La Araucanía, donde está Los Ángeles). Se pueden cambiar con COMBUSTIBLE_ZONAS, separadas por coma.
+COMBUSTIBLE_ZONAS = [z.strip() for z in os.getenv('COMBUSTIBLE_ZONAS', 'Zona Centro,Zona Sur').split(',') if z.strip()]
 
 # SECURITY WARNING: don't run with debug turned on in production!
 ALLOWED_HOSTS = [h for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]

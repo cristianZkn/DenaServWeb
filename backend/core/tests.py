@@ -646,9 +646,10 @@ class PagosEstadosPortafolioTests(TestCase):
 
     def test_estado_automatico_segun_pagos(self):
         self.assertEqual(self.cot["estado"], "BORRADOR")                       # al crearse: Cotizado
-        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=1)        # primer pago (aunque sea parcial)
-        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # En ejecución
+        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=1)        # anticipo con saldo pendiente
+        self.assertEqual(self.estado_actual(), "BORRADOR")                     # sigue Cotizado hasta pagar todo el 40 %
         self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(self.estado_actual(), "ACEPTADA")                     # anticipo completo: En ejecución
         self.pagar(self.hitos[1], pago_completo=True)
         self.assertEqual(self.estado_actual(), "ACEPTADA")                     # faltan pagos: sigue en ejecución
         self.pagar(self.hitos[2], pago_completo=True)
@@ -685,7 +686,7 @@ class PagosEstadosPortafolioTests(TestCase):
     def test_sin_pagos_no_hay_avance(self):
         r = self.bitacora(10)
         self.assertEqual(r.status_code, 409)
-        self.assertIn("primer pago", r.json()["message"])
+        self.assertIn("anticipo", r.json()["message"])
 
     def test_avance_limitado_por_los_pagos(self):
         self.pagar(self.hitos[0], pago_completo=True)                           # solo el anticipo (40 %)
@@ -1465,3 +1466,78 @@ class MapeoPresupuestoTests(TestCase):
         self.assertTrue(CatalogoTipo.objects.filter(categoria="INSUMO", fuente_url__contains="296449").exists())  # sigue como insumo
         self.assertTrue(CatalogoTipo.objects.filter(categoria="TABIQUES", fuente_url__contains="296449").exists())
         self.assertFalse(CatalogoTipo.objects.filter(categoria="VENTANAS_PUERTAS", fuente_url="").exists())
+
+
+class AnticipoIniciaObraTests(TestCase):
+    """La obra pasa a «En ejecución» solo cuando el anticipo del 40 % se paga por completo."""
+
+    def setUp(self):
+        u = Usuario.objects.create(rut="3-9", nombre_completo="Anticipo", email="anticipo@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.c.post("/api/cotizaciones/", {"cliente_nombre": "Cliente Anticipo", "direccion_terreno": "Calle Uno 1",
+                               "superficie_m2": 40}, content_type="application/json", **self.h).json()
+        self.hitos = list(HitoPago.objects.filter(cotizacion_id=self.cot["id"]).order_by("id"))
+
+    def pagar(self, hito, **body):
+        return self.c.patch(f"/api/hitos-pago/{hito.id}/", body, content_type="application/json", **self.h)
+
+    def test_un_abono_del_anticipo_no_inicia_la_obra_ni_el_avance(self):
+        monto = float(self.hitos[0].monto_pago)
+        self.pagar(self.hitos[0], pago_completo=False, monto_abonado=monto - 1)          # falta $1 del 40 %
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "BORRADOR")
+        self.assertEqual(self.c.get("/api/cotizaciones/progreso/", **self.h).json(), [])
+        r = self.c.post(f"/api/cotizaciones/{self.cot['id']}/bitacora/", {"porcentaje": 10, "comentario": "Inicio de obra"},
+                        content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("anticipo", r.json()["message"])
+
+    def test_el_anticipo_completo_inicia_la_obra(self):
+        self.pagar(self.hitos[0], pago_completo=True)
+        self.assertEqual(Cotizacion.objects.get(id=self.cot["id"]).estado, "ACEPTADA")
+        self.assertEqual(len(self.c.get("/api/cotizaciones/progreso/", **self.h).json()), 1)
+
+
+class EstadisticasPanelTests(TestCase):
+    def setUp(self):
+        u = Usuario.objects.create(rut="3-9", nombre_completo="Panel", email="panel@d.cl")
+        self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def crear(self, nombre):
+        return self.c.post("/api/cotizaciones/", {"cliente_nombre": nombre, "direccion_terreno": "Calle Uno 1", "superficie_m2": 40},
+                           content_type="application/json", **self.h).json()
+
+    def test_cuenta_por_estado_y_por_trimestre(self):
+        self.crear("Cliente Uno")                                              # Cotizado
+        en_obra = self.crear("Cliente Dos")
+        listo = self.crear("Cliente Tres")
+        for hito in HitoPago.objects.filter(cotizacion_id=en_obra["id"]).order_by("id")[:1]:
+            self.c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **self.h)
+        for hito in HitoPago.objects.filter(cotizacion_id=listo["id"]).order_by("id"):
+            self.c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **self.h)
+        e = self.c.get("/api/cotizaciones/estadisticas/", **self.h).json()
+        self.assertEqual((e["cotizados"], e["en_ejecucion"], e["terminados"]), (1, 1, 1))
+        self.assertEqual(len(e["trimestres"]), 4)
+        actual = e["trimestres"][-1]                                           # el trimestre en curso es el último
+        self.assertEqual((actual["creados"], actual["terminados"]), (3, 1))
+
+    def test_requiere_sesion(self):
+        self.assertEqual(self.client.get("/api/cotizaciones/estadisticas/").status_code, 401)
+
+
+class CombustibleCentroSurTests(TestCase):
+    def test_promedia_la_zona_centro_y_la_zona_sur_e_ignora_las_demas(self):
+        from unittest import mock
+        from . import combustibles
+        filas = [{"zona_geografica_nombre": z, "combustible_nombre_largo": n, "precio_promedio": str(p)}
+                 for z, p in (("Zona Centro", 1600), ("Zona Sur", 1700), ("Zona Norte", 9999))
+                 for n in ("Gasolina 93", "Gasolina 95", "Gasolina 97", "Petroleo Diesel")]
+        r = mock.Mock(); r.json.return_value = {"data": filas}; r.raise_for_status.return_value = None
+        with mock.patch("core.combustibles.requests.get", return_value=r):
+            precios = combustibles.leer_cne()
+        self.assertEqual(precios, {"93": 1650, "95": 1650, "97": 1650, "DIESEL": 1650})
+        self.assertEqual(combustibles.nombre_zona(), "Zona Centro + Zona Sur")
+
+    def test_el_catalogo_de_tarifas_ya_no_muestra_traslado_por_tramo_ni_bencina(self):
+        from .calculo import TARIFAS_META
+        claves = {t[0] for t in TARIFAS_META}
+        self.assertFalse({"traslado_m2_hasta_35km", "traslado_m2_hasta_100km", "precio_litro"} & claves)

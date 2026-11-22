@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 interface ProgresoObra {
   id: number;
@@ -11,21 +10,127 @@ interface ProgresoObra {
   avance: number;
 }
 
+interface Trimestre {
+  clave: string;
+  etiqueta: string;
+  creados: number;
+  terminados: number;
+}
+
+interface Estadisticas {
+  cotizados: number;
+  en_ejecucion: number;
+  terminados: number;
+  trimestres: Trimestre[];
+}
+
+const SEGMENTOS = 20;
+
+/** Etapa y color de la barra según el avance. El 50 % es cuando corresponde el 2.º pago. */
+function etapa(av: number) {
+  if (av >= 100) return { texto: "Terminada", barra: "bg-green-500", chip: "bg-green-100 text-green-800" };
+  if (av >= 50) return { texto: "Más de la mitad", barra: "bg-blue-500", chip: "bg-blue-100 text-blue-800" };
+  if (av > 0) return { texto: "En construcción", barra: "bg-amber-400", chip: "bg-amber-100 text-amber-800" };
+  return { texto: "Por iniciar", barra: "bg-slate-300", chip: "bg-slate-100 text-slate-600" };
+}
+
+/** Barra de avance dividida en 20 tramos de 5 %; un espacio marca la mitad de la obra. */
+function BarraSegmentada({ av, nombre }: { av: number; nombre: string }) {
+  const llenos = Math.round((av / 100) * SEGMENTOS);
+  const { barra } = etapa(av);
+  return (
+    <div className="flex gap-[3px]" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${nombre}`}>
+      {Array.from({ length: SEGMENTOS }, (_, i) => (
+        <span
+          key={i}
+          className={`h-7 flex-1 rounded-[5px] transition-colors duration-500 ${i < llenos ? `${barra} shadow-sm` : "bg-slate-100"} ${i === SEGMENTOS / 2 - 1 ? "mr-1.5" : ""}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Columnas por trimestre (los 4 más recientes). */
+function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
+  titulo: string; ayuda: string; datos: Trimestre[]; campo: "creados" | "terminados"; color: string;
+}) {
+  const max = Math.max(1, ...datos.map((d) => d[campo]));
+  const total = datos.reduce((t, d) => t + d[campo], 0);
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{titulo}</h2>
+          <p className="text-sm text-slate-500">{ayuda}</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700 whitespace-nowrap">{total} en 4 trimestres</span>
+      </div>
+      <div className="mt-5 flex gap-3 sm:gap-5" role="img" aria-label={`${titulo}: ${datos.map((d) => `${d.etiqueta} ${d[campo]}`).join(", ")}`}>
+        {datos.map((d) => {
+          const valor = d[campo];
+          return (
+            <div key={d.clave} className="flex-1 flex flex-col items-center">
+              <div className="h-40 w-full flex flex-col items-center justify-end">
+                <span className="mb-1 text-sm font-extrabold tabular-nums text-slate-800">{valor}</span>
+                <div className={`w-full max-w-16 rounded-t-xl ${valor ? color : "bg-slate-200"} transition-[height] duration-700`} style={{ height: `${valor ? Math.max((valor / max) * 82, 8) : 3}%` }} />
+              </div>
+              <span className="mt-2 text-xs font-semibold text-slate-500">{d.etiqueta}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Tarjeta({ icono, titulo, valor, detalle, acento }: { icono: string; titulo: string; valor: number | string; detalle: string; acento: string }) {
+  return (
+    <Link href="/dashboard/proyectos" className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition">
+      <span aria-hidden className={`absolute left-0 top-0 h-full w-1.5 ${acento}`} />
+      <div className="flex items-center gap-4">
+        <span aria-hidden className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-2xl">{icono}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-500">{titulo}</p>
+          <p className="text-3xl font-black tabular-nums text-slate-900 leading-tight">{valor}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-slate-500">{detalle}</p>
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
-  const router = useRouter();
   const [progreso, setProgreso] = useState<ProgresoObra[]>([]);
+  const [stats, setStats] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errores, setErrores] = useState<string[]>([]);
+
+  const cargar = useCallback(async () => {
+    const fallos: string[] = [];
+    try {
+      const [p, e] = await Promise.all([fetch("/api/cotizaciones/progreso"), fetch("/api/cotizaciones/estadisticas/")]);
+      if (p.ok) setProgreso(await p.json());
+      else fallos.push("el avance de las obras");
+      if (e.ok) setStats(await e.json());
+      else fallos.push("las estadísticas de proyectos");
+    } catch {
+      fallos.push("los datos del panel (sin conexión con el servidor)");
+    }
+    setErrores(fallos);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    fetch("/api/cotizaciones/progreso")
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setProgreso)
-      .catch(() => setProgreso([]))
-      .finally(() => setLoading(false));
-  }, [router]);
+    cargar();
+  }, [cargar]);
+
+  const reintentar = () => {
+    setLoading(true);
+    cargar();
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mr-auto">Panel principal</h1>
         <Link href="/dashboard/proyectos" className="font-semibold text-blue-800 border border-blue-200 hover:bg-blue-50 px-4 h-11 inline-flex items-center rounded-lg transition">
@@ -36,41 +141,65 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* Aviso si algo no pudo cargarse */}
+      {errores.length > 0 && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-r-md">
+          <p className="font-semibold mr-auto">No se pudo cargar {errores.join(" ni ")}.</p>
+          <button type="button" onClick={reintentar} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 h-10 rounded-lg cursor-pointer">Reintentar</button>
+        </div>
+      )}
+
+      {/* Resumen por estado */}
+      <div className="grid sm:grid-cols-3 gap-4">
+        <Tarjeta icono="📝" titulo="Proyectos cotizados" valor={stats ? stats.cotizados : "—"} detalle="Esperando que se pague por completo el anticipo del 40 %." acento="bg-amber-400" />
+        <Tarjeta icono="🏗️" titulo="Obras en ejecución" valor={stats ? stats.en_ejecucion : "—"} detalle="Con el anticipo pagado y la obra en marcha." acento="bg-blue-500" />
+        <Tarjeta icono="✅" titulo="Obras terminadas" valor={stats ? stats.terminados : "—"} detalle="Con todos sus pagos completos." acento="bg-green-500" />
+      </div>
+
       {/* Avance físico de las obras en ejecución */}
-      <section aria-labelledby="progreso-titulo" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-        <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
+      <section aria-labelledby="progreso-titulo" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="progreso-titulo" className="text-lg font-bold text-slate-900">Avance de obras en ejecución</h2>
+          <p className="text-xs text-slate-500">Cada tramo es un 5 % de avance; el espacio marca el 50 %, cuando corresponde el 2.º pago.</p>
+        </div>
         {loading ? (
-          <p className="text-slate-500 text-sm mt-1">Cargando…</p>
+          <p className="text-slate-500 text-sm mt-3">Cargando…</p>
         ) : progreso.length === 0 ? (
-          <p className="text-slate-500 text-sm mt-1">
-            No existen obras en ejecución. Cuando se registre el primer pago de un proyecto, pasará a «En ejecución» y su avance se mostrará aquí.
+          <p className="text-slate-500 text-sm mt-3">
+            No existen obras en ejecución. Cuando se pague por completo el anticipo (40 %) de un proyecto, pasará a «En ejecución» y su avance se mostrará aquí.
           </p>
         ) : (
-          <>
-            <ul className="mt-3 space-y-3" aria-label="Avance de cada obra">
-              {progreso.map((p) => {
-                const av = Math.max(0, Math.min(100, Number(p.avance)));
-                // Color según el avance: ámbar al inicio, verde azulado en el tramo medio y verde al terminar
-                const color = av >= 100 ? "from-green-600 to-green-500" : av >= 50 ? "from-blue-700 to-blue-500" : "from-amber-600 to-amber-400";
-                return (
-                  <li key={p.id}>
-                    <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="font-semibold text-slate-800 truncate">
-                        {p.cliente_nombre} <span className="font-normal text-slate-400">{p.codigo_cotizacion}</span>
-                      </span>
-                      <span className="font-extrabold tabular-nums text-slate-900">{av}%</span>
+          <ul className="mt-4 grid lg:grid-cols-2 gap-4" aria-label="Avance de cada obra">
+            {progreso.map((p) => {
+              const av = Math.max(0, Math.min(100, Number(p.avance)));
+              const e = etapa(av);
+              return (
+                <li key={p.id} className="rounded-xl border border-slate-200 p-4 bg-slate-50/60">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/dashboard/proyecto/${p.id}`} className="font-bold text-slate-900 hover:underline truncate block">{p.cliente_nombre}</Link>
+                      <p className="text-xs font-mono text-slate-400">{p.codigo_cotizacion}</p>
                     </div>
-                    <div className="mt-1 h-3 rounded-full bg-slate-100 overflow-hidden" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${p.cliente_nombre}`}>
-                      <div className={`h-full rounded-full bg-gradient-to-r ${color} transition-[width] duration-700`} style={{ width: `${av}%` }} />
+                    <div className="text-right shrink-0">
+                      <p className="text-3xl font-black tabular-nums leading-none text-slate-900">{av}<span className="text-lg">%</span></p>
+                      <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${e.chip}`}>{e.texto}</span>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
+                  </div>
+                  <div className="mt-3"><BarraSegmentada av={av} nombre={p.cliente_nombre} /></div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
+      {/* Proyectos por trimestre */}
+      {stats && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          <GraficoTrimestres titulo="Proyectos cotizados por trimestre" ayuda="Proyectos creados en cada trimestre." datos={stats.trimestres} campo="creados" color="bg-blue-500" />
+          <GraficoTrimestres titulo="Proyectos terminados por trimestre" ayuda="Obras con todos sus pagos completos, según la fecha del último pago." datos={stats.trimestres} campo="terminados" color="bg-amber-400" />
+        </div>
+      )}
     </div>
   );
 }

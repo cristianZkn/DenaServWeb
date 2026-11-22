@@ -19,7 +19,7 @@ export interface FichaData {
 }
 
 export const DESTINO_HITO: Record<string, string> = {
-  ANTICIPO_40: "Antes del inicio de obras: compra de materiales, traslados y primeros pagos a proveedores.",
+  ANTICIPO_40: "Antes del inicio de obras: compra de materiales, traslados, transporte y primeros pagos a proveedores.",
   AVANCE_30: "Al alcanzar el 50 % de avance de la obra.",
   ENTREGA_30: "Al terminar el proyecto, con la revisión y entrega de llaves.",
 };

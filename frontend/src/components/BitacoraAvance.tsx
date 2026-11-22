@@ -129,7 +129,7 @@ export default function BitacoraAvance({
           <p className="text-base text-slate-600 mt-1">
             Avance actual: <strong>{avanceActual} %</strong>.{" "}
             {sinPagos
-              ? "La obra inicia al registrarse el primer pago."
+              ? "La obra inicia cuando el anticipo (40 %) se paga por completo."
               : `Con los pagos registrados puede informar entre ${Math.max(minimo, avanceActual)} % y ${maximo} %.`}
           </p>
         </div>

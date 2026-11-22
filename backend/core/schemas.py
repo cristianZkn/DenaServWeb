@@ -510,6 +510,20 @@ class ProgresoObraSchema(Schema):
     avance: float
 
 
+class TrimestreSchema(Schema):
+    clave: str
+    etiqueta: str
+    creados: int
+    terminados: int
+
+
+class EstadisticasSchema(Schema):
+    cotizados: int
+    en_ejecucion: int
+    terminados: int
+    trimestres: List[TrimestreSchema]
+
+
 # --- Motor de cálculo ---
 class CalculoInSchema(Schema):
     superficie_m2: float

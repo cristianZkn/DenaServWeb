@@ -32,13 +32,10 @@ TARIFAS_META = [
     ("viga_vista_m2", "Casa", "Vigas a la vista", "$/m²", "Adicional por cada m² con vigas a la vista."),
     ("materiales_ref_m2", "Casa", "Referencia de materiales", "$/m²", "Solo para cotizaciones antiguas sin lista de materiales."),
     ("tabique_factor_muros", "Casa", "Factor de muros", "veces", "Metros de muro = perímetro × este factor (estima la tabiquería)."),
-    ("traslado_m2_hasta_35km", "Traslado", "Traslado hasta 35 km", "$/m²", "Maestros y materiales, para terrenos hasta 35 km."),
-    ("traslado_m2_hasta_100km", "Traslado", "Traslado hasta 100 km", "$/m²", "Terrenos entre 35 y 100 km (la empresa no trabaja a más distancia)."),
     ("radier_m2", "Radier", "Radier solo (todo incluido)", "$/m²", "Material y mano de obra; entre $35.000 y $40.000 por m²."),
     ("estabilizado_m3", "Radier", "Estabilizado puesto en obra", "$/m³", "Relleno de estabilizado (polvo de roca) con IVA incluido."),
     ("mo_radier_m2", "Cotizaciones por trabajador", "Mano de obra del radier", "$/m²", "Por trabajador; la empresa paga $35.000 o $38.000."),
     ("mo_viga_vista_m2", "Cotizaciones por trabajador", "Vigas a la vista", "$/m²", "Por trabajador y por m² con vigas a la vista."),
-    ("precio_litro", "Cotizaciones por trabajador", "Precio de la bencina", "$/L", "Para el traslado por combustible."),
     ("km_por_litro", "Cotizaciones por trabajador", "Rendimiento del vehículo", "km/L", "Kilómetros que rinde un litro de bencina."),
     ("dias_fabricacion_radier", "Cotizaciones por trabajador", "Días de fabricación del radier", "días", "Se suman a los días de traslado."),
 ]
