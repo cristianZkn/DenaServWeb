@@ -22,6 +22,7 @@ DEFAULTS = {
     "precio_litro": D("1650"),          # bencina, CLP por litro
     "km_por_litro": D("10"),            # rendimiento: 1 litro = 10 km
     "dias_fabricacion_radier": D("4"),  # días que toma fabricar el radier o la base
+    "flete_camion_dia": D("120000"),    # traslado en camión: CLP por cada día de traslado
 }
 
 
@@ -38,6 +39,7 @@ TARIFAS_META = [
     ("mo_viga_vista_m2", "Cotizaciones por trabajador", "Vigas a la vista", "$/m²", "Por trabajador y por m² con vigas a la vista."),
     ("km_por_litro", "Cotizaciones por trabajador", "Rendimiento del vehículo", "km/L", "Kilómetros que rinde un litro de bencina."),
     ("dias_fabricacion_radier", "Cotizaciones por trabajador", "Días de fabricación del radier", "días", "Se suman a los días de traslado."),
+    ("flete_camion_dia", "Flete", "Flete camión", "$/día", "Costo del camión por cada día de traslado (se multiplica por la cantidad de días)."),
 ]
 
 
@@ -122,11 +124,14 @@ def traslado_combustible(km, dias, precio_litro, km_por_litro) -> dict:
             "litros": litros.quantize(D("0.01")), "precio_litro": precio_litro, "costo": _clp(litros * precio_litro)}
 
 
-TIPOS_TRASLADO = {"MAESTROS": "Traslado de maestros", "MATERIALES": "Traslado de materiales", "FLETE": "Flete"}
+TIPOS_TRASLADO = {"MAESTROS": "Traslado de maestros", "MATERIALES": "Traslado de materiales", "FLETE": "Flete",
+                  "CAMION": "Traslado flete"}
+TRASLADO_CAMION = "CAMION"  # no usa combustible: cuesta una tarifa fija por día (`flete_camion_dia`)
 
 
 def traslados_combustible(km, traslados, km_por_litro, dias_extra_maestros=0) -> dict:
-    """Tres traslados (maestros, materiales y flete) con la misma distancia, pero cada uno con su combustible y sus días.
+    """Traslados (maestros, materiales, flete y camión) con la misma distancia, pero cada uno con su combustible y sus días.
+    El traslado en camión no usa combustible: cuesta `precio_litro` (la tarifa diaria del camión que regía al cotizar) por día.
     `km` es el recorrido total de un día (ida y vuelta): litros por día = km / 10 y costo = litros x precio x días.
     Ej.: 30 km a $1.000 el litro -> 3 L = $3.000 por día; flete 2 días = $6.000.
     Si hay que fabricar el radier o la base (el terreno no la tiene), los maestros suman `dias_extra_maestros` (4) días."""
@@ -135,6 +140,11 @@ def traslados_combustible(km, traslados, km_por_litro, dias_extra_maestros=0) ->
     for t in traslados:
         extra = int(dias_extra_maestros) if t["tipo"] == "MAESTROS" else 0
         dias, precio = D(int(t["dias"]) + extra), D(str(t["precio_litro"]))
+        if t["tipo"] == TRASLADO_CAMION:  # tarifa fija por día, sin litros
+            lineas.append({"tipo": t["tipo"], "nombre": TIPOS_TRASLADO[t["tipo"]], "combustible": "", "dias": int(t["dias"]),
+                           "dias_extra": 0, "dias_total": int(dias), "precio_litro": precio, "litros_por_dia": D(0),
+                           "costo_por_dia": _clp(precio), "litros": D(0), "costo": _clp(precio * dias)})
+            continue
         litros_dia = km / km_por_litro
         lineas.append({"tipo": t["tipo"], "nombre": TIPOS_TRASLADO[t["tipo"]], "combustible": t["combustible"], "dias": int(t["dias"]),
                        "dias_extra": extra, "dias_total": int(dias), "precio_litro": precio, "litros_por_dia": litros_dia.quantize(D("0.01")),

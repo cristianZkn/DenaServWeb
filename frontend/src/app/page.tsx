@@ -145,7 +145,7 @@ export default function PortafolioPage() {
             <p className="text-sm font-bold uppercase tracking-widest text-amber-600">Quiénes somos</p>
             <h2 className="mt-2 text-3xl sm:text-4xl font-black text-blue-900 leading-tight">DenaServ, fabricación y venta de casas prefabricadas</h2>
             <p className="mt-4 text-slate-600 text-lg">
-              Somos una empresa de Los Ángeles dedicada a la fabricación y venta de casas prefabricadas y a la construcción de radieres. Trabajamos con
+              Somos una empresa de Los Ángeles dedicada a la construcción de casas y radieres. Trabajamos con
               proyectos personalizados y mejorados, y la mayoría de nuestros clientes llega por la recomendación de obras que ya hemos entregado.
             </p>
             <p className="mt-4 text-slate-600 text-lg">
@@ -204,6 +204,29 @@ export default function PortafolioPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </section>
+
+      {/* Banner del instituto y contacto de los programadores */}
+      <section aria-label="Instituto y desarrolladores" className="bg-blue-950 border-t border-white/10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-4 text-left" aria-label="Instituto Profesional Virginio Gómez, Universidad de Concepción">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/img/escudo-virginio-gomez.png" alt="" width={100} height={110} className="h-24 sm:h-28 w-auto shrink-0" />
+            <div>
+              <p className="text-sm sm:text-base font-semibold text-blue-100">Instituto Profesional</p>
+              <p className="text-2xl sm:text-3xl font-black leading-tight text-white">Virginio Gómez</p>
+              <p className="mt-1 text-sm sm:text-base font-semibold text-blue-100">Universidad de Concepción</p>
+            </div>
+          </div>
+          <div className="text-center md:text-right">
+            <p className="text-sm font-bold uppercase tracking-widest text-amber-300">Desarrollado por</p>
+            <p className="mt-1 text-blue-100">Programadores del proyecto</p>
+            <ul className="mt-3 space-y-1.5 font-semibold text-white">
+              <li><a href="mailto:ignacioer6@gmail.com" className="hover:underline break-all">ignacioer6@gmail.com</a></li>
+              <li><a href="mailto:maikol17aj@gmail.com" className="hover:underline break-all">maikol17aj@gmail.com</a></li>
+            </ul>
           </div>
         </div>
       </section>

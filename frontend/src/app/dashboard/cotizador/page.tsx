@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { errorDatosClienteCampo, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
+import { errorDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
 import { CATEGORIAS } from "@/lib/categorias";
 
@@ -60,8 +60,10 @@ const ETIQUETA_CATEGORIA: Record<string, string> = {
 const TRASLADOS = [
   { tipo: "MAESTROS", titulo: "Traslado de maestros", descripcion: "Movilización diaria del equipo de trabajadores." },
   { tipo: "MATERIALES", titulo: "Traslado de materiales", descripcion: "Transporte de los materiales de la obra." },
-  { tipo: "FLETE", titulo: "Flete", descripcion: "Camión o flete de carga hasta el terreno." },
+  // El flete no usa combustible: cuesta una tarifa fija por día (Tarifas → «Flete camión»). Es opcional.
+  { tipo: "CAMION", titulo: "Traslado flete", descripcion: "Flete contratado por día. Si no se usa, deje los días en blanco.", camion: true },
 ];
+const PRECIO_CAMION_DIA = 120000;
 const DIAS_RADIER = 4; // días de fabricación del radier o la base (tarifa «dias_fabricacion_radier»)
 const COMBUSTIBLES = [
   { v: "93", t: "Bencina 93" }, { v: "95", t: "Bencina 95" }, { v: "97", t: "Bencina 97" }, { v: "DIESEL", t: "Diésel" },
@@ -162,6 +164,17 @@ export default function CotizadorPage() {
   const [errorCombustible, setErrorCombustible] = useState("");
   const [actualizandoCombustible, setActualizandoCombustible] = useState(false);
   const precioDe = (c: string) => combustibles.find((x) => x.tipo === c)?.precio ?? 0;
+  // Costo del camión por día: viene de Tarifas (si no responde, el valor de fábrica).
+  const [precioCamion, setPrecioCamion] = useState(PRECIO_CAMION_DIA);
+  useEffect(() => {
+    fetch("/api/tarifas/")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((ts: { clave: string; valor: number }[]) => {
+        const t = ts.find((x) => x.clave === "flete_camion_dia");
+        if (t && Number(t.valor) >= 0) setPrecioCamion(Number(t.valor));
+      })
+      .catch(() => {});
+  }, []);
   const cargarCombustibles = async (forzar = false) => {
     setActualizandoCombustible(true);
     try {
@@ -231,9 +244,15 @@ export default function CotizadorPage() {
     lleva_radier: !esCasa || llevaRadier,
     tarifa_radier_m2: num(tarifaRadier),
     // Solo se envían los traslados completos; el precio del litro es el que se muestra en pantalla (así lo calculado = lo guardado).
-    traslados: TRASLADOS.filter((x) => traslados[x.tipo].combustible && traslados[x.tipo].dias !== "" && precioDe(traslados[x.tipo].combustible) > 0)
-      .map((x) => ({ tipo: x.tipo, combustible: traslados[x.tipo].combustible, dias: Math.floor(num(traslados[x.tipo].dias)), precio_litro: precioDe(traslados[x.tipo].combustible) })),
+    traslados: TRASLADOS.filter((x) => (x.camion
+        ? traslados[x.tipo].dias !== "" && precioCamion > 0
+        : traslados[x.tipo].combustible && traslados[x.tipo].dias !== "" && precioDe(traslados[x.tipo].combustible) > 0))
+      .map((x) => (x.camion
+        ? { tipo: x.tipo, dias: Math.floor(num(traslados[x.tipo].dias)), precio_litro: precioCamion }
+        : { tipo: x.tipo, combustible: traslados[x.tipo].combustible, dias: Math.floor(num(traslados[x.tipo].dias)), precio_litro: precioDe(traslados[x.tipo].combustible) })),
   };
+  // Los traslados de maestros y materiales son obligatorios (0 días si no se usan); el flete es opcional.
+  const faltanTraslados = TRASLADOS.some((x) => !x.camion && !parametrosTarifas.traslados.some((t) => t.tipo === x.tipo));
 
   // Recalcula el presupuesto en el servidor 300 ms después del último cambio.
   const claveLista = JSON.stringify([materialesValidos]);
@@ -302,37 +321,17 @@ export default function CotizadorPage() {
     e.preventDefault();
     setError("");
 
-    /** Muestra el error fijo bajo el menú y lleva la vista hasta el campo que falta (si no, el aviso queda fuera de pantalla). */
-    const fallo = (mensaje: string, campo?: string) => {
-      setError(mensaje);
-      window.setTimeout(() => {
-        const el = campo ? document.getElementById(campo) : null;
-        if (campo && el) {
-          marcarInvalido(campo);
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        } else {
-          document.getElementById("alerta-formulario")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 0);
-    };
-
-    const errorDatos = errorDatosClienteCampo({
+    const errorDatos = errorDatosCliente({
       nombre: formData.cliente_nombre, telefono: formData.cliente_telefono,
       rut: formData.cliente_rut, direccion: formData.direccion_terreno,
     });
-    if (errorDatos) return fallo(errorDatos.mensaje, errorDatos.campo);
-    if (num(formData.superficie_m2) <= 0) return fallo("Los metros cuadrados deben ser mayores a 0.", "superficie_m2");
-    if ((llevaRadier || !esCasa) && num(tarifaRadier) <= 0) return fallo("Elija el valor de la mano de obra del radier.", "tarifa_radier");
-    if (num(nTrabajadores) < 1) return fallo("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.", "n_trabajadores");
-    if (num(formData.distancia_flete_km) <= 0) return fallo("Indique la distancia hasta el terreno para calcular el traslado.", "distancia_flete_km");
-    if (parametrosTarifas.traslados.length < TRASLADOS.length) {
-      const falta = TRASLADOS.find((x) => !traslados[x.tipo].combustible || traslados[x.tipo].dias === "") ?? TRASLADOS[0];
-      return fallo(
-        `Indique el combustible y los días del traslado de ${falta.titulo.toLowerCase()}. Si no se usa, escriba 0 días.`,
-        traslados[falta.tipo].combustible ? `dias-${falta.tipo}` : `comb-${falta.tipo}`
-      );
-    }
-    if (!presupuesto) return fallo("Espere a que se calcule el valor de la obra antes de guardar.");
+    if (errorDatos) return setError(errorDatos);
+    if (num(formData.superficie_m2) <= 0) return setError("Los metros cuadrados deben ser mayores a 0.");
+    if ((llevaRadier || !esCasa) && num(tarifaRadier) <= 0) return setError("Elija el valor de la mano de obra del radier.");
+    if (num(nTrabajadores) < 1) return setError("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.");
+    if (num(formData.distancia_flete_km) <= 0) return setError("Indique la distancia hasta el terreno para calcular el traslado.");
+    if (faltanTraslados) return setError("Indique el combustible y los días de los traslados de maestros y materiales. Si alguno no se usa, escriba 0 días.");
+    if (!presupuesto) return setError("Espere a que se calcule el valor de la obra antes de guardar.");
 
     setGuardando(true);
     try {
@@ -351,9 +350,9 @@ export default function CotizadorPage() {
       });
       if (res.ok) return router.push("/dashboard/proyectos");
       const detalle = await res.json().catch(() => ({}));
-      fallo(`No fue posible guardar el proyecto: ${detalle.message || JSON.stringify(detalle)}`);
+      setError(`No fue posible guardar el proyecto: ${detalle.message || JSON.stringify(detalle)}`);
     } catch {
-      fallo("Sin conexión con el servidor. Intente nuevamente.");
+      setError("Sin conexión con el servidor. Intente nuevamente.");
     } finally {
       setGuardando(false);
     }
@@ -367,7 +366,7 @@ export default function CotizadorPage() {
     ...(num(formData.superficie_m2) <= 0 ? ["la superficie"] : []),
     ...(num(nTrabajadores) < 1 ? ["la cantidad de trabajadores"] : []),
     ...(num(formData.distancia_flete_km) <= 0 ? ["la distancia al terreno"] : []),
-    ...(parametrosTarifas.traslados.length < TRASLADOS.length ? ["el combustible y los días de cada traslado"] : []),
+    ...(faltanTraslados ? ["el combustible y los días de cada traslado"] : []),
   ];
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
@@ -378,12 +377,7 @@ export default function CotizadorPage() {
         <p className="text-slate-600 mt-1">Complete los datos en el orden indicado: cada paso alimenta al siguiente y el valor de la obra se actualiza en el panel lateral.</p>
       </div>
 
-      {/* Fijo bajo el menú: el aviso se ve aunque la persona esté más abajo en el formulario */}
-      {error && (
-        <div id="alerta-formulario" role="alert" className="sticky top-20 z-40 scroll-mt-24 bg-red-50 border-l-4 border-red-500 text-red-800 p-4 mb-6 rounded-r-md shadow-md font-semibold">
-          {error}
-        </div>
-      )}
+      {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 mb-6 rounded-r-md">{error}</div>}
 
       <div className="grid lg:grid-cols-[1fr_22rem] gap-6 items-start">
         <div className="space-y-6">
@@ -510,8 +504,9 @@ export default function CotizadorPage() {
           {/* Paso 4: tipo de traslado. Misma distancia para los tres; combustible y días propios de cada uno */}
           <Seccion titulo="4. Tipo de traslado">
             <p className="text-slate-600 -mt-2">
-              La distancia es la misma para los tres traslados, pero cada uno puede usar un combustible distinto y trabajar una cantidad
-              de días distinta. El costo diario es la distancia ÷ 10 (1 litro rinde 10 km) por el precio del litro.
+              La distancia es la misma para los traslados, pero cada uno puede usar un combustible distinto y trabajar una cantidad
+              de días distinta. El costo diario es la distancia ÷ 10 (1 litro rinde 10 km) por el precio del litro. El traslado de flete
+              no usa combustible: cuesta {clp(precioCamion)} por día × la cantidad de días.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-5">
@@ -559,6 +554,22 @@ export default function CotizadorPage() {
                 const diasTotal = num(e.dias) + extra;
                 const litrosDia = km / 10;
                 const costoDia = litrosDia * precio;
+                if (x.camion) {
+                  const diasCamion = Math.floor(num(e.dias));
+                  return (
+                    <fieldset key={x.tipo} className="rounded-xl border border-slate-200 p-4 space-y-3">
+                      <legend className="px-2 font-bold text-slate-900">{x.titulo}</legend>
+                      <p className="text-sm text-slate-500 -mt-1">{x.descripcion}</p>
+                      <NumberField label="Días de traslado" name={`dias-${x.tipo}`} value={e.dias} onChange={(_, v) => setTraslado(x.tipo, "dias", v)}
+                        step="1" suffix="días" max={365} />
+                      {e.dias !== "" && (
+                        <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                          {clp(precioCamion)} por día × {diasCamion} {diasCamion === 1 ? "día" : "días"} = <strong>{clp(precioCamion * diasCamion)}</strong>
+                        </p>
+                      )}
+                    </fieldset>
+                  );
+                }
                 return (
                   <fieldset key={x.tipo} className="rounded-xl border border-slate-200 p-4 space-y-3">
                     <legend className="px-2 font-bold text-slate-900">{x.titulo}</legend>
