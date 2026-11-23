@@ -116,9 +116,9 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* Contenido: se desvanece suavemente al cambiar de sección */}
+      {/* Contenido: los bloques de cada sección aparecen con un breve escalonado (ver .panel-anim en globals.css) */}
       <main className="lg:pl-64">
-        <div key={pathname} className="animate-entrar w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div key={pathname} className="panel-anim w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </div>
       </main>

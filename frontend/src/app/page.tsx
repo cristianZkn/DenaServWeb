@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TarjetaObra, VisorObra, type Obra } from "@/components/GaleriaObra";
+import Reveal from "@/components/Reveal";
+import Proceso from "@/components/Proceso";
+import CasaIlustrada from "@/components/CasaIlustrada";
+import { MODELOS } from "@/lib/catalogo";
 import { ETIQUETAS, REDES, WHATSAPP_GENERAL } from "@/lib/empresa";
 
 const SECCIONES = [
   { id: "inicio", texto: "Inicio" },
   { id: "nosotros", texto: "Nosotros" },
   { id: "servicios", texto: "Servicios" },
+  { id: "catalogo", texto: "Catálogo" },
   { id: "proyectos", texto: "Obras" },
   { id: "proceso", texto: "Cómo trabajamos" },
   { id: "contacto", texto: "Contacto" },
@@ -26,13 +31,6 @@ const SERVICIOS = [
   { icono: "🧱", titulo: "Radieres", texto: "Base de hormigón firme y bien nivelada, lista para recibir su casa." },
   { icono: "🛡️", titulo: "Revestimientos", texto: "Smart Panel, siding y terminaciones pensadas para el clima del sur." },
   { icono: "🏗️", titulo: "Cubiertas y techumbres", texto: "Cerchas, zinc y estructura de techo con materiales de calidad." },
-];
-
-const PASOS = [
-  { titulo: "Visita y cotización", texto: "Conversamos su idea, vemos el terreno y le entregamos una cotización detallada." },
-  { titulo: "Acuerdo y anticipo", texto: "Con el contrato firmado y el anticipo del 40 %, comienza la obra." },
-  { titulo: "Construcción con seguimiento", texto: "Avanzamos por etapas y le mostramos el progreso con fotos." },
-  { titulo: "Entrega", texto: "Revisamos juntos la obra terminada y se cancela el saldo final." },
 ];
 
 const METAS = [
@@ -87,6 +85,7 @@ export default function PortafolioPage() {
   const [verTodas, setVerTodas] = useState(false);
   const [menu, setMenu] = useState(false);
   const [bajo, setBajo] = useState(false);
+  const [progreso, setProgreso] = useState(0);
   const activa = useSeccionActiva(useMemo(() => SECCIONES.map((s) => s.id), []));
 
   useEffect(() => {
@@ -98,7 +97,11 @@ export default function PortafolioPage() {
   }, []);
 
   useEffect(() => {
-    const f = () => setBajo(window.scrollY > 24);
+    const f = () => {
+      setBajo(window.scrollY > 24);
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      setProgreso(total > 0 ? Math.min(1, window.scrollY / total) : 0);
+    };
     f();
     window.addEventListener("scroll", f, { passive: true });
     return () => window.removeEventListener("scroll", f);
@@ -125,21 +128,22 @@ export default function PortafolioPage() {
       <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${bajo || menu ? "bg-blue-950/95 backdrop-blur shadow-lg shadow-black/20" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <a href="#inicio" className="font-black text-xl tracking-tighter text-white">DENASERV<span className="text-amber-400">.</span></a>
-          <div className="hidden md:flex items-center gap-1">{SECCIONES.map(enlace)}</div>
+          <div className="hidden lg:flex items-center gap-1">{SECCIONES.map(enlace)}</div>
           <div className="flex items-center gap-2">
             <Link href="/login" className="hidden sm:inline-block text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/25 text-white px-4 py-2 rounded-full whitespace-nowrap transition">
               Acceso de la empresa
             </Link>
             <button type="button" onClick={() => setMenu((m) => !m)} aria-label="Abrir menú" aria-expanded={menu}
-              className="md:hidden !min-h-0 h-10 w-10 rounded-lg border border-white/25 text-white cursor-pointer">{menu ? "✕" : "☰"}</button>
+              className="lg:hidden !min-h-0 h-10 w-10 rounded-lg border border-white/25 text-white cursor-pointer">{menu ? "✕" : "☰"}</button>
           </div>
         </div>
         {menu && (
-          <div className="md:hidden px-4 pb-4 flex flex-col animate-entrar">
+          <div className="lg:hidden px-4 pb-4 flex flex-col animate-entrar">
             {SECCIONES.map(enlace)}
             <Link href="/login" className="mt-2 text-center text-sm font-bold bg-white/10 border border-white/25 text-white px-4 py-2.5 rounded-lg">Acceso de la empresa</Link>
           </div>
         )}
+        <span aria-hidden className="absolute bottom-0 left-0 h-0.5 w-full origin-left bg-gradient-to-r from-amber-400 to-blue-300" style={{ transform: `scaleX(${progreso})` }} />
       </nav>
 
       {/* Inicio */}
@@ -147,20 +151,22 @@ export default function PortafolioPage() {
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60rem_28rem_at_50%_-8%,rgba(70,149,141,0.55),transparent_70%),radial-gradient(34rem_22rem_at_88%_18%,rgba(217,154,43,0.28),transparent_70%)]" />
         <div aria-hidden className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:56px_56px]" />
         <div aria-hidden className="absolute left-1/2 -translate-x-1/2 -top-[34rem] w-[56rem] h-[56rem] rounded-full border border-blue-300/25 shadow-[0_0_140px_30px_rgba(70,149,141,0.35)]" />
+        <div aria-hidden className="animate-flotar absolute left-[8%] top-[38%] h-40 w-40 rounded-full bg-blue-400/15 blur-2xl" />
+        <div aria-hidden className="animate-flotar-lento absolute right-[10%] top-[52%] h-52 w-52 rounded-full bg-amber-400/15 blur-3xl" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 pt-36 pb-32 sm:pt-44 sm:pb-40 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur px-4 py-1.5 text-sm font-semibold text-blue-100">
-            <span className="h-2 w-2 rounded-full bg-amber-400" aria-hidden /> Casas prefabricadas y radieres · Los Ángeles, Chile
+          <span className="animate-entrar-arriba inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur px-4 py-1.5 text-sm font-semibold text-blue-100">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulso-anillo" aria-hidden /> Casas prefabricadas y radieres · Los Ángeles, Chile
           </span>
-          <h1 className="mt-6 text-4xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[1.05]">
-            Construimos <span className="bg-gradient-to-r from-blue-300 via-blue-200 to-amber-300 bg-clip-text text-transparent">tu hogar</span> con calidad estructural
+          <h1 className="animate-entrar-arriba retraso-1 mt-6 text-4xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[1.05]">
+            Construimos <span className="animate-brillo-texto bg-gradient-to-r from-blue-300 via-amber-200 to-blue-300 bg-clip-text text-transparent">tu hogar</span> con calidad estructural
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto font-light">
+          <p className="animate-entrar-arriba retraso-2 mt-6 text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto font-light">
             Proyectos personalizados, materiales de calidad y un servicio con garantías. Conozca algunas de las obras que ya entregamos.
           </p>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <a href="#proyectos" className="bg-amber-400 hover:bg-amber-300 text-blue-950 font-black px-7 py-3.5 rounded-full shadow-lg shadow-amber-500/25 transition">Ver nuestras obras</a>
-            <a href="#contacto" className="border border-white/30 hover:bg-white/10 font-bold px-7 py-3.5 rounded-full transition">Quiero cotizar</a>
+          <div className="animate-entrar-arriba retraso-3 mt-10 flex flex-wrap justify-center gap-4">
+            <a href="#proyectos" className="brillo-boton bg-amber-400 hover:bg-amber-300 text-blue-950 font-black px-7 py-3.5 rounded-full shadow-lg shadow-amber-500/25 hover:-translate-y-0.5 transition">Ver nuestras obras</a>
+            <a href="#contacto" className="border border-white/30 hover:bg-white/10 hover:-translate-y-0.5 font-bold px-7 py-3.5 rounded-full transition">Quiero cotizar</a>
           </div>
         </div>
       </header>
@@ -168,20 +174,35 @@ export default function PortafolioPage() {
       {/* Ventajas, montadas sobre el borde de la cabecera */}
       <section aria-label="Por qué elegirnos" className="relative z-10 -mt-16 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {VENTAJAS.map((v) => (
-            <div key={v.titulo} className="rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-xl shadow-blue-950/10">
+          {VENTAJAS.map((v, i) => (
+            <Reveal key={v.titulo} delay={i * 120} className="h-full">
+            <div className="h-full rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-xl shadow-blue-950/10 hover:-translate-y-1 hover:shadow-2xl transition duration-300">
               <div className="h-11 w-11 rounded-xl bg-blue-900 text-xl flex items-center justify-center" aria-hidden>{v.icono}</div>
               <h3 className="mt-3 font-extrabold text-blue-900">{v.titulo}</h3>
               <p className="mt-1 text-sm text-slate-600">{v.texto}</p>
             </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
+      {/* Cinta con lo que hacemos */}
+      <div aria-hidden className="mt-14 overflow-hidden border-y border-slate-200 bg-white py-3">
+        <div className="animate-cinta flex w-max gap-10 whitespace-nowrap text-sm font-bold uppercase tracking-widest text-blue-900/70">
+          {[0, 1].map((k) => (
+            <div key={k} className="flex gap-10">
+              {["Casas prefabricadas", "Radieres", "Smart Panel", "Cubiertas de zinc", "Proyectos a medida", "Cotización clara", "Avance con fotos"].map((x) => (
+                <span key={`${k}-${x}`} className="flex items-center gap-10">{x}<span className="text-amber-500">◆</span></span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Nosotros */}
       <section id="nosotros" className="scroll-mt-16 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
         <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-start">
-          <div>
+          <Reveal desde="izquierda">
             <p className="text-sm font-bold uppercase tracking-widest text-amber-600">Quiénes somos</p>
             <h2 className="mt-2 text-3xl sm:text-4xl font-black text-blue-900 leading-tight">Una empresa de Los Ángeles que construye con confianza</h2>
             <p className="mt-4 text-slate-600 text-lg">
@@ -198,8 +219,8 @@ export default function PortafolioPage() {
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="grid gap-4">
+          </Reveal>
+          <Reveal desde="derecha" delay={150} className="grid gap-4">
             <div className="rounded-2xl bg-gradient-to-br from-blue-900 to-blue-700 text-white p-6 sm:p-8 shadow-xl">
               <p className="text-sm font-bold uppercase tracking-widest text-amber-300">Misión</p>
               <p className="mt-2 text-blue-50">Entregar construcciones de calidad y un servicio con garantías a nuestros clientes, para lograr su satisfacción y crecer en reputación y clientela.</p>
@@ -208,7 +229,7 @@ export default function PortafolioPage() {
               <p className="text-sm font-bold uppercase tracking-widest text-amber-700">Visión</p>
               <p className="mt-2 text-slate-700">Masificar nuestros servicios para llegar tanto a clientes con presupuestos reducidos como a clientes con presupuestos altos, con buena calidad en materiales y en nuestros trabajos.</p>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
@@ -217,13 +238,70 @@ export default function PortafolioPage() {
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <Encabezado sobre="Servicios" titulo="Todo lo que necesita su obra" texto="Desde la base hasta el techo, en una sola cotización." />
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {SERVICIOS.map((s) => (
-              <div key={s.titulo} className="group rounded-2xl bg-slate-50 ring-1 ring-slate-200 p-6 hover:bg-blue-900 hover:ring-blue-900 transition-colors duration-300">
+            {SERVICIOS.map((s, i) => (
+              <Reveal key={s.titulo} delay={i * 120} className="h-full">
+              <div className="group h-full rounded-2xl bg-slate-50 ring-1 ring-slate-200 p-6 hover:bg-blue-900 hover:ring-blue-900 hover:-translate-y-1 hover:shadow-xl transition duration-300">
                 <div className="h-12 w-12 rounded-xl bg-blue-900 group-hover:bg-white/15 text-2xl flex items-center justify-center transition-colors" aria-hidden>{s.icono}</div>
                 <h3 className="mt-4 text-lg font-extrabold text-blue-900 group-hover:text-white transition-colors">{s.titulo}</h3>
                 <p className="mt-2 text-sm text-slate-600 group-hover:text-blue-100 transition-colors">{s.texto}</p>
               </div>
+              </Reveal>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Catálogo: casas prediseñadas por la empresa */}
+      <section id="catalogo" className="scroll-mt-16 relative overflow-hidden bg-slate-50">
+        <div aria-hidden className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl animate-flotar-lento" />
+        <div aria-hidden className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-amber-300/20 blur-3xl animate-flotar" />
+        <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <Reveal><Encabezado sobre="Catálogo" titulo="Casas prediseñadas" texto="Modelos listos para elegir. Cada uno se adapta a su terreno y a su presupuesto: pida su cotización sin compromiso." /></Reveal>
+          <div className="mt-12 grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
+            {MODELOS.map((m, i) => {
+              const mensaje = encodeURIComponent(m.personalizado ? "Hola, quiero cotizar un proyecto a medida." : `Hola, me interesa el ${m.nombre} de ${m.m2} m². ¿Me pueden enviar una cotización?`);
+              const href = contacto ? `${contacto}${contacto.includes("?") ? "&" : "?"}text=${mensaje}` : "#contacto";
+              return (
+                <Reveal key={m.id} delay={i * 120} className="h-full">
+                  <article className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-slate-200 shadow-lg shadow-blue-950/5 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-blue-950/15 hover:ring-blue-300 transition duration-300">
+                    <div className="relative aspect-[3/2] overflow-hidden bg-blue-950">
+                      {m.imagen ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.imagen} alt={`${m.nombre} de ${m.m2} m²`} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      ) : (
+                        <div className="h-full w-full transition-transform duration-700 group-hover:scale-105"><CasaIlustrada m2={m.m2 || 54} dormitorios={m.dormitorios} plano={m.personalizado} /></div>
+                      )}
+                      {m.etiqueta && (
+                        <span className={`absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-black shadow-md ${m.personalizado ? "bg-white text-blue-900" : "bg-amber-400 text-blue-950"}`}>{m.etiqueta}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col gap-3 p-5">
+                      <div>
+                        <h3 className="text-xl font-black text-blue-900">{m.nombre}</h3>
+                        {!m.personalizado && (
+                          <ul className="mt-2 flex flex-wrap gap-2 text-xs font-bold" aria-label="Características">
+                            <li className="rounded-full bg-blue-50 px-3 py-1 text-blue-800">{m.m2} m²</li>
+                            <li className="rounded-full bg-blue-50 px-3 py-1 text-blue-800">{m.dormitorios} {m.dormitorios === 1 ? "dormitorio" : "dormitorios"}</li>
+                            <li className="rounded-full bg-blue-50 px-3 py-1 text-blue-800">{m.banos} {m.banos === 1 ? "baño" : "baños"}</li>
+                          </ul>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-600">{m.resumen}</p>
+                      <ul className="space-y-1.5 text-sm text-slate-700">
+                        {m.incluye.map((x) => (
+                          <li key={x} className="flex gap-2"><span aria-hidden className="mt-0.5 text-emerald-600">✓</span>{x}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-auto pt-2 text-xs font-semibold text-slate-500"><span className="text-amber-600">Ideal para:</span> {m.ideal}</p>
+                      <a href={href} target={contacto ? "_blank" : undefined} rel="noopener noreferrer"
+                        className="brillo-boton mt-1 block rounded-xl bg-blue-900 hover:bg-blue-800 px-4 py-3 text-center font-bold text-white transition-colors">
+                        {m.personalizado ? "Cotizar a medida" : "Cotizar este modelo"}
+                      </a>
+                    </div>
+                  </article>
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -253,7 +331,7 @@ export default function PortafolioPage() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {mostradas.map((p) => <TarjetaObra key={p.id} obra={p} onAbrir={() => setVisor(p)} />)}
+                  {mostradas.map((p, i) => <Reveal key={p.id} delay={(i % 3) * 120} className="h-full"><TarjetaObra obra={p} onAbrir={() => setVisor(p)} /></Reveal>)}
                 </div>
                 {filtradas.length > 6 && (
                   <div className="mt-10 text-center">
@@ -269,36 +347,31 @@ export default function PortafolioPage() {
         </div>
       </section>
 
-      {/* Proceso: es una secuencia real, por eso va numerado */}
-      <section id="proceso" className="scroll-mt-16 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-        <Encabezado sobre="Cómo trabajamos" titulo="De la idea a la llave en mano" texto="Un camino simple, con acuerdos claros en cada etapa." />
-        <ol className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {PASOS.map((p, i) => (
-            <li key={p.titulo} className="relative rounded-2xl bg-white ring-1 ring-slate-200 p-6 shadow-sm">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-blue-950 font-black">{i + 1}</span>
-              <h3 className="mt-4 font-extrabold text-blue-900">{p.titulo}</h3>
-              <p className="mt-2 text-sm text-slate-600">{p.texto}</p>
-            </li>
-          ))}
-        </ol>
+      {/* Cómo trabajamos: línea de tiempo animada */}
+      <section id="proceso" className="scroll-mt-16 relative overflow-hidden">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(40rem_20rem_at_50%_0%,rgba(70,149,141,0.10),transparent_70%)]" />
+        <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <Reveal><Encabezado sobre="Cómo trabajamos" titulo="De la idea a la llave en mano" texto="Un camino simple, con acuerdos claros en cada etapa." /></Reveal>
+          <Proceso />
+        </div>
       </section>
 
       {/* Llamado a la acción + redes */}
       <section id="contacto" className="scroll-mt-16 bg-gradient-to-br from-blue-900 to-blue-950 text-white">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
-          <div className="text-center max-w-2xl mx-auto">
+          <Reveal className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-black leading-tight">¿Listo para construir su casa?</h2>
             <p className="mt-4 text-lg text-blue-100">Cuéntenos su idea y su terreno. Le respondemos con una cotización clara y sin compromiso.</p>
             {contacto && (
-              <a href={contacto} target="_blank" rel="noopener noreferrer" className="mt-8 inline-flex items-center gap-2 rounded-full bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 shadow-lg transition">
+              <a href={contacto} target="_blank" rel="noopener noreferrer" className="brillo-boton mt-8 inline-flex items-center gap-2 rounded-full bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 shadow-lg hover:-translate-y-0.5 transition">
                 <span aria-hidden>💬</span> Escribir por WhatsApp
               </a>
             )}
-          </div>
+          </Reveal>
 
           <h3 className="mt-14 text-center text-sm font-bold uppercase tracking-widest text-amber-300">Síganos en nuestras redes</h3>
           <ul className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {REDES.map((r) => {
+            {REDES.map((r, i) => {
               const cuerpo = (
                 <>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-amber-300 group-hover:bg-amber-400 group-hover:text-blue-950 transition-colors"><IconoRed clave={r.clave} /></span>
@@ -308,13 +381,13 @@ export default function PortafolioPage() {
                 </>
               );
               return (
-                <li key={r.clave}>
+                <li key={r.clave}><Reveal delay={i * 100} className="h-full">
                   {r.url ? (
                     <a href={r.url} target="_blank" rel="noopener noreferrer" className="group block h-full rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 p-5 transition">{cuerpo}</a>
                   ) : (
                     <div className="group block h-full rounded-2xl border border-white/10 bg-white/[0.03] p-5 opacity-70">{cuerpo}</div>
                   )}
-                </li>
+                </Reveal></li>
               );
             })}
           </ul>

@@ -72,45 +72,46 @@ function Puntos({ total, actual, ir }: { total: number; actual: number; ir: (n: 
   );
 }
 
-/** Tarjeta de obra con carrusel de fotos, viñeta y datos clave. Al tocarla se abre el visor grande. */
+/** Tarjeta de obra en vidrio difuminado: toda ella es clicable (foto, textos y datos) y abre el visor con los detalles y el WhatsApp. */
 export function TarjetaObra({ obra, onAbrir }: { obra: Obra; onAbrir: () => void }) {
   const fotos = fotosDe(obra);
   const c = useCarrusel(fotos.length);
   const datos = [obra.superficie_m2 ? `${obra.superficie_m2} m²` : null, obra.revestimiento].filter(Boolean) as string[];
   return (
-    <article className="group relative bg-white rounded-3xl overflow-hidden flex flex-col shadow-xl shadow-blue-950/10 ring-1 ring-slate-200 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-blue-950/25 transition duration-300">
-      <div className="relative aspect-[4/3] w-full bg-blue-950 overflow-hidden cursor-zoom-in" onClick={onAbrir} {...c.gestos}>
+    <article
+      role="button" tabIndex={0} aria-label={`Ver detalles de ${obra.titulo}`} onClick={onAbrir}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onAbrir(); } }}
+      className="group relative flex h-full flex-col overflow-hidden rounded-3xl cursor-pointer bg-gradient-to-b from-white/15 to-white/5 backdrop-blur-md ring-1 ring-white/20 shadow-xl shadow-black/20 hover:-translate-y-1.5 hover:ring-amber-300/60 hover:shadow-2xl hover:shadow-amber-400/10 transition duration-300"
+    >
+      <div className="relative aspect-[4/3] w-full overflow-hidden" {...c.gestos}>
         <div className="absolute inset-0 flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${c.i * 100}%)` }}>
           {fotos.map((f, k) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={f} src={f} alt={`${obra.titulo}, foto ${k + 1} de ${fotos.length}`} loading={k === 0 ? "eager" : "lazy"} className="h-full w-full shrink-0 object-cover" />
+            <img key={f} src={f} alt={`${obra.titulo}, foto ${k + 1} de ${fotos.length}`} loading={k === 0 ? "eager" : "lazy"} className="h-full w-full shrink-0 object-cover transition-transform duration-700 group-hover:scale-105" />
           ))}
         </div>
-        <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-blue-950/80 to-transparent pointer-events-none" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-blue-950/80 to-transparent pointer-events-none" />
         <div className="absolute top-4 left-4"><Vineta etiqueta={obra.etiqueta} /></div>
         {fotos.length > 1 && (
           <span className="absolute top-4 right-4 rounded-full bg-black/50 backdrop-blur text-white text-xs font-bold px-2.5 py-1">{c.i + 1}/{fotos.length}</span>
         )}
+        <span aria-hidden className="absolute bottom-3 right-3 rounded-full bg-white/20 backdrop-blur-md ring-1 ring-white/30 text-white text-xs font-bold px-3 py-1 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-300">
+          Ver detalles
+        </span>
         {fotos.length > 1 && <><Flecha lado="ant" onClick={c.ant} /><Flecha lado="sig" onClick={c.sig} /><Puntos total={fotos.length} actual={c.i} ir={c.ir} /></>}
       </div>
 
-      <div className="p-5 sm:p-6 flex-grow flex flex-col gap-3">
+      <div className="p-5 sm:p-6 flex-grow flex flex-col gap-3 text-white">
         <div>
-          <h3 className="text-xl font-black text-blue-900 leading-tight">{obra.titulo}</h3>
-          {obra.ubicacion_comuna && <p className="mt-1 text-sm font-semibold text-slate-500">📍 {obra.ubicacion_comuna}</p>}
+          <h3 className="text-xl font-black leading-tight">{obra.titulo}</h3>
+          {obra.ubicacion_comuna && <p className="mt-1 text-sm font-semibold text-blue-200">📍 {obra.ubicacion_comuna}</p>}
         </div>
         {datos.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Datos de la obra">
-            {datos.map((d) => <li key={d} className="rounded-full bg-blue-50 text-blue-800 text-xs font-bold px-3 py-1">{d}</li>)}
+            {datos.map((d) => <li key={d} className="rounded-full bg-white/10 ring-1 ring-white/15 text-blue-50 text-xs font-bold px-3 py-1">{d}</li>)}
           </ul>
         )}
-        {obra.descripcion && <p className="text-slate-600 line-clamp-3 flex-grow">{obra.descripcion}</p>}
-        <button
-          type="button" onClick={onAbrir}
-          className="mt-2 w-full rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 px-4 transition-colors cursor-pointer"
-        >
-          Ver galería y detalles
-        </button>
+        {obra.descripcion && <p className="text-blue-100/90 line-clamp-3">{obra.descripcion}</p>}
       </div>
     </article>
   );
@@ -141,11 +142,11 @@ export function VisorObra({ obra, onCerrar }: { obra: Obra; onCerrar: () => void
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-blue-950/90 backdrop-blur-sm p-3 sm:p-6 animate-aparecer" role="dialog" aria-modal="true" aria-label={obra.titulo} onClick={onCerrar}>
-      <div className="relative w-full max-w-6xl max-h-full overflow-y-auto rounded-3xl bg-white shadow-2xl grid lg:grid-cols-[1.5fr_1fr] animate-subir" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-6xl max-h-full overflow-y-auto rounded-3xl bg-gradient-to-br from-blue-900/90 via-blue-950/90 to-blue-900/80 backdrop-blur-xl ring-1 ring-white/20 text-white shadow-2xl shadow-black/40 grid lg:grid-cols-[1.5fr_1fr] animate-subir" onClick={(e) => e.stopPropagation()}>
         <button ref={cerrarRef} type="button" onClick={onCerrar} aria-label="Cerrar galería"
           className="absolute top-3 right-3 z-10 !min-h-0 h-10 w-10 rounded-full bg-black/55 hover:bg-black/80 text-white text-lg cursor-pointer">✕</button>
 
-        <div className="bg-blue-950 flex flex-col">
+        <div className="bg-black/30 flex flex-col">
           <div className="relative aspect-[4/3] lg:aspect-auto lg:flex-1 lg:min-h-[28rem] overflow-hidden" {...c.gestos}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img key={fotos[c.i]} src={fotos[c.i]} alt={`${obra.titulo}, foto ${c.i + 1} de ${fotos.length}`} className="absolute inset-0 h-full w-full object-contain animate-aparecer" />
@@ -169,16 +170,16 @@ export function VisorObra({ obra, onCerrar }: { obra: Obra; onCerrar: () => void
 
         <div className="p-6 sm:p-8 flex flex-col gap-4">
           <div>
-            <p className="text-sm font-bold uppercase tracking-widest text-amber-600">Obra terminada</p>
-            <h3 className="mt-1 text-2xl sm:text-3xl font-black text-blue-900 leading-tight">{obra.titulo}</h3>
+            <p className="text-sm font-bold uppercase tracking-widest text-amber-300">Obra terminada</p>
+            <h3 className="mt-1 text-2xl sm:text-3xl font-black text-white leading-tight">{obra.titulo}</h3>
           </div>
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            {obra.ubicacion_comuna && <div className="rounded-xl bg-slate-50 p-3"><dt className="text-slate-500 font-semibold">Ubicación</dt><dd className="font-black text-blue-900">{obra.ubicacion_comuna}</dd></div>}
-            {obra.superficie_m2 ? <div className="rounded-xl bg-slate-50 p-3"><dt className="text-slate-500 font-semibold">Superficie</dt><dd className="font-black text-blue-900">{obra.superficie_m2} m²</dd></div> : null}
-            {obra.revestimiento && <div className="rounded-xl bg-slate-50 p-3 col-span-2"><dt className="text-slate-500 font-semibold">Revestimiento</dt><dd className="font-black text-blue-900">{obra.revestimiento}</dd></div>}
-            <div className="rounded-xl bg-slate-50 p-3"><dt className="text-slate-500 font-semibold">Fotos</dt><dd className="font-black text-blue-900">{fotos.length}</dd></div>
+            {obra.ubicacion_comuna && <div className="rounded-xl bg-white/10 ring-1 ring-white/10 p-3"><dt className="text-blue-200 font-semibold">Ubicación</dt><dd className="font-black text-white">{obra.ubicacion_comuna}</dd></div>}
+            {obra.superficie_m2 ? <div className="rounded-xl bg-white/10 ring-1 ring-white/10 p-3"><dt className="text-blue-200 font-semibold">Superficie</dt><dd className="font-black text-white">{obra.superficie_m2} m²</dd></div> : null}
+            {obra.revestimiento && <div className="rounded-xl bg-white/10 ring-1 ring-white/10 p-3 col-span-2"><dt className="text-blue-200 font-semibold">Revestimiento</dt><dd className="font-black text-white">{obra.revestimiento}</dd></div>}
+            <div className="rounded-xl bg-white/10 ring-1 ring-white/10 p-3"><dt className="text-blue-200 font-semibold">Fotos</dt><dd className="font-black text-white">{fotos.length}</dd></div>
           </dl>
-          {obra.descripcion && <p className="text-slate-600 whitespace-pre-line">{obra.descripcion}</p>}
+          {obra.descripcion && <p className="text-blue-100 whitespace-pre-line">{obra.descripcion}</p>}
           <a href={obra.whatsapp_url || "https://wa.me/"} target="_blank" rel="noopener noreferrer"
             className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 transition-colors shadow-md">
             <span aria-hidden>💬</span> Consultar por esta obra

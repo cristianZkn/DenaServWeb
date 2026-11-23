@@ -125,3 +125,36 @@ html { scroll-behavior: smooth; }
   button, a { transition-property: color, background-color, border-color, opacity, transform, box-shadow; transition-duration: 150ms; transition-timing-function: ease-out; }
   button:not(:disabled):active { transform: scale(0.98); }
 }
+
+/* ---- Portafolio público: movimiento que llama la atención sin estorbar ---- */
+@keyframes flotar { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -18px, 0); } }
+@keyframes brillo-texto { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+@keyframes cinta { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes pulso-anillo { 0% { box-shadow: 0 0 0 0 rgb(251 191 36 / 0.55); } 70%, 100% { box-shadow: 0 0 0 14px rgb(251 191 36 / 0); } }
+@keyframes entrar-arriba { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.animate-flotar { animation: flotar 9s ease-in-out infinite; }
+.animate-flotar-lento { animation: flotar 14s ease-in-out infinite reverse; }
+.animate-brillo-texto { background-size: 200% auto; animation: brillo-texto 7s linear infinite; }
+.animate-cinta { animation: cinta 38s linear infinite; }
+.animate-pulso-anillo { animation: pulso-anillo 2.4s ease-out infinite; }
+.animate-entrar-arriba { animation: entrar-arriba 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.retraso-1 { animation-delay: 0.1s; } .retraso-2 { animation-delay: 0.25s; } .retraso-3 { animation-delay: 0.4s; } .retraso-4 { animation-delay: 0.55s; }
+
+/* Barrido de luz al pasar sobre un botón destacado */
+.brillo-boton { position: relative; overflow: hidden; }
+.brillo-boton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.45) 50%, transparent 65%); transform: translateX(-120%); transition: transform 0.7s ease; }
+.brillo-boton:hover::after { transform: translateX(120%); }
+
+/* ---- Panel administrativo: cada bloque de la página aparece con un breve escalonado al cargar ---- */
+@keyframes panel-entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.panel-anim > * > * { animation: panel-entrar 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.panel-anim > * > *:nth-child(2) { animation-delay: 0.05s; }
+.panel-anim > * > *:nth-child(3) { animation-delay: 0.1s; }
+.panel-anim > * > *:nth-child(4) { animation-delay: 0.15s; }
+.panel-anim > * > *:nth-child(5) { animation-delay: 0.2s; }
+.panel-anim > * > *:nth-child(6) { animation-delay: 0.25s; }
+.panel-anim > * > *:nth-child(n + 7) { animation-delay: 0.3s; }
+.panel-anim tbody tr { animation: aparecer 0.35s ease-out backwards; }
+.panel-anim tbody tr:nth-child(2) { animation-delay: 0.03s; } .panel-anim tbody tr:nth-child(3) { animation-delay: 0.06s; }
+.panel-anim tbody tr:nth-child(4) { animation-delay: 0.09s; } .panel-anim tbody tr:nth-child(5) { animation-delay: 0.12s; }
+.panel-anim tbody tr:nth-child(6) { animation-delay: 0.15s; } .panel-anim tbody tr:nth-child(n + 7) { animation-delay: 0.18s; }
