@@ -1612,3 +1612,18 @@ class TrasladoCamionTests(TestCase):
                                content_type="application/json", **h)
         self.assertEqual(con.status_code, 200)
         self.assertEqual(float(con.json()["costo_flete"]) - float(sin["costo_flete"]), 2 * 120000)  # 2 días x tarifa «flete_camion_dia»
+
+
+class PortafolioEtiquetaTests(TestCase):
+    def test_la_vineta_se_guarda_se_publica_y_solo_admite_valores_validos(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        crear = lambda **kw: self.client.post("/api/portafolio/", {"titulo": "Casa 54 m²", **kw}, content_type="application/json", **h)
+        r = crear(etiqueta="NUEVO")
+        self.assertEqual((r.status_code, r.json()["etiqueta"]), (200, "NUEVO"))
+        self.assertEqual(self.client.get("/api/portafolio/").json()[0]["etiqueta"], "NUEVO")
+        self.assertEqual(crear(etiqueta="OFERTON").status_code, 422)
+        p = self.client.patch(f"/api/portafolio/{r.json()['id']}/", {"etiqueta": None}, content_type="application/json", **h)
+        self.assertEqual((p.status_code, p.json()["etiqueta"]), (200, ""))

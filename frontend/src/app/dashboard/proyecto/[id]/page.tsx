@@ -4,6 +4,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import { urlSegura } from "@/lib/url";
 
 import { use, useCallback, useEffect, useState } from "react";
+import Paginador from "@/components/Paginador";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { errorDatosCliente, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
@@ -93,7 +94,7 @@ const campo = "block text-base font-semibold text-slate-800 mb-1";
 const ayuda = "text-sm text-slate-500 mt-1";
 const botonGrande = "px-6 py-3 rounded-xl text-lg font-bold shadow cursor-pointer disabled:opacity-50";
 
-/** Materiales con los que se trabaja el proyecto: desglose por etapa y materiales agregados al cotizar. */
+/** Materiales con los que se trabaja el proyecto: una sola tabla con pestañas por grupo (etapas y agregados), búsqueda y paginación. */
 function MaterialesProyecto({ cot }: { cot: Detalle }) {
   const lineas = (cot.detalles_insumo ?? []) as unknown as LineaMaterial[];
   const obra = cot as unknown as { modo_tarifas?: boolean; n_trabajadores?: number; dias_obra?: number; lleva_radier?: boolean };
@@ -107,54 +108,21 @@ function MaterialesProyecto({ cot }: { cot: Detalle }) {
   };
   const cantidad = (l: LineaMaterial) => `${Number(l.cantidad_calculada).toLocaleString("es-CL", { maximumFractionDigits: 2 })} ${unidad(l)}`;
 
-  const tabla = (ls: LineaMaterial[]) => (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[34rem] text-left text-base">
-        <thead>
-          <tr className="text-sm font-semibold text-slate-500 border-b border-slate-200">
-            <th className="py-2 pr-3">Material</th>
-            <th className="py-2 pr-3">Proveedor</th>
-            <th className="py-2 pr-3 text-right">Cantidad</th>
-            <th className="py-2 text-right">Costo</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {ls.map((l) => (
-            <tr key={l.id}>
-              <td className="py-2 pr-3 font-semibold text-slate-900">
-                {l.catalogo_tipo?.fuente_url ? (
-                  <a href={urlSegura(l.catalogo_tipo.fuente_url)} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
-                ) : (
-                  l.catalogo_tipo?.nombre ?? "Material eliminado"
-                )}
-              </td>
-              <td className="py-2 pr-3 text-slate-600">{l.catalogo_tipo?.proveedor?.razon_social ?? "—"}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{cantidad(l)}</td>
-              <td className="py-2 text-right tabular-nums font-bold">{clp(l.subtotal_costo)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const bloque = (titulo: string, ayuda: string, ls: LineaMaterial[]) => (
-    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h3 className="text-xl font-black text-slate-900">{titulo}</h3>
-          <p className="text-sm text-slate-500">{ayuda}</p>
-        </div>
-        <div className="text-base text-slate-600">
-          Subtotal: <strong className="text-slate-900">{clp(suma(ls))}</strong>
-        </div>
-      </div>
-      {tabla(ls)}
-    </div>
-  );
+  const grupos = [
+    ...etapas.map((e) => ({ clave: e, nombre: ETAPA[e] ?? e, ayuda: "Desglose calculado según los m² de la casa, para organizar las compras.", filas: desglose.filter((l) => (l.etapa_obra || "ETAPA_1") === e) })),
+    ...(agregados.length ? [{ clave: "AGREGADOS", nombre: "Elegidos al cotizar", ayuda: "Los que se eligieron al cotizar: suman al valor de la obra.", filas: agregados }] : []),
+  ];
+  const [clave, setClave] = useState("");
+  const [busca, setBusca] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(10);
+  const grupo = grupos.find((g) => g.clave === clave) ?? grupos[0];
+  const q = busca.trim().toLowerCase();
+  const filtradas = grupo ? grupo.filas.filter((l) => !q || `${l.catalogo_tipo?.nombre ?? ""} ${l.catalogo_tipo?.proveedor?.razon_social ?? ""}`.toLowerCase().includes(q)) : [];
+  const visibles = filtradas.slice((pagina - 1) * porPagina, pagina * porPagina);
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-4 animate-entrar">
       {(cot.revestimiento || cot.base_terreno || obra.modo_tarifas) && (
         <div className="flex flex-wrap gap-2 text-base">
           {cot.revestimiento && <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-100">Material exterior: <strong>{cot.revestimiento.nombre}</strong></span>}
@@ -167,17 +135,71 @@ function MaterialesProyecto({ cot }: { cot: Detalle }) {
         </div>
       )}
 
-      {lineas.length === 0 && (
+      {lineas.length === 0 ? (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center text-slate-500 text-lg">
           Este proyecto no tiene una lista de materiales registrada.
         </div>
-      )}
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-100 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Materiales del proyecto</h3>
+                <p className="text-sm text-slate-500">{lineas.length} materiales · total {clp(suma(lineas))}</p>
+              </div>
+              <div className="w-full sm:w-72">
+                <input type="search" aria-label="Buscar material o proveedor" placeholder="Buscar material o proveedor…" value={busca}
+                  onChange={(e) => { setBusca(e.target.value); setPagina(1); }} />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Grupos de materiales">
+              {grupos.map((g) => (
+                <button key={g.clave} type="button" role="tab" aria-selected={g.clave === grupo.clave}
+                  onClick={() => { setClave(g.clave); setPagina(1); }}
+                  className={`!min-h-0 px-4 py-1.5 rounded-full text-sm font-bold border transition-colors cursor-pointer ${g.clave === grupo.clave ? "bg-blue-900 border-blue-900 text-white" : "bg-white border-slate-300 text-blue-900 hover:border-blue-700"}`}>
+                  {g.nombre} <span className="opacity-70">({g.filas.length})</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-slate-500">{grupo.ayuda} Subtotal del grupo: <strong className="text-slate-900">{clp(suma(grupo.filas))}</strong></p>
+          </div>
 
-      {etapas.map((e) =>
-        bloque(`Materiales de la obra · ${ETAPA[e] ?? e}`, "Desglose calculado según los m² de la casa, para organizar las compras.", desglose.filter((l) => (l.etapa_obra || "ETAPA_1") === e))
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[34rem] text-left text-base">
+              <thead>
+                <tr className="text-sm font-semibold text-slate-500 bg-slate-50 border-b border-slate-200">
+                  <th className="py-2.5 px-4 sm:px-5">Material</th>
+                  <th className="py-2.5 pr-3">Proveedor</th>
+                  <th className="py-2.5 pr-3 text-right">Cantidad</th>
+                  <th className="py-2.5 px-4 sm:px-5 text-right">Costo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibles.map((l) => (
+                  <tr key={l.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-2.5 px-4 sm:px-5 font-semibold text-slate-900">
+                      {l.catalogo_tipo?.fuente_url ? (
+                        <a href={urlSegura(l.catalogo_tipo.fuente_url)} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
+                      ) : (
+                        l.catalogo_tipo?.nombre ?? "Material eliminado"
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-3 text-slate-600">{l.catalogo_tipo?.proveedor?.razon_social ?? "—"}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{cantidad(l)}</td>
+                    <td className="py-2.5 px-4 sm:px-5 text-right tabular-nums font-bold">{clp(l.subtotal_costo)}</td>
+                  </tr>
+                ))}
+                {visibles.length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-slate-500">No hay materiales que coincidan con la búsqueda.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 sm:px-5 pb-4">
+            <Paginador total={filtradas.length} pagina={pagina} porPagina={porPagina} onPagina={setPagina} onPorPagina={(n) => { setPorPagina(n); setPagina(1); }} />
+          </div>
+        </div>
       )}
-
-      {agregados.length > 0 && bloque("Materiales de la cotización", "Los que se eligieron al cotizar: suman al valor de la obra.", agregados)}
     </section>
   );
 }
@@ -382,7 +404,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     <div className="max-w-6xl mx-auto grid lg:grid-cols-[19rem_minmax(0,1fr)] gap-5 items-start">
       {dialogo}
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
-      <aside className="lg:sticky lg:top-20 space-y-3">
+      <aside className="lg:sticky lg:top-6 space-y-3">
         <Link href="/dashboard/proyectos" className="inline-block text-base font-semibold text-blue-800 hover:underline">
           ← Proyectos
         </Link>

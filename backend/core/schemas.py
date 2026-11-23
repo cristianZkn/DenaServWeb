@@ -455,9 +455,20 @@ class PortafolioProyectoSchema(Schema):
     ubicacion_comuna: Optional[str] = None
     imagen_url: Optional[str] = None
     publicado: bool
+    etiqueta: str = ""
     cotizacion_id: Optional[int] = None
     whatsapp_url: Optional[str] = None
     imagenes: List[str] = []
+    superficie_m2: Optional[float] = None
+    revestimiento: Optional[str] = None
+
+    @staticmethod
+    def resolve_superficie_m2(obj):
+        return float(obj.cotizacion.superficie_m2) if obj.cotizacion else None
+
+    @staticmethod
+    def resolve_revestimiento(obj):
+        return obj.cotizacion.revestimiento.nombre if obj.cotizacion and obj.cotizacion.revestimiento else None
 
     @staticmethod
     def resolve_imagenes(obj):
@@ -483,8 +494,14 @@ class PortafolioProyectoInSchema(Schema):
     ubicacion_comuna: Optional[str] = Field(None, max_length=100)
     imagen_url: Optional[str] = None
     publicado: bool = True
+    etiqueta: str = ""
     cotizacion_id: Optional[int] = None
     imagenes: List[str] = []  # imágenes como data URL (data:image/jpeg;base64,...)
+
+    @field_validator("etiqueta")
+    @classmethod
+    def _etiqueta(cls, x):
+        return _etiqueta_valida(x)
 
     @field_validator("imagen_url")
     @classmethod
@@ -495,14 +512,29 @@ class PortafolioProyectoInSchema(Schema):
         return x or None
 
 
+ETIQUETAS_PORTAFOLIO = ("", "NUEVO", "DESTACADO", "ENTREGADO", "EN_CONSTRUCCION")
+
+
+def _etiqueta_valida(x):
+    if x not in ETIQUETAS_PORTAFOLIO:
+        raise ValueError("La viñeta debe ser nuevo, destacado, entregado o en construcción.")
+    return x
+
+
 class PortafolioProyectoUpdateSchema(Schema):
     titulo: Optional[str] = Field(None, min_length=3, max_length=150)
     descripcion: Optional[str] = Field(None, max_length=2000)
     ubicacion_comuna: Optional[str] = Field(None, max_length=100)
     publicado: Optional[bool] = None
+    etiqueta: Optional[str] = None
     agregar_imagenes: List[str] = []
     quitar_imagenes: List[int] = []
     quitar_portada: bool = False  # quita la foto externa (imagen_url)
+
+    @field_validator("etiqueta")
+    @classmethod
+    def _etiqueta(cls, x):
+        return _etiqueta_valida(x or "")
 
 
 class ProgresoObraSchema(Schema):

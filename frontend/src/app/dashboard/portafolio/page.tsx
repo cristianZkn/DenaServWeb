@@ -2,6 +2,7 @@
 
 import { useDialogo } from "@/components/ConfirmDialog";
 import { reducirImagen } from "@/lib/imagenes";
+import { ETIQUETAS } from "@/lib/empresa";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -13,6 +14,7 @@ interface Proyecto {
   descripcion: string | null;
   ubicacion_comuna: string | null;
   publicado: boolean;
+  etiqueta?: string;
   imagenes: string[];
 }
 const MAX_IMAGENES = 10;
@@ -92,6 +94,9 @@ export default function PortafolioAdminPage() {
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos</div>
                 )}
+                {p.etiqueta && ETIQUETAS[p.etiqueta] && (
+                  <span className={`absolute top-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-black shadow ${ETIQUETAS[p.etiqueta].clase}`}>{ETIQUETAS[p.etiqueta].texto}</span>
+                )}
                 <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded">{p.imagenes.length} {p.imagenes.length === 1 ? "foto" : "fotos"}</span>
               </div>
               <div className="p-4 flex-1 flex flex-col gap-2">
@@ -131,6 +136,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   const [descripcion, setDescripcion] = useState(proyecto?.descripcion ?? "");
   const [comuna, setComuna] = useState(proyecto?.ubicacion_comuna ?? "");
   const [publicado, setPublicado] = useState(proyecto?.publicado ?? true);
+  const [vineta, setVineta] = useState(proyecto?.etiqueta ?? "");
   const [existentes, setExistentes] = useState<string[]>(proyecto?.imagenes ?? []);
   const [quitar, setQuitar] = useState<number[]>([]);
   const [quitarPortada, setQuitarPortada] = useState(false); // foto externa de obras antiguas (no está en la base de datos)
@@ -165,7 +171,7 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
     if (titulo.trim().length < 3) return setError("El título debe tener al menos 3 letras.");
     setGuardando(true);
     try {
-      const base = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, ubicacion_comuna: comuna.trim() || null, publicado };
+      const base = { titulo: titulo.trim(), descripcion: descripcion.trim() || null, ubicacion_comuna: comuna.trim() || null, publicado, etiqueta: vineta };
       // Las fotos suben de a pocas por vez: así ninguna solicitud supera el límite de tamaño del servidor.
       const r = proyecto
         ? await fetch(`/api/portafolio/${proyecto.id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ ...base, quitar_imagenes: quitar, quitar_portada: quitarPortada }) })
@@ -202,6 +208,14 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
         <div>
           <label className={etiqueta} htmlFor="pf-c">Comuna</label>
           <input id="pf-c" value={comuna} onChange={(e) => setComuna(e.target.value)} maxLength={100} placeholder="Ej: Casablanca" />
+        </div>
+        <div>
+          <label className={etiqueta} htmlFor="pf-v">Viñeta sobre las fotos</label>
+          <select id="pf-v" value={vineta} onChange={(e) => setVineta(e.target.value)}>
+            <option value="">Sin viñeta</option>
+            {Object.entries(ETIQUETAS).map(([k, v]) => <option key={k} value={k}>{v.texto}</option>)}
+          </select>
+          <p className="text-sm text-slate-500 mt-1">Se muestra en una esquina de la foto en la página pública.</p>
         </div>
         <div>
           <label className={etiqueta} htmlFor="pf-d">Descripción</label>

@@ -250,6 +250,8 @@ class PortafolioProyecto(models.Model):
     ubicacion_comuna = models.CharField(max_length=100, null=True, blank=True)
     imagen_url = models.CharField(max_length=500, null=True, blank=True)
     publicado = models.BooleanField(default=True)
+    # Viñeta que se muestra sobre las fotos en la página pública ('' = sin viñeta).
+    etiqueta = models.CharField(max_length=20, blank=True, default='')  # NUEVO | DESTACADO | ENTREGADO | EN_CONSTRUCCION
     cotizacion = models.ForeignKey(
         Cotizacion,
         on_delete=models.SET_NULL,

@@ -3,6 +3,7 @@
 import { useDialogo } from "@/components/ConfirmDialog";
 import { urlSegura } from "@/lib/url";
 import { CATEGORIAS } from "@/lib/categorias";
+import Paginador from "@/components/Paginador";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -60,6 +61,8 @@ export default function CatalogosPage() {
   const [categoria, setCategoria] = useState("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [verInactivos, setVerInactivos] = useState(false);
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(20);
   const [modal, setModal] = useState<Insumo | "nuevo" | null>(null);
   const sondeo = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -121,10 +124,11 @@ export default function CatalogosPage() {
   };
 
   const q = busqueda.trim().toLowerCase();
-  const visibles = items
+  const filtrados = items
     .filter((i) => (verInactivos || i.activo) && (categoria === "TODOS" || i.categoria === categoria))
     .filter((i) => !q || `${i.nombre} ${i.proveedor ?? ""}`.toLowerCase().includes(q))
     .sort((a, b) => GRUPOS.findIndex((g) => g.key === a.categoria) - GRUPOS.findIndex((g) => g.key === b.categoria) || a.nombre.localeCompare(b.nombre));
+  const visibles = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
   const ocultos = items.filter((i) => !i.activo).length;
   const sinCobertura = estado?.grupos_sin_cobertura ?? [];
   const ultima = antiguedad(estado?.ultima_actualizacion ?? null);
@@ -181,7 +185,7 @@ export default function CatalogosPage() {
             return (
               <button
                 key={g.key}
-                onClick={() => setCategoria(g.key)}
+                onClick={() => { setCategoria(g.key); setPagina(1); }}
                 className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
                   categoria === g.key ? "bg-blue-900 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                 }`}
@@ -194,9 +198,9 @@ export default function CatalogosPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <input type="search" placeholder="Buscar material o proveedor" aria-label="Buscar" value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)} className="flex-1 min-w-0 sm:!w-80 sm:flex-none" />
+            onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }} className="flex-1 min-w-0 sm:!w-80 sm:flex-none" />
           <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" className="!w-4 !min-h-0" checked={verInactivos} onChange={(e) => setVerInactivos(e.target.checked)} />
+            <input type="checkbox" className="!w-4 !min-h-0" checked={verInactivos} onChange={(e) => { setVerInactivos(e.target.checked); setPagina(1); }} />
             Ver desactivados o por confirmar ({ocultos})
           </label>
         </div>
@@ -271,6 +275,9 @@ export default function CatalogosPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 pb-4">
+          <Paginador total={filtrados.length} pagina={pagina} porPagina={porPagina} onPagina={setPagina} onPorPagina={(n) => { setPorPagina(n); setPagina(1); }} opciones={[20, 50, 100]} />
         </div>
       </div>
 
