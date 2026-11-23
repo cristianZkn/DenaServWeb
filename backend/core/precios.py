@@ -1,7 +1,7 @@
 """Actualización de precios de mercado del catálogo.
 
 Cada producto guarda la URL exacta de su ficha en la tienda (mapeo 1 a 1, sin buscadores). Al actualizar se lee
-el precio de lista, se aplica el descuento vigente del proveedor y se guarda:
+el precio de lista, se aplica el descuento propio del material (el que la empresa le puso; 0 si no tiene) y se guarda:
     costo_neto = precio_lista * (1 - descuento_pct / 100)
 """
 import re
@@ -26,7 +26,7 @@ GRUPOS_OBLIGATORIOS = {
 # Categorías de insumos informativos (cubicación/BOM); las bases y revestimientos sí entran al valor de la cotización.
 CATEGORIAS_INSUMO = ["INSUMO", *[c for c in GRUPOS_OBLIGATORIOS if c != "REVESTIMIENTO"]]
 
-CAMPOS_LECTURA = ["precio_lista", "descuento_pct", "costo_neto", "precio_base_unitario", "sku", "nombre_tienda",
+CAMPOS_LECTURA = ["precio_lista", "costo_neto", "precio_base_unitario", "sku", "nombre_tienda",
                   "precio_actualizado_en", "ultimo_error"]
 
 
@@ -56,13 +56,11 @@ def proveedor_de(url: str) -> Proveedor:
 
 def aplicar_lectura(item: CatalogoTipo, lectura: dict, ahora) -> None:
     """Vuelca en el ítem lo leído de la ficha (no guarda). `precio_base_unitario` queda por unidad de cotización
-    (m² en revestimientos) y SIN descuento: el motor de cálculo aplica el descuento del proveedor."""
+    (m² en revestimientos) y SIN descuento: el motor de cálculo aplica el descuento del propio material."""
     lista = lectura["precio"]
-    descuento = item.proveedor.descuento_pct if item.proveedor else Decimal(0)
     m2 = Decimal(str(item.m2_por_unidad or 0))
     item.precio_lista = lista
-    item.descuento_pct = descuento
-    item.costo_neto = costo_neto(lista, descuento)
+    item.costo_neto = costo_neto(lista, item.descuento_pct or 0)
     item.precio_base_unitario = (lista / m2).quantize(Decimal("1")) if m2 > 0 else lista
     item.sku = lectura.get("sku") or item.sku
     item.nombre_tienda = (lectura.get("nombre") or item.nombre_tienda)[:250]
@@ -109,14 +107,6 @@ def actualizar_item(item: CatalogoTipo, extractor=None, ahora=None) -> str:
     aplicar_lectura(item, lectura, ahora or timezone.now())
     item.save(update_fields=CAMPOS_LECTURA)
     return "actualizado" if cambio else "sin_cambio"
-
-
-def recalcular_netos(proveedor: Proveedor) -> None:
-    """Si cambia el descuento de un proveedor, se refresca el neto guardado de sus productos."""
-    for it in CatalogoTipo.objects.filter(proveedor=proveedor, precio_lista__isnull=False):
-        it.descuento_pct = proveedor.descuento_pct
-        it.costo_neto = costo_neto(it.precio_lista, proveedor.descuento_pct)
-        it.save(update_fields=["descuento_pct", "costo_neto"])
 
 
 def grupos_sin_cobertura() -> list:

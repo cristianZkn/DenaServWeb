@@ -19,8 +19,8 @@ Plataforma web de **DenaServ**, empresa de construcción de casas prefabricadas 
 | **Pagos** | Tres pagos por contrato (anticipo 40 %, avance 30 %, entrega 30 %), con registro de **abonos parciales**. |
 | **Avance y bitácora** | Cada registro de la bitácora guarda el % de obra, un comentario y fotos opcionales. El avance debe ser coherente con los pagos (por ejemplo, 50 % exige el 2.º pago cobrado). El panel principal muestra el avance de las obras en ejecución. |
 | **Fichas** | La ficha del cliente es un resumen general (sin materiales). La ficha de la empresa (PDF) incluye el desglose completo de materiales, mano de obra, traslado, ganancia, pagos y bitácora con fotos. |
-| **Materiales y precios** | Catálogo con proveedor, precio de lista, descuento y costo neto. Los precios se actualizan solos cada lunes desde las fichas de las tiendas. |
-| **Proveedores** | Mantenedor de empresas proveedoras con su descuento comercial. |
+| **Materiales y precios** | Catálogo con proveedor, unidad de medida, precio de lista, descuento propio de cada material y costo neto. Los precios se actualizan solos cada lunes desde las fichas de las tiendas (la tienda no informa descuentos: los escribe la empresa en cada material). La mano de obra por m² instalado se decide en cada cotización y queda guardada con la tarifa usada. |
+| **Proveedores** | Mantenedor de las empresas a las que se les compra (razón social, RUT y contacto). |
 | **Portafolio** | Obras finalizadas con hasta 10 fotos, que se pueden publicar u ocultar de la web. |
 | **Ficha del cliente** | Página pública por enlace con el resumen de la cotización y descarga en PDF. |
 

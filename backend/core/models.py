@@ -29,7 +29,6 @@ class Proveedor(models.Model):
     contacto_nombre = models.CharField(max_length=100, null=True, blank=True)
     telefono = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(max_length=150, null=True, blank=True)
-    descuento_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # convenio comercial
     activo = models.BooleanField(default=True)
 
     class Meta:
@@ -62,8 +61,9 @@ class CatalogoTipo(models.Model):
     precio_actualizado_en = models.DateTimeField(null=True, blank=True)
     # >0: la tienda vende por unidad (plancha/tira) y precio_base_unitario se expresa por m² = precio unidad / m2_por_unidad.
     m2_por_unidad = models.DecimalField(max_digits=10, decimal_places=4, default=0)
-    # Registro de la última lectura de la ficha: precio de lista de la tienda (por unidad de venta), descuento
-    # vigente del proveedor y costo neto = precio_lista * (1 - descuento_pct / 100).
+    # Registro de la última lectura de la ficha: precio de lista de la tienda (por unidad de venta) y costo neto =
+    # precio_lista * (1 - descuento_pct / 100). El descuento es de cada material (convenio u oferta que la empresa
+    # consigue en ese producto) y lo escribe la empresa; la lectura de la tienda nunca lo pisa. 0 = sin descuento.
     precio_lista = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     descuento_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     costo_neto = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
@@ -173,6 +173,9 @@ class DetalleCotizacionInsumo(models.Model):
     subtotal_costo = models.DecimalField(max_digits=18, decimal_places=2)
     # True = material que se agregó a mano a la cotización (suma al valor); False = desglose automático para compras.
     es_adicional = models.BooleanField(default=False)
+    # Mano de obra por m² instalado que se cobró en ESTA cotización por este material (0 = sin instalación). Se guarda aquí
+    # para que cambiar la tarifa del catálogo después no altere cotizaciones ya emitidas.
+    mano_obra_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     class Meta:
         db_table = 'detalle_cotizacion_insumo'

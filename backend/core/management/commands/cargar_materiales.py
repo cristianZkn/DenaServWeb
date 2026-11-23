@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.models import CatalogoTipo, Proveedor
 
-CAMPOS = ("descripcion", "unidad_medida", "precio_base_unitario", "etapa_obra", "rendimiento_m2", "m2_por_unidad",
+CAMPOS = ("descripcion", "unidad_medida", "precio_base_unitario", "descuento_pct", "etapa_obra", "rendimiento_m2", "m2_por_unidad",
           "fuente_url", "verificado", "activo")
 
 
@@ -30,6 +30,8 @@ class Command(BaseCommand):
                 valores = {k: fila[k] for k in CAMPOS if k in fila}
                 if "precio_base_unitario" in valores:
                     valores["precio_base_unitario"] = Decimal(str(valores["precio_base_unitario"]))
+                if "descuento_pct" in valores:
+                    valores["descuento_pct"] = Decimal(str(valores["descuento_pct"]))
                 valores.setdefault("unidad_medida", "UN")
                 _, creado = CatalogoTipo.objects.update_or_create(
                     categoria=fila["categoria"].upper(), nombre=fila["nombre"], proveedor=prov, defaults=valores)
@@ -41,14 +43,13 @@ class Command(BaseCommand):
 
     @staticmethod
     def _proveedor(ref):
-        """Texto = razón social existente; objeto {rut_empresa, razon_social, descuento_pct} = se crea si no existe."""
+        """Texto = razón social existente; objeto {rut_empresa, razon_social} = se crea si no existe."""
         if not ref:
             return None
         if isinstance(ref, dict):
             return Proveedor.objects.get_or_create(
                 rut_empresa=ref["rut_empresa"],
-                defaults={"razon_social": ref.get("razon_social", ref["rut_empresa"]),
-                          "descuento_pct": ref.get("descuento_pct", 0)})[0]
+                defaults={"razon_social": ref.get("razon_social", ref["rut_empresa"])})[0]
         prov = Proveedor.objects.filter(razon_social__iexact=ref).first()
         if not prov:
             raise ValueError(f"el proveedor «{ref}» no existe; créelo antes o use el formato con rut_empresa")

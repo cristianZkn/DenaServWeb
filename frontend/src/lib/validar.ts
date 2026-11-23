@@ -1,20 +1,34 @@
 // Validaciones de datos de contacto chilenos (espejo de backend/core/validadores.py).
 
-/** Da formato 12.345.678-5 mientras se escribe (solo dígitos y K, máx. 9 caracteres). */
+/** Da formato 12.345.678-5 mientras se escribe. Solo admite números; la K únicamente puede ser el dígito verificador (el último). */
 export function formatearRut(valor: string): string {
-  const s = valor.replace(/[^0-9kK]/g, "").toUpperCase().slice(0, 9);
-  if (s.length <= 1) return s;
-  return `${s.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${s.slice(-1)}`;
+  const limpio = valor.replace(/[^0-9kK]/g, "").toUpperCase().slice(0, 9);
+  if (limpio.length <= 1) return limpio === "K" ? "" : limpio;
+  const cuerpo = limpio.slice(0, -1).replace(/K/g, "");
+  const dv = limpio.slice(-1);
+  if (!cuerpo) return dv === "K" ? "" : dv;
+  return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${dv}`;
 }
 
-export function rutValido(rut: string): boolean {
-  const s = rut.replace(/[.\-\s]/g, "").toUpperCase();
-  if (!/^\d{7,8}[\dK]$/.test(s)) return false;
-  const cuerpo = s.slice(0, -1).split("").reverse();
-  const suma = cuerpo.reduce((a, d, i) => a + Number(d) * (2 + (i % 6)), 0);
+/** Dígito verificador (módulo 11) que le corresponde a los números del RUN/RUT. */
+export function dvCorrecto(cuerpo: string): string {
+  const suma = cuerpo.split("").reverse().reduce((a, d, i) => a + Number(d) * (2 + (i % 6)), 0);
   const esperado = 11 - (suma % 11);
-  return s.slice(-1) === (esperado === 11 ? "0" : esperado === 10 ? "K" : String(esperado));
+  return esperado === 11 ? "0" : esperado === 10 ? "K" : String(esperado);
 }
+
+/** Mensaje que explica qué está mal en un RUN/RUT, o "" si es válido (mismos textos que el servidor). */
+export function errorRut(valor: string, etiqueta = "RUN"): string {
+  const s = valor.replace(/[.\-\s]/g, "").toUpperCase();
+  if (!/^\d{7,8}[\dK]$/.test(s)) return `El ${etiqueta} debe tener 7 u 8 números y un dígito verificador (0-9 o K). Ejemplo: 12.345.678-5`;
+  const cuerpo = s.slice(0, -1);
+  const esperado = dvCorrecto(cuerpo);
+  if (s.slice(-1) === esperado) return "";
+  const conPuntos = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `El dígito verificador del ${etiqueta} no corresponde: para ${conPuntos} debería ser ${esperado}, no ${s.slice(-1)}. Revise que lo haya escrito bien.`;
+}
+
+export const rutValido = (rut: string) => errorRut(rut) === "";
 
 /** Celular chileno mientras se escribe: la persona ingresa solo los 8 dígitos finales y se agrega "+56 9" con el espacio cada 4. */
 export function formatearTelefono(valor: string): string {
@@ -38,15 +52,27 @@ export function telefonoValido(tel: string): boolean {
 
 export const correoValido = (c: string) => /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(c);
 
-/** Mensaje del primer error de los datos del cliente, o "" si todo está bien. RUN y teléfono son opcionales. */
-export function errorDatosCliente(d: { nombre: string; telefono: string; rut: string; direccion: string }): string {
+/** Mensaje que explica qué le falta a un correo, o "" si es válido (mismos textos que el servidor). */
+export function errorCorreo(correo: string): string {
+  const v = correo.trim().toLowerCase();
+  if (correoValido(v)) return "";
+  if (!v.includes("@")) return "Al correo le falta el «@». Ejemplo: nombre@correo.cl";
+  if (/\s/.test(v) || v.split("@").length > 2) return "El correo no puede llevar espacios ni más de un «@». Ejemplo: nombre@correo.cl";
+  return "El correo está incompleto: después del «@» falta el dominio. Ejemplo: nombre@correo.cl";
+}
+
+export const errorTelefono = (tel: string) => (telefonoValido(tel) ? "" : "El teléfono debe tener 9 dígitos. Ejemplo: +56 9 8765 4321");
+
+/** Errores de los datos del cliente por campo (nombre, rut, telefono, direccion); vacío si todo está bien. RUN y teléfono son opcionales. */
+export function erroresDatosCliente(d: { nombre: string; telefono: string; rut: string; direccion: string }): Record<string, string> {
+  const e: Record<string, string> = {};
   const nombre = d.nombre.trim();
-  if (nombre.length < 3 || nombre.length > 150) return "El nombre del cliente debe tener entre 3 y 150 caracteres.";
-  if (d.rut.trim() && !rutValido(d.rut)) return "El RUN no es válido. Ejemplo: 12.345.678-5";
-  if (d.telefono.trim() && !telefonoValido(d.telefono)) return "El teléfono debe tener 9 dígitos. Ejemplo: +56 9 8765 4321";
+  if (nombre.length < 3 || nombre.length > 150) e.nombre = "El nombre del cliente debe tener entre 3 y 150 caracteres.";
+  if (d.rut.trim() && errorRut(d.rut)) e.rut = errorRut(d.rut);
+  if (d.telefono.trim() && errorTelefono(d.telefono)) e.telefono = errorTelefono(d.telefono);
   const dir = d.direccion.trim();
-  if (dir.length < 5 || dir.length > 255) return "La dirección del terreno debe tener entre 5 y 255 caracteres.";
-  return "";
+  if (dir.length < 5 || dir.length > 255) e.direccion = "La dirección del terreno debe tener entre 5 y 255 caracteres.";
+  return e;
 }
 
 /** Resalta en rojo un campo por su id (para validaciones hechas en código, fuera de un formulario) y le da el foco. */

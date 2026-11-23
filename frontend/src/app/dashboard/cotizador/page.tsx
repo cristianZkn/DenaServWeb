@@ -11,7 +11,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { errorDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
+import { erroresDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
+import ErrorCampo, { useErrores } from "@/components/ErrorCampo";
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
 import { CATEGORIAS } from "@/lib/categorias";
 
@@ -26,10 +27,12 @@ interface CatalogoItem {
   precio_neto: number;
   m2_por_unidad: number;
   mano_obra_m2: number;
+  descuento_pct?: number;
 }
 
 /** Material de la lista, tal como lo edita el usuario (la cantidad se guarda como texto mientras se escribe). */
-interface MaterialLista { catalogo_id: number; cantidad: string }
+/** `instala`/`tarifa`: solo para materiales con tarifa de instalación en el catálogo; se deciden en cada cotización sin tocar el catálogo. */
+interface MaterialLista { catalogo_id: number; cantidad: string; instala: boolean; tarifa: string }
 
 /** Respuesta del servidor ya convertida a números. */
 interface Presupuesto {
@@ -193,7 +196,11 @@ export default function CotizadorPage() {
   };
   useEffect(() => { cargarCombustibles(); }, []);
   const [nTrabajadores, setNTrabajadores] = useState("");
-  const setCampo = (name: string, value: string) => setFormData((prev) => ({ ...prev, [name]: value }));
+  const { errores, limpiar, fallar } = useErrores();
+  const setCampo = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    limpiar(name);
+  };
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setCampo(e.target.name, e.target.value);
   const esCasa = formData.tipo_proyecto === "CASA";
 
@@ -203,6 +210,8 @@ export default function CotizadorPage() {
   const [materialElegido, setMaterialElegido] = useState("");
   const [cantidadElegida, setCantidadElegida] = useState("");
 
+  const tarifaCatalogo = (id: number) => Number(catalogo.find((c) => c.id === id)?.mano_obra_m2 ?? 0);
+
   const agregarMaterial = () => {
     const id = Number(materialElegido);
     if (!id || num(cantidadElegida) <= 0) return;
@@ -210,7 +219,7 @@ export default function CotizadorPage() {
     setMateriales((prev) =>
       prev.some((m) => m.catalogo_id === id)
         ? prev.map((m) => (m.catalogo_id === id ? { ...m, cantidad: String(num(m.cantidad) + num(cantidadElegida)) } : m))
-        : [...prev, { catalogo_id: id, cantidad: cantidadElegida }]
+        : [...prev, { catalogo_id: id, cantidad: cantidadElegida, instala: tarifaCatalogo(id) > 0, tarifa: String(tarifaCatalogo(id)) }]
     );
     setMaterialElegido("");
     setCantidadElegida("");
@@ -218,8 +227,12 @@ export default function CotizadorPage() {
 
   // ---- Lo que se envía al servidor (solo datos completos y válidos)
   const materialesValidos = useMemo(
-    () => materiales.filter((m) => num(m.cantidad) > 0).map((m) => ({ catalogo_id: m.catalogo_id, cantidad: num(m.cantidad) })),
-    [materiales]
+    () => materiales.filter((m) => num(m.cantidad) > 0).map((m) => ({
+      catalogo_id: m.catalogo_id, cantidad: num(m.cantidad),
+      // Con tarifa de instalación en el catálogo se envía la de esta cotización (0 = no se instala); sin ella, no se envía nada.
+      ...(Number(catalogo.find((c) => c.id === m.catalogo_id)?.mano_obra_m2 ?? 0) > 0 ? { mano_obra_m2: m.instala ? num(m.tarifa) : 0 } : {}),
+    })),
+    [materiales, catalogo]
   );
 
   // Carga del catálogo de materiales activos.
@@ -322,11 +335,16 @@ export default function CotizadorPage() {
     e.preventDefault();
     setError("");
 
-    const errorDatos = errorDatosCliente({
+    const ed = erroresDatosCliente({
       nombre: formData.cliente_nombre, telefono: formData.cliente_telefono,
       rut: formData.cliente_rut, direccion: formData.direccion_terreno,
     });
-    if (errorDatos) return setError(errorDatos);
+    const porCampo: Record<string, string> = {};
+    if (ed.nombre) porCampo.cliente_nombre = ed.nombre;
+    if (ed.rut) porCampo.cliente_rut = ed.rut;
+    if (ed.telefono) porCampo.cliente_telefono = ed.telefono;
+    if (ed.direccion) porCampo.direccion_terreno = ed.direccion;
+    if (fallar(porCampo)) return;
     if (num(formData.superficie_m2) <= 0) return setError("Los metros cuadrados deben ser mayores a 0.");
     if ((llevaRadier || !esCasa) && num(tarifaRadier) <= 0) return setError("Elija el valor de la mano de obra del radier.");
     if (num(nTrabajadores) < 1) return setError("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.");
@@ -372,7 +390,7 @@ export default function CotizadorPage() {
   const totalLineas = presupuesto ? presupuesto.materialesLinea.length + presupuesto.manoObraDetalle.length : 0;
 
   return (
-    <form onSubmit={guardar} className="max-w-6xl mx-auto pb-28 lg:pb-0">
+    <form onSubmit={guardar} noValidate className="max-w-6xl mx-auto pb-28 lg:pb-0">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Nuevo proyecto</h1>
         <p className="text-slate-600 mt-1">Complete los datos en el orden indicado: cada paso alimenta al siguiente y el valor de la obra se actualiza en el panel lateral.</p>
@@ -388,25 +406,33 @@ export default function CotizadorPage() {
               <div>
                 <label htmlFor="cliente_nombre" className={labelCls}>Nombre del cliente</label>
                 <input id="cliente_nombre" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleChange}
-                  placeholder="Ej.: Carolina Rojas" className={inputCls} required minLength={3} maxLength={150} />
+                  placeholder="Ej.: Carolina Rojas" className={inputCls} required minLength={3} maxLength={150}
+                  aria-invalid={errores.cliente_nombre ? true : undefined} aria-describedby={errores.cliente_nombre ? "cliente_nombre-error" : undefined} />
+                <ErrorCampo id="cliente_nombre" texto={errores.cliente_nombre} />
               </div>
               <div>
                 <label htmlFor="cliente_rut" className={labelCls}>RUN del cliente</label>
                 <input id="cliente_rut" name="cliente_rut" value={formData.cliente_rut}
                   onChange={(e) => setCampo("cliente_rut", formatearRut(e.target.value))}
-                  placeholder="12.345.678-5" maxLength={12} className={inputCls} />
+                  placeholder="12.345.678-5" maxLength={12} className={inputCls} autoComplete="off"
+                  aria-invalid={errores.cliente_rut ? true : undefined} aria-describedby={errores.cliente_rut ? "cliente_rut-error" : undefined} />
+                <ErrorCampo id="cliente_rut" texto={errores.cliente_rut} />
               </div>
               <div>
                 <label htmlFor="cliente_telefono" className={labelCls}>Teléfono o WhatsApp</label>
                 <input id="cliente_telefono" name="cliente_telefono" type="tel" value={formData.cliente_telefono}
                   onChange={(e) => setCampo("cliente_telefono", formatearTelefono(e.target.value))}
-                  placeholder="+56 9 8765 4321" maxLength={16} className={inputCls} />
+                  placeholder="+56 9 8765 4321" maxLength={16} className={inputCls}
+                  aria-invalid={errores.cliente_telefono ? true : undefined} aria-describedby={errores.cliente_telefono ? "cliente_telefono-error" : undefined} />
+                <ErrorCampo id="cliente_telefono" texto={errores.cliente_telefono} />
               </div>
             </div>
             <div>
               <label htmlFor="direccion_terreno" className={labelCls}>Dirección del terreno</label>
               <input id="direccion_terreno" name="direccion_terreno" value={formData.direccion_terreno} onChange={handleChange}
-                placeholder="Ej.: Parcela 14, Camino Los Boldos, Limache" className={inputCls} required minLength={5} maxLength={255} />
+                placeholder="Ej.: Parcela 14, Camino Los Boldos, Limache" className={inputCls} required minLength={5} maxLength={255}
+                aria-invalid={errores.direccion_terreno ? true : undefined} aria-describedby={errores.direccion_terreno ? "direccion_terreno-error" : undefined} />
+              <ErrorCampo id="direccion_terreno" texto={errores.direccion_terreno} />
             </div>
           </Seccion>
 
@@ -650,11 +676,14 @@ export default function CotizadorPage() {
                   const nombre = catalogo.find((c) => c.id === m.catalogo_id)?.nombre ?? `Material ${m.catalogo_id}`;
                   const proveedor = catalogo.find((c) => c.id === m.catalogo_id)?.proveedor?.razon_social;
                   const linea = presupuesto?.materialesLinea.find((a) => a.id === m.catalogo_id);
+                  const item = catalogo.find((c) => c.id === m.catalogo_id);
+                  const conTarifa = Number(item?.mano_obra_m2 ?? 0) > 0;
+                  const cambiar = (cambios: Partial<MaterialLista>) => setMateriales((prev) => prev.map((x) => (x.catalogo_id === m.catalogo_id ? { ...x, ...cambios } : x)));
                   return (
                     <li key={m.catalogo_id} className="p-3 flex flex-wrap items-center gap-3">
                       <div className="basis-full sm:basis-0 sm:flex-1 sm:min-w-[10rem]">
                         <div className="font-semibold text-slate-900">{nombre}</div>
-                        <div className="text-sm text-slate-500">{linea ? `${proveedor ? `${proveedor} · ` : ""}${clp(linea.precioNeto)} por unidad (con descuento)` : "Calculando…"}</div>
+                        <div className="text-sm text-slate-500">{linea ? `${proveedor ? `${proveedor} · ` : ""}${clp(linea.precioNeto)} por unidad${item?.descuento_pct ? ` (con ${item.descuento_pct} % de descuento)` : ""}` : "Calculando…"}</div>
                       </div>
                       <input type="number" inputMode="decimal" min="0" step="any" value={m.cantidad} aria-label={`Cantidad de ${nombre}`}
                         onFocus={(e) => e.target.select()}
@@ -663,6 +692,24 @@ export default function CotizadorPage() {
                       <span className="ml-auto sm:ml-0 sm:w-28 text-right font-bold tabular-nums">{linea ? clp(linea.subtotal) : "—"}</span>
                       <button type="button" onClick={() => setMateriales((prev) => prev.filter((x) => x.catalogo_id !== m.catalogo_id))}
                         className="text-red-700 font-semibold hover:underline cursor-pointer">Quitar</button>
+                      {conTarifa && (
+                        <div className="basis-full flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm">
+                          <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                            <input type="checkbox" className="!w-4 !min-h-0" checked={m.instala} onChange={(e) => cambiar({ instala: e.target.checked })} />
+                            Lo instalan nuestros trabajadores
+                          </label>
+                          {m.instala ? (
+                            <label className="flex items-center gap-2 text-slate-600">
+                              Tarifa $ por m² y por trabajador
+                              <input type="number" inputMode="numeric" min="0" step="100" value={m.tarifa} aria-label={`Tarifa de instalación de ${nombre}`}
+                                onFocus={(e) => e.target.select()} onChange={(e) => cambiar({ tarifa: e.target.value })} className="!w-28 !min-h-0 h-9 px-2 border border-slate-300 rounded-lg" />
+                              <span className="text-xs text-slate-500">(catálogo: {clp(Number(item?.mano_obra_m2 ?? 0))})</span>
+                            </label>
+                          ) : (
+                            <span className="text-slate-500">Esta vez no se cobra mano de obra por instalarlo.</span>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

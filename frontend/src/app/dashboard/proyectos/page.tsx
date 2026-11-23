@@ -1,5 +1,6 @@
 "use client";
 
+import EncabezadoPagina from "@/components/EncabezadoPagina";
 import { useDialogo } from "@/components/ConfirmDialog";
 
 import { useEffect, useState } from "react";
@@ -164,42 +165,28 @@ export default function ProyectosPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      {/* Barra superior: título, búsqueda y acción principal en una sola línea */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 w-full sm:w-auto sm:mr-auto">
-          Proyectos <span className="text-slate-400 font-semibold text-lg">{cotizaciones.length}</span>
-        </h1>
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
-          placeholder="Buscar cliente, código o dirección"
-          aria-label="Buscar proyecto"
-          className="flex-1 min-w-0 sm:!w-80 sm:flex-none"
-        />
-        <Link
-          href="/dashboard/cotizador"
-          className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 sm:px-5 h-11 inline-flex items-center justify-center rounded-lg shadow-sm transition whitespace-nowrap"
-        >
-          + Nuevo proyecto
-        </Link>
-      </div>
+      <EncabezadoPagina icono="📁" titulo="Proyectos" descripcion="Cotizaciones y obras: valor, pagos, estado y ficha del cliente."
+        resumen={ESTADOS_PROYECTO.map((e) => ({ texto: e.plural, valor: cuenta(e.key as string) }))}
+        acciones={
+          <Link href="/dashboard/cotizador"
+            className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 sm:px-5 h-11 inline-flex items-center justify-center rounded-lg shadow-sm transition whitespace-nowrap">
+            + Nuevo proyecto
+          </Link>
+        } />
 
-      {/* Filtro por estado del proyecto */}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar proyectos por estado">
-        {[{ key: "TODOS", label: "Todos" }, ...ESTADOS_PROYECTO.map((e) => ({ key: e.key as string, label: e.plural }))].map((e) => (
-          <button
-            key={e.key}
-            type="button"
-            aria-pressed={filtro === e.key}
-            onClick={() => { setFiltro(e.key); setPagina(1); }}
-            className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
-              filtro === e.key ? "bg-blue-900 text-white" : "bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
-            }`}
-          >
-            {e.label} <span className="opacity-70">{cuenta(e.key)}</span>
-          </button>
-        ))}
+      {/* Búsqueda y filtro por estado */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <input type="search" value={busqueda} onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
+          placeholder="Buscar cliente, código, dirección, teléfono o RUN" aria-label="Buscar proyecto" className="w-full sm:!w-96" />
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar proyectos por estado">
+          {[{ key: "TODOS", label: "Todos" }, ...ESTADOS_PROYECTO.map((e) => ({ key: e.key as string, label: e.plural }))].map((e) => (
+            <button key={e.key} type="button" aria-pressed={filtro === e.key} onClick={() => { setFiltro(e.key); setPagina(1); }}
+              className={`!min-h-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition cursor-pointer ring-1 ring-inset ${
+                filtro === e.key ? "bg-blue-900 text-white ring-blue-900" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"}`}>
+              {e.label} <span className="opacity-70">{cuenta(e.key)}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -208,7 +195,7 @@ export default function ProyectosPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse block md:table">
             <thead className="hidden md:table-header-group">

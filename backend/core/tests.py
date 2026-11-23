@@ -184,9 +184,9 @@ class BomTests(TestCase):
     def test_insumos_por_etapa_con_descuento_y_detalle_guardado(self):
         from .api import create_jwt_token
         u = Usuario.objects.create(rut="2-7", nombre_completo="B", email="b@d.cl")
-        prov = Proveedor.objects.create(rut_empresa="9-9", razon_social="Sodimac", descuento_pct=10)
+        prov = Proveedor.objects.create(rut_empresa="9-9", razon_social="Sodimac")
         CatalogoTipo.objects.create(categoria="INSUMO", nombre="Pino 2x3", unidad_medida="UN", precio_base_unitario=1000,
-                                    proveedor=prov, etapa_obra="ETAPA_1", rendimiento_m2=2)
+                                    proveedor=prov, etapa_obra="ETAPA_1", rendimiento_m2=2, descuento_pct=10)
         CatalogoTipo.objects.create(categoria="INSUMO", nombre="Yeso", unidad_medida="UN", precio_base_unitario=500,
                                     etapa_obra="ETAPA_2", rendimiento_m2=1)
         r = Client().post("/api/cotizaciones/calcular", {"superficie_m2": 10}, content_type="application/json",
@@ -285,7 +285,7 @@ class ExtraccionTests(TestCase):
 
 class PreciosTests(TestCase):
     def setUp(self):
-        self.prov = Proveedor.objects.create(rut_empresa="EASY-WEB", razon_social="Easy", descuento_pct=10)
+        self.prov = Proveedor.objects.create(rut_empresa="EASY-WEB", razon_social="Easy")
 
     def _item(self, **kw):
         base = dict(categoria="TABIQUERIA", nombre="Pino 2x3", unidad_medida="UN", proveedor=self.prov,
@@ -299,7 +299,7 @@ class PreciosTests(TestCase):
 
     def test_actualiza_lista_descuento_neto_y_fecha(self):
         from . import precios
-        it = self._item()
+        it = self._item(descuento_pct=10)
         r = precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(10000)}, pausa=0)
         it.refresh_from_db()
         self.assertEqual((it.precio_lista, it.descuento_pct, it.costo_neto), (Decimal("10000.00"), Decimal("10.00"), Decimal("9000.00")))
@@ -354,13 +354,12 @@ class PreciosTests(TestCase):
         CatalogoTipo.objects.filter(categoria="TECHUMBRE").update(verificado=False)
         self.assertEqual([g["codigo"] for g in precios.grupos_sin_cobertura()], ["TECHUMBRE"])
 
-    def test_cambiar_descuento_del_proveedor_refresca_el_neto(self):
+    def test_la_lectura_de_la_tienda_respeta_el_descuento_propio_del_material(self):
         from . import precios
-        it = self._item(precio_lista=10000, costo_neto=9000)
-        self.prov.descuento_pct = 20; self.prov.save()
-        precios.recalcular_netos(self.prov)
+        it = self._item(precio_lista=10000, costo_neto=10000, descuento_pct=20)
+        precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(12000)}, pausa=0)
         it.refresh_from_db()
-        self.assertEqual((it.descuento_pct, it.costo_neto), (Decimal("20.00"), Decimal("8000.00")))
+        self.assertEqual((it.descuento_pct, it.precio_lista, it.costo_neto), (Decimal("20.00"), Decimal("12000.00"), Decimal("9600.00")))
 
     def test_actualizacion_en_segundo_plano(self):
         import time
@@ -384,7 +383,7 @@ class InsumosApiTests(TestCase):
         from django.test import override_settings
         self.u = Usuario.objects.create(rut="1-9", nombre_completo="T", email="t@t.cl")
         self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
-        self.prov = Proveedor.objects.create(rut_empresa="SODIMAC-WEB", razon_social="Sodimac", descuento_pct=5)
+        self.prov = Proveedor.objects.create(rut_empresa="SODIMAC-WEB", razon_social="Sodimac")
         CatalogoTipo.objects.create(categoria="TECHUMBRE", nombre="Zinc", unidad_medida="UN", proveedor=self.prov,
                                     fuente_url="https://www.sodimac.cl/sodimac-cl/product/1/", precio_lista=10000,
                                     descuento_pct=5, costo_neto=9500, precio_base_unitario=10000)
@@ -429,11 +428,11 @@ class InsumosApiTests(TestCase):
         from . import scraper
         ficha = {"nombre": "Cemento 25 kg", "sku": "7", "precio": D(5090)}
         with mock.patch("core.precios.scraper.extraer", return_value=ficha):
-            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/7/"},
+            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/7/", "unidad_medida": "SACO", "descuento_pct": 5},
                                  content_type="application/json", **self.h)
         self.assertEqual(r.status_code, 200)
         j = r.json()
-        self.assertEqual((j["nombre"], j["precio_lista"], j["costo_neto"]), ("Cemento 25 kg", 5090, 4835.5))  # 5 % de descuento de Sodimac
+        self.assertEqual((j["nombre"], j["precio_lista"], j["costo_neto"]), ("Cemento 25 kg", 5090, 4835.5))  # 5 % de descuento propio del material
         with mock.patch("core.precios.scraper.extraer", side_effect=scraper.ErrorExtraccion("La ficha ya no existe en la tienda (404).")):
             r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/9/"},
                                  content_type="application/json", **self.h)
@@ -809,9 +808,9 @@ class MaterialesAdicionalesTests(TestCase):
         from .api import create_jwt_token
         u = Usuario.objects.create(rut="8-1", nombre_completo="M", email="m@d.cl")
         self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
-        prov = Proveedor.objects.create(rut_empresa="PROV-M", razon_social="Prov M", descuento_pct=10)
+        prov = Proveedor.objects.create(rut_empresa="PROV-M", razon_social="Prov M")
         self.osb = CatalogoTipo.objects.create(categoria="INSUMO", nombre="Plancha OSB", unidad_medida="UN",
-                                               precio_base_unitario=10000, proveedor=prov)  # neto 9.000
+                                               precio_base_unitario=10000, proveedor=prov, descuento_pct=10)  # neto 9.000
 
     def calc(self, **extra):
         return self.c.post("/api/cotizaciones/calcular", {"superficie_m2": 40, "distancia_km": 10, "modo_lista": True, **extra},
@@ -848,7 +847,7 @@ class ModoListaTests(TestCase):
         from .api import create_jwt_token
         u = Usuario.objects.create(rut="9-1", nombre_completo="L", email="l@d.cl")
         self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
-        prov = Proveedor.objects.create(rut_empresa="PROV-L", razon_social="Prov L", descuento_pct=0)
+        prov = Proveedor.objects.create(rut_empresa="PROV-L", razon_social="Prov L")
         self.cem = CatalogoTipo.objects.create(categoria="BASE_RADIER", nombre="Saco cemento", unidad_medida="SACO",
                                                precio_base_unitario=5000, proveedor=prov)
         self.base = {"superficie_m2": 50, "distancia_km": 10, "modo_lista": True, "m2_vigas_vista": 10,
@@ -942,7 +941,7 @@ class CotizacionTarifasApiTests(TestCase):
     def setUp(self):
         u = Usuario.objects.create(rut="4-4", nombre_completo="Tarifas", email="tarifas@d.cl")
         self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
-        prov = Proveedor.objects.create(rut_empresa="PROV-T", razon_social="Prov T", descuento_pct=0)
+        prov = Proveedor.objects.create(rut_empresa="PROV-T", razon_social="Prov T")
         self.osb = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="LP Smartside Lap Siding", unidad_medida="M2",
                                                precio_base_unitario=10000, proveedor=prov, mano_obra_m2=2000)
         self.cot = self.c.post("/api/cotizaciones/", {
@@ -1026,10 +1025,10 @@ class SelectorMaterialesApiTests(TestCase):
     def setUp(self):
         u = Usuario.objects.create(rut="5-6", nombre_completo="Selector", email="selector@d.cl")
         self.c, self.h = Client(), {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
-        self.prov = Proveedor.objects.create(rut_empresa="PROV-S", razon_social="Maderas SpA", descuento_pct=10)
+        self.prov = Proveedor.objects.create(rut_empresa="PROV-S", razon_social="Maderas SpA")
 
     def test_catalogo_trae_proveedor_y_precio_neto_con_descuento(self):
-        CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4", unidad_medida="UN", precio_base_unitario=10000, proveedor=self.prov)
+        CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4", unidad_medida="UN", precio_base_unitario=10000, proveedor=self.prov, descuento_pct=10)
         CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino 2x4 sin convenio", unidad_medida="UN", precio_base_unitario=5000)
         filas = {f["nombre"]: f for f in self.c.get("/api/catalogo-tipos/?activo=true", **self.h).json()}
         self.assertEqual((filas["Pino 2x4"]["proveedor"]["razon_social"], filas["Pino 2x4"]["precio_neto"]), ("Maderas SpA", 9000))
@@ -1688,7 +1687,7 @@ class RendimientoTests(TestCase):
         self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
 
     def _cotizaciones(self, n):
-        prov = Proveedor.objects.create(rut_empresa=f"P{n}-{Cotizacion.objects.count()}", razon_social="Prov", descuento_pct=5)
+        prov = Proveedor.objects.create(rut_empresa=f"P{n}-{Cotizacion.objects.count()}", razon_social="Prov")
         base = CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="Base", unidad_medida="M2", proveedor=prov, precio_base_unitario=100)
         for i in range(n):
             Cotizacion.objects.create(codigo_cotizacion=f"COT-R{Cotizacion.objects.count()}{i}", cliente_nombre="Ana", direccion_terreno="Calle 1234",
@@ -1752,3 +1751,94 @@ class FichaPublicaPrivacidadTests(TestCase):
         self.assertEqual((hito_pub["fase"], hito_pub["monto_abonado"], hito_pub["estado"]), ("ANTICIPO_40", 100, "ABONADO"))   # lo que el cliente sí necesita
         interno = self.client.get(f"/api/cotizaciones/{cot.id}/", **h).json()["hitos_pago"][0]
         self.assertEqual(interno["registros"][0]["nota"], "NOTA-INTERNA")   # el panel interno sigue viéndolo todo
+
+
+class RunYCorreoMensajesTests(TestCase):
+    def test_el_run_con_digito_verificador_incorrecto_dice_cual_deberia_ser(self):
+        from . import validadores as v
+        with self.assertRaises(ValueError) as e:
+            v.normalizar_rut("12.121.212-1", "RUN")
+        self.assertIn("debería ser 9", str(e.exception))
+        self.assertIn("12.121.212", str(e.exception))
+        self.assertEqual(v.normalizar_rut("12121212-9", "RUN"), "12.121.212-9")
+
+    def test_un_run_con_letras_o_largo_incorrecto_explica_el_formato(self):
+        from . import validadores as v
+        for malo in ("kkkkkkkk-k", "12345-6", "abc", ""):
+            with self.assertRaises(ValueError) as e:
+                v.normalizar_rut(malo, "RUN")
+            self.assertIn("7 u 8 números", str(e.exception), malo)
+
+    def test_el_correo_incompleto_dice_que_falta(self):
+        from . import validadores as v
+        for malo, frase in (("gmail.com", "falta el «@»"), ("ana@", "falta el dominio"), ("a b@c.cl", "espacios")):
+            with self.assertRaises(ValueError) as e:
+                v.validar_email(malo)
+            self.assertIn(frase, str(e.exception), malo)
+
+
+class DescuentoPorMaterialTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def test_el_proveedor_ya_no_tiene_descuento(self):
+        r = self.client.post("/api/proveedores/", {"rut_empresa": "76.123.456-0", "razon_social": "Maderas SpA"}, content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("descuento_pct", r.json())
+
+    def test_el_descuento_se_pone_en_el_material_y_recalcula_su_neto(self):
+        item = CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino", unidad_medida="UN", precio_base_unitario=10000, precio_lista=10000,
+                                           costo_neto=10000, fuente_url="https://www.easy.cl/pino-1/p", verificado=True)
+        cuerpo = {"categoria": "TABIQUERIA", "nombre": "Pino", "unidad_medida": "UN", "fuente_url": item.fuente_url, "verificado": True, "descuento_pct": 20}
+        r = self.client.put(f"/api/catalogo-tipos/{item.id}", cuerpo, content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["descuento_pct"], r.json()["costo_neto"], r.json()["precio_neto"]), (20, 8000, 8000))
+        fila = next(i for i in self.client.get("/api/insumos/", **self.h).json() if i["id"] == item.id)
+        self.assertEqual((fila["descuento_pct"], fila["costo_neto"]), (20, 8000))
+        self.assertEqual(self.client.put(f"/api/catalogo-tipos/{item.id}", {**cuerpo, "descuento_pct": 150}, content_type="application/json", **self.h).status_code, 422)
+
+    def test_la_unidad_de_medida_es_obligatoria_y_debe_ser_conocida(self):
+        crear = lambda **kw: self.client.post("/api/catalogo-tipos/", {"categoria": "INSUMO", "nombre": "Clavos", "precio_base_unitario": 100, **kw}, content_type="application/json", **self.h)
+        self.assertEqual(crear(unidad_medida="").status_code, 422)
+        self.assertEqual(crear(unidad_medida="metros mágicos").status_code, 422)
+        self.assertEqual(crear(unidad_medida="caja").json()["unidad_medida"], "CAJA")
+
+
+class InstalacionPorCotizacionTests(TestCase):
+    """La mano de obra por m² instalado se decide en cada cotización y queda guardada con la tarifa que se usó."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        prov = Proveedor.objects.create(rut_empresa="PROV-I", razon_social="Prov I")
+        self.osb = CatalogoTipo.objects.create(categoria="REVESTIMIENTO", nombre="OSB Lap", unidad_medida="M2", precio_base_unitario=5000,
+                                               proveedor=prov, mano_obra_m2=2000)
+
+    def calc(self, **mat):
+        cuerpo = {"superficie_m2": 40, "distancia_km": 10, "modo_tarifas": True, "n_trabajadores": 2,
+                  "materiales": [{"catalogo_id": self.osb.id, "cantidad": 10, **mat}]}
+        return self.client.post("/api/cotizaciones/calcular", cuerpo, content_type="application/json", **self.h).json()
+
+    def test_sin_dato_usa_la_tarifa_del_catalogo_con_dato_la_cambia_o_la_quita(self):
+        base = float(self.calc(mano_obra_m2=0)["costo_mano_obra"])
+        con_catalogo = float(self.calc()["costo_mano_obra"])
+        otra_tarifa = float(self.calc(mano_obra_m2=3000)["costo_mano_obra"])
+        self.assertEqual(con_catalogo - base, 10 * 2000 * 2)    # 10 m² x $2.000 x 2 trabajadores
+        self.assertEqual(otra_tarifa - base, 10 * 3000 * 2)
+
+    def test_la_cotizacion_guarda_la_tarifa_usada_y_no_cambia_si_el_catalogo_cambia_despues(self):
+        cuerpo = {"cliente_nombre": "Ana", "direccion_terreno": "Calle 1234", "superficie_m2": 40, "distancia_flete_km": 10, "modo_tarifas": True,
+                  "n_trabajadores": 2, "materiales": [{"catalogo_id": self.osb.id, "cantidad": 10, "mano_obra_m2": 0}]}
+        cot = self.client.post("/api/cotizaciones/", cuerpo, content_type="application/json", **self.h)
+        self.assertEqual(cot.status_code, 200, cot.content)
+        from .models import DetalleCotizacionInsumo
+        d = DetalleCotizacionInsumo.objects.get(cotizacion_id=cot.json()["id"], es_adicional=True)
+        self.assertEqual(d.mano_obra_m2, 0)                       # esta vez no se instaló
+        CatalogoTipo.objects.filter(id=self.osb.id).update(mano_obra_m2=9999)   # la tarifa del catálogo sube
+        desglose = self.client.get(f"/api/cotizaciones/{cot.json()['id']}/desglose/", **self.h).json()
+        self.assertFalse(any(l["concepto"].startswith("Instalación") for l in desglose["mano_obra"]))

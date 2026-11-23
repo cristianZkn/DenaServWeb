@@ -1,5 +1,6 @@
 "use client";
 
+import EncabezadoPagina from "@/components/EncabezadoPagina";
 import { useDialogo } from "@/components/ConfirmDialog";
 import { useEffect, useState } from "react";
 
@@ -107,13 +108,8 @@ export default function TarifasPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      <div className="bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
-        <h1 className="text-2xl font-extrabold text-slate-900">Tarifas del cálculo</h1>
-        <p className="text-sm text-slate-500 mt-1 max-w-3xl">
-          Valores fijos con los que el cotizador calcula el precio de cada obra. Un cambio rige para los proyectos que se cotizan desde ese
-          momento; los proyectos ya guardados mantienen su valor, salvo que se les modifique el monto.
-        </p>
-      </div>
+      <EncabezadoPagina icono="💲" titulo="Tarifas del cálculo"
+        descripcion="Valores fijos con los que el cotizador calcula el precio de cada obra. Un cambio rige para los proyectos que se cotizan desde ese momento; los ya guardados mantienen su valor, salvo que se les modifique el monto." />
 
       <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" aria-labelledby="comb-titulo">
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">

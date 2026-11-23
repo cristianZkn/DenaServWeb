@@ -43,8 +43,7 @@ def _neto(item):
     """Costo neto unitario aplicando el descuento del proveedor (convenio)."""
     if not item:
         return Decimal(0)
-    d = item.proveedor.descuento_pct if item.proveedor else 0
-    return calculo.costo_neto(item.precio_base_unitario, d)
+    return calculo.costo_neto(item.precio_base_unitario, item.descuento_pct)
 
 
 def _precio_minimo(categoria):
@@ -67,7 +66,7 @@ def _calcular_desde_catalogo(data):
             raise ValueError("Uno de los materiales de la lista ya no está disponible en el catálogo.")
         adicionales.append({'id': it.id, 'nombre': it.nombre, 'unidad': it.unidad_medida,
                             'cantidad': mat.cantidad, 'precio_neto': _neto(it), 'etapa': it.etapa_obra or 'ETAPA_1',
-                            'mano_obra_m2': it.mano_obra_m2})
+                            'mano_obra_m2': it.mano_obra_m2 if mat.mano_obra_m2 is None else mat.mano_obra_m2})
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
     traslados = [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
@@ -425,7 +424,6 @@ def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
         for attr, value in data.dict().items():
             setattr(proveedor, attr, value)
         proveedor.save()
-        precios.recalcular_netos(proveedor)
         return 200, proveedor
     except Proveedor.DoesNotExist:
         return 404, {"message": "Proveedor no encontrado"}
@@ -528,6 +526,8 @@ def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSche
         url_antes, verificado_antes = item.fuente_url, item.verificado
         for attr, value in data.dict(exclude_unset=True).items():
             setattr(item, attr, value)
+        if item.precio_lista is not None:  # si cambió el descuento, el costo neto guardado se recalcula sin volver a leer la tienda
+            item.costo_neto = precios.costo_neto(item.precio_lista, item.descuento_pct)
         # Si cambia la ficha o el usuario confirma el producto, se vuelve a leer y se acepta lo que muestre hoy.
         if item.fuente_url and (item.fuente_url != url_antes or (item.verificado and not verificado_antes)):
             item.sku = ""
@@ -619,7 +619,8 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 for l in r.get("mano_obra_lineas", [])])
             DetalleCotizacionInsumo.objects.bulk_create([
                 DetalleCotizacionInsumo(cotizacion=cotizacion, catalogo_tipo_id=i["id"], etapa_obra=i["etapa"],
-                                        cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"], es_adicional=True)
+                                        cantidad_calculada=i["cantidad"], subtotal_costo=i["subtotal"], es_adicional=True,
+                                        mano_obra_m2=i.get("mano_obra_m2") or 0)
                 for i in r.get("adicionales", [])])
 
             # Hitos 40/30/30 en Decimal; el último absorbe el redondeo.
@@ -783,7 +784,8 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 base_terreno_id=cot.base_terreno_id, revestimiento_id=cot.revestimiento_id,
                 ganancia_m2=float(cot.ganancia_m2), m2_vigas_vista=float(cot.m2_vigas_vista),
                 tipo_proyecto=cot.tipo_proyecto, radier_m2=float(cot.radier_m2),
-                materiales=[MaterialAdicionalInSchema(catalogo_id=d.catalogo_tipo_id, cantidad=float(d.cantidad_calculada))
+                materiales=[MaterialAdicionalInSchema(catalogo_id=d.catalogo_tipo_id, cantidad=float(d.cantidad_calculada),
+                                                      mano_obra_m2=float(d.mano_obra_m2))   # se mantiene la tarifa con la que se cotizó
                             for d in cot.detalles_insumo.filter(es_adicional=True)],
                 maestros=[ManoObraInSchema(cantidad=l.cantidad, cobro=float(l.cobro)) for l in cot.mano_obra.all()],
                 modo_lista=cot.modo_lista, modo_tarifas=cot.modo_tarifas, n_trabajadores=cot.n_trabajadores,
@@ -1188,7 +1190,7 @@ def desglose_cotizacion(request, cotizacion_id: int):
     } for d in detalles]
     mano_obra, traslado = [], None
     if cot.modo_tarifas:
-        adicionales = [{"nombre": d.catalogo_tipo.nombre, "cantidad": d.cantidad_calculada, "mano_obra_m2": d.catalogo_tipo.mano_obra_m2}
+        adicionales = [{"nombre": d.catalogo_tipo.nombre, "cantidad": d.cantidad_calculada, "mano_obra_m2": d.mano_obra_m2}
                        for d in detalles if d.es_adicional]
         lineas = calculo.lineas_mano_obra_tarifas(cot.superficie_m2, cot.n_trabajadores, cot.m2_vigas_vista, cot.tipo_proyecto,
                                                   adicionales, cot.lleva_radier, cot.tarifa_radier_m2, calculo.vigentes())

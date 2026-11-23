@@ -7,7 +7,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import Paginador from "@/components/Paginador";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { errorDatosCliente, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
+import { erroresDatosCliente, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
+import ErrorCampo, { useErrores } from "@/components/ErrorCampo";
 import ContratoNotarial from "@/components/ContratoNotarial";
 import { bajarContrato, unirContrato } from "@/lib/contrato";
 import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
@@ -305,11 +306,15 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const { errores, limpiar, fallar, props: ep } = useErrores();
   const guardarDatos = async () => {
-    const vacios = [["pd-nombre", form.cliente_nombre], ["pd-dir", form.direccion_terreno]].filter(([, v]) => !v.trim()).map(([i]) => i);
-    if (vacios.length) { marcarInvalido(...vacios); return avisar("Complete los campos obligatorios marcados en rojo.", true); }
-    const err = errorDatosCliente({ nombre: form.cliente_nombre, telefono: form.cliente_telefono, rut: form.cliente_rut, direccion: form.direccion_terreno });
-    if (err) return avisar(err, true);
+    const ed = erroresDatosCliente({ nombre: form.cliente_nombre, telefono: form.cliente_telefono, rut: form.cliente_rut, direccion: form.direccion_terreno });
+    const porCampo: Record<string, string> = {};
+    if (ed.nombre) porCampo["pd-nombre"] = ed.nombre;
+    if (ed.rut) porCampo["pd-rut"] = ed.rut;
+    if (ed.telefono) porCampo["pd-tel"] = ed.telefono;
+    if (ed.direccion) porCampo["pd-dir"] = ed.direccion;
+    if (fallar(porCampo)) return;
     const res = await fetch(`/api/cotizaciones/${id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify(payload(true, true)) });
     if (!res.ok) return avisar((await res.json()).message || "No se pudo guardar.", true);
     avisar("Listo: los datos del cliente quedaron guardados.");
@@ -470,19 +475,23 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <label className={campo} htmlFor="pd-nombre">Nombre del cliente *</label>
-            <input id="pd-nombre" value={form.cliente_nombre} onChange={set("cliente_nombre")} maxLength={150} />
+            <input {...ep("pd-nombre")} value={form.cliente_nombre} onChange={(e) => { setForm({ ...form, cliente_nombre: e.target.value }); limpiar("pd-nombre"); }} maxLength={150} />
+            <ErrorCampo id="pd-nombre" texto={errores["pd-nombre"]} />
           </div>
           <div>
-            <label className={campo}>RUN del cliente</label>
-            <input value={form.cliente_rut} onChange={(e) => setForm({ ...form, cliente_rut: formatearRut(e.target.value) })} placeholder="12.345.678-5" maxLength={12} />
+            <label className={campo} htmlFor="pd-rut">RUN del cliente</label>
+            <input {...ep("pd-rut")} autoComplete="off" value={form.cliente_rut} onChange={(e) => { setForm({ ...form, cliente_rut: formatearRut(e.target.value) }); limpiar("pd-rut"); }} placeholder="12.345.678-5" maxLength={12} />
+            <ErrorCampo id="pd-rut" texto={errores["pd-rut"]} />
           </div>
           <div>
-            <label className={campo}>Teléfono</label>
-            <input type="tel" value={form.cliente_telefono} onChange={(e) => setForm({ ...form, cliente_telefono: formatearTelefono(e.target.value) })} placeholder="+56 9 8765 4321" maxLength={16} />
+            <label className={campo} htmlFor="pd-tel">Teléfono</label>
+            <input {...ep("pd-tel")} type="tel" value={form.cliente_telefono} onChange={(e) => { setForm({ ...form, cliente_telefono: formatearTelefono(e.target.value) }); limpiar("pd-tel"); }} placeholder="+56 9 8765 4321" maxLength={16} />
+            <ErrorCampo id="pd-tel" texto={errores["pd-tel"]} />
           </div>
           <div>
             <label className={campo} htmlFor="pd-dir">Dirección del terreno *</label>
-            <input id="pd-dir" value={form.direccion_terreno} onChange={set("direccion_terreno")} maxLength={255} />
+            <input {...ep("pd-dir")} value={form.direccion_terreno} onChange={(e) => { setForm({ ...form, direccion_terreno: e.target.value }); limpiar("pd-dir"); }} maxLength={255} />
+            <ErrorCampo id="pd-dir" texto={errores["pd-dir"]} />
           </div>
           <p className={ayuda}>La modificación de estos datos no altera el valor de la obra.</p>
           <button onClick={guardarDatos} className={`${botonGrande} bg-blue-900 text-white hover:bg-blue-800`}>

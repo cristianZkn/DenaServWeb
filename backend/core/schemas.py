@@ -97,7 +97,6 @@ class ProveedorSchema(Schema):
     contacto_nombre: Optional[str] = None
     telefono: Optional[str] = None
     email: Optional[str] = None
-    descuento_pct: float = 0
     activo: bool
 
 class ProveedorInSchema(Schema):
@@ -106,7 +105,6 @@ class ProveedorInSchema(Schema):
     contacto_nombre: Optional[str] = None
     telefono: Optional[str] = None
     email: Optional[str] = None
-    descuento_pct: float = Field(0, ge=0, le=100)
     activo: bool = True
 
     @field_validator("rut_empresa")
@@ -158,19 +156,19 @@ class CatalogoTipoSchema(Schema):
     verificado: bool = False
     ultimo_error: str = ''
     activo: bool
-    precio_neto: float = 0  # lo que cuesta al cotizar: precio unitario menos el descuento del proveedor
+    precio_neto: float = 0  # lo que cuesta al cotizar: precio unitario menos el descuento del propio material
 
     @staticmethod
     def resolve_precio_neto(obj):
-        descuento = obj.proveedor.descuento_pct if obj.proveedor else 0
-        return float(calculo.costo_neto(obj.precio_base_unitario, descuento))
+        return float(calculo.costo_neto(obj.precio_base_unitario, obj.descuento_pct))
 
 class CatalogoTipoInSchema(Schema):
     categoria: str = Field(min_length=2, max_length=50)
     nombre: str = Field('', max_length=150)
     descripcion: Optional[str] = Field(None, max_length=2000)
-    unidad_medida: str = Field('UN', min_length=1, max_length=20)
+    unidad_medida: str = Field('UN', max_length=20)
     precio_base_unitario: float = Field(0.00, ge=0, le=1_000_000_000)
+    descuento_pct: float = Field(0, ge=0, le=100)  # descuento propio de este material (convenio u oferta); 0 = sin descuento
     proveedor_id: Optional[int] = None
     etapa_obra: str = Field('', max_length=50)
     rendimiento_m2: float = Field(0, ge=0, le=100_000)
@@ -192,6 +190,17 @@ class CatalogoTipoInSchema(Schema):
     @classmethod
     def _nombre(cls, x):
         return v.texto(x, "El nombre", 2, 150) if x and x.strip() else ""
+
+    @field_validator("unidad_medida")
+    @classmethod
+    def _unidad(cls, x):
+        u = (x or "").strip().upper()
+        if u not in UNIDADES:
+            raise ValueError("Elija la unidad de medida del material (unidad, m², metro lineal, kg, saco, caja, rollo, plancha…).")
+        return u
+
+
+UNIDADES = ("UN", "M2", "ML", "M3", "KG", "SACO", "CAJA", "ROLLO", "PLANCHA", "BOLSA", "LT", "GL", "PAR")
 
 
 class InsumoSchema(Schema):
@@ -227,6 +236,7 @@ class DetalleCotizacionInsumoSchema(Schema):
     cantidad_calculada: float
     subtotal_costo: float
     es_adicional: bool = False
+    mano_obra_m2: float = 0
 
 class DetalleCotizacionInsumoInSchema(Schema):
     catalogo_tipo_id: int
@@ -333,6 +343,8 @@ class ObraEjecucionInSchema(Schema):
 class MaterialAdicionalInSchema(Schema):
     catalogo_id: int
     cantidad: float = Field(gt=0, le=100000)
+    # Mano de obra por m² instalado SOLO para esta cotización: sin dato se usa la tarifa del catálogo; 0 = no se instala.
+    mano_obra_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
 
 
 class ManoObraInSchema(Schema):

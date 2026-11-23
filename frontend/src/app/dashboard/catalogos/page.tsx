@@ -4,6 +4,8 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import { urlSegura } from "@/lib/url";
 import { CATEGORIAS } from "@/lib/categorias";
 import Paginador from "@/components/Paginador";
+import EncabezadoPagina from "@/components/EncabezadoPagina";
+import Insignia from "@/components/Insignia";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -42,6 +44,23 @@ interface Estado {
 const OBLIGATORIOS = ["TECHUMBRE", "REVESTIMIENTO", "TABIQUERIA", "BASE_RADIER"]; // deben tener un precio leído de su ficha
 const GRUPOS = CATEGORIAS.map((c) => ({ ...c, obligatorio: OBLIGATORIOS.includes(c.key) }));
 
+// Unidades en que se vende un material (las mismas que acepta el servidor).
+const UNIDADES = [
+  { v: "UN", t: "Unidad" }, { v: "M2", t: "m² (metro cuadrado)" }, { v: "ML", t: "Metro lineal" }, { v: "M3", t: "m³ (metro cúbico)" },
+  { v: "KG", t: "Kilo" }, { v: "SACO", t: "Saco" }, { v: "CAJA", t: "Caja" }, { v: "ROLLO", t: "Rollo" }, { v: "PLANCHA", t: "Plancha" },
+  { v: "BOLSA", t: "Bolsa" }, { v: "LT", t: "Litro" }, { v: "GL", t: "Global" }, { v: "PAR", t: "Par" },
+];
+const etiquetaUnidad = (u: string) => UNIDADES.find((x) => x.v === u.toUpperCase())?.t ?? u;
+
+type FiltroEstado = "ACTIVOS" | "DESACTIVADOS" | "POR_CONFIRMAR" | "SIN_VERIFICAR" | "TODOS";
+const ESTADOS: { k: FiltroEstado; t: string }[] = [
+  { k: "ACTIVOS", t: "Activos" }, { k: "DESACTIVADOS", t: "Desactivados" }, { k: "POR_CONFIRMAR", t: "Por confirmar" },
+  { k: "SIN_VERIFICAR", t: "Sin verificar" }, { k: "TODOS", t: "Todos" },
+];
+const cumple = (i: Insumo, f: FiltroEstado) =>
+  f === "TODOS" || (f === "ACTIVOS" && i.activo) || (f === "DESACTIVADOS" && !i.activo && i.verificado) ||
+  (f === "POR_CONFIRMAR" && !i.activo && !i.verificado) || (f === "SIN_VERIFICAR" && i.activo && !i.verificado);
+
 const clp = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 
@@ -60,7 +79,8 @@ export default function CatalogosPage() {
   const [aviso, setAviso] = useState("");
   const [categoria, setCategoria] = useState("TODOS");
   const [busqueda, setBusqueda] = useState("");
-  const [verInactivos, setVerInactivos] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("ACTIVOS");
+  const [filtroProveedor, setFiltroProveedor] = useState("");
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(20);
   const [modal, setModal] = useState<Insumo | "nuevo" | null>(null);
@@ -124,40 +144,34 @@ export default function CatalogosPage() {
   };
 
   const q = busqueda.trim().toLowerCase();
-  const filtrados = items
-    .filter((i) => (verInactivos || i.activo) && (categoria === "TODOS" || i.categoria === categoria))
+  const porEstado = items.filter((i) => cumple(i, filtroEstado) && (!filtroProveedor || (i.proveedor ?? "Sin proveedor") === filtroProveedor));
+  const nombresProveedor = Array.from(new Set(items.map((i) => i.proveedor ?? "Sin proveedor"))).sort((a, b) => a.localeCompare(b, "es"));
+  const filtrados = porEstado
+    .filter((i) => categoria === "TODOS" || i.categoria === categoria)
     .filter((i) => !q || `${i.nombre} ${i.proveedor ?? ""}`.toLowerCase().includes(q))
     .sort((a, b) => GRUPOS.findIndex((g) => g.key === a.categoria) - GRUPOS.findIndex((g) => g.key === b.categoria) || a.nombre.localeCompare(b.nombre));
   const visibles = filtrados.slice((pagina - 1) * porPagina, pagina * porPagina);
-  const ocultos = items.filter((i) => !i.activo).length;
   const sinCobertura = estado?.grupos_sin_cobertura ?? [];
   const ultima = antiguedad(estado?.ultima_actualizacion ?? null);
   const problemas = [...(estado?.resultado?.errores ?? []), ...(estado?.resultado?.a_revisar ?? [])];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 bg-white px-5 py-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="mr-auto">
-          <h1 className="text-2xl font-extrabold text-slate-900">Materiales y precios</h1>
-          <p className="text-sm text-slate-500">
-            Precios obtenidos de la ficha de cada producto. Última actualización:{" "}
-            <strong className={ultima.dias > 8 ? "text-amber-700" : "text-slate-700"}>
-              {estado?.ultima_actualizacion ? `${new Date(estado.ultima_actualizacion).toLocaleDateString("es-CL")} · ${ultima.texto.toLowerCase()}` : "nunca"}
-            </strong>
-            . Se actualizan automáticamente cada lunes.
-          </p>
-        </div>
-        <button
-          onClick={sincronizar}
-          disabled={sincronizando}
-          className="border-2 border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 h-11 rounded-lg transition disabled:opacity-60"
-        >
-          {sincronizando ? "Leyendo precios…" : "Sincronizar precios ahora"}
-        </button>
-        <button onClick={() => setModal("nuevo")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 h-11 rounded-lg shadow-sm transition">
-          + Agregar material
-        </button>
-      </div>
+      <EncabezadoPagina icono="🧱" titulo="Materiales y precios"
+        descripcion={<>Precios obtenidos de la ficha de cada producto. Última actualización:{" "}
+          <strong className={ultima.dias > 8 ? "text-amber-700" : "text-slate-800"}>
+            {estado?.ultima_actualizacion ? `${new Date(estado.ultima_actualizacion).toLocaleDateString("es-CL")} · ${ultima.texto.toLowerCase()}` : "nunca"}
+          </strong>. Se actualizan solos cada lunes.</>}
+        resumen={[{ texto: "Activos", valor: items.filter((i) => i.activo).length }, { texto: "Desactivados", valor: items.filter((i) => !i.activo).length }, { texto: "Total", valor: items.length }]}
+        acciones={<>
+          <button onClick={sincronizar} disabled={sincronizando}
+            className="border-2 border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 h-11 rounded-lg transition disabled:opacity-60 cursor-pointer">
+            {sincronizando ? "Leyendo precios…" : "Sincronizar precios ahora"}
+          </button>
+          <button onClick={() => setModal("nuevo")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 h-11 rounded-lg shadow-sm transition cursor-pointer">
+            + Agregar material
+          </button>
+        </>} />
 
       {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md">{error}</div>}
       {aviso && <div className="bg-green-50 border-l-4 border-green-600 text-green-900 p-3 rounded-r-md font-semibold">{aviso}</div>}
@@ -176,18 +190,32 @@ export default function CatalogosPage() {
         </details>
       )}
 
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Estado del material">
+          <span className="text-sm font-semibold text-slate-500 mr-1">Estado</span>
+          {ESTADOS.map((e) => {
+            const n = items.filter((i) => cumple(i, e.k)).length;
+            if (n === 0 && e.k !== "ACTIVOS" && e.k !== "TODOS") return null; // estados sin materiales no ocupan espacio
+            return (
+              <button key={e.k} type="button" aria-pressed={filtroEstado === e.k} onClick={() => { setFiltroEstado(e.k); setPagina(1); }}
+                className={`!min-h-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition cursor-pointer ring-1 ring-inset ${
+                  filtroEstado === e.k ? "bg-blue-900 text-white ring-blue-900" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"}`}>
+                {e.t} <span className="opacity-70">{n}</span>
+              </button>
+            );
+          })}
+        </div>
         <div className="flex flex-wrap gap-2">
           {[{ key: "TODOS", label: "Todos", obligatorio: false }, ...GRUPOS].map((g) => {
-            const n = items.filter((i) => i.activo && (g.key === "TODOS" || i.categoria === g.key)).length;
+            const n = porEstado.filter((i) => g.key === "TODOS" || i.categoria === g.key).length;
             const falta = g.obligatorio && sinCobertura.some((s) => s.codigo === g.key);
             if (g.key !== "TODOS" && n === 0 && !g.obligatorio) return null; // categorías sin materiales no ocupan espacio
             return (
               <button
                 key={g.key}
                 onClick={() => { setCategoria(g.key); setPagina(1); }}
-                className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition ${
-                  categoria === g.key ? "bg-blue-900 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                className={`!min-h-0 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
+                  categoria === g.key ? "bg-amber-400 text-blue-950" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                 }`}
               >
                 {g.label} <span className="opacity-70">{n}</span>
@@ -196,13 +224,14 @@ export default function CatalogosPage() {
             );
           })}
         </div>
-        <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex flex-wrap items-center gap-3">
           <input type="search" placeholder="Buscar material o proveedor" aria-label="Buscar" value={busqueda}
             onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }} className="flex-1 min-w-0 sm:!w-80 sm:flex-none" />
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" className="!w-4 !min-h-0" checked={verInactivos} onChange={(e) => { setVerInactivos(e.target.checked); setPagina(1); }} />
-            Ver desactivados o por confirmar ({ocultos})
-          </label>
+          <select aria-label="Filtrar por proveedor" value={filtroProveedor} onChange={(e) => { setFiltroProveedor(e.target.value); setPagina(1); }} className="sm:!w-56">
+            <option value="">Todos los proveedores</option>
+            {nombresProveedor.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <span className="text-sm text-slate-500">{filtrados.length} {filtrados.length === 1 ? "material" : "materiales"}</span>
         </div>
       </div>
 
@@ -244,8 +273,11 @@ export default function CatalogosPage() {
                           <div className="font-semibold text-slate-900 truncate" title={i.nombre}>
                             {i.url ? <a href={urlSegura(i.url)} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre} ↗</a> : i.nombre}
                           </div>
-                          {!i.activo && <span className="text-xs font-semibold text-amber-700">{i.verificado ? "Desactivado" : "Por confirmar"}</span>}
-                          {i.activo && !i.verificado && <span className="text-xs font-semibold text-amber-700">Sin verificar</span>}
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-slate-500">Se vende por {etiquetaUnidad(i.unidad_medida).toLowerCase()}</span>
+                            {!i.activo && <Insignia tono="gris">{i.verificado ? "Desactivado" : "Por confirmar"}</Insignia>}
+                            {i.activo && !i.verificado && <Insignia tono="ambar">Sin verificar</Insignia>}
+                          </div>
                           {i.ultimo_error && <div className="text-xs text-red-700" title={i.ultimo_error}>⚠ {i.ultimo_error.slice(0, 70)}</div>}
                         </td>
                         <td className="px-4 py-2.5 text-slate-700">{i.proveedor ?? "—"}</td>
@@ -253,7 +285,7 @@ export default function CatalogosPage() {
                           {clp(i.precio_lista)}
                           {i.m2_por_unidad > 0 && <div className="text-xs text-slate-500">por plancha</div>}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{i.descuento_pct ? `${i.descuento_pct}%` : "—"}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{i.descuento_pct ? <Insignia tono="verde">−{i.descuento_pct}%</Insignia> : <span className="text-slate-400">—</span>}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">
                           {clp(i.costo_neto)}
                           {i.neto_por_m2 != null && <div className="text-xs font-normal text-slate-500">{clp(i.neto_por_m2)} por m²</div>}
@@ -306,7 +338,8 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     precio_base_unitario: item ? String(item.precio_base_unitario) : "",
     proveedor_id: item?.proveedor_id ? String(item.proveedor_id) : "",
     sin_ficha: item ? !item.url : false,
-    unidad_medida: item?.unidad_medida || "UN",
+    unidad_medida: item?.unidad_medida || "",
+    descuento_pct: item?.descuento_pct ? String(item.descuento_pct) : "",
     activo: item?.activo ?? true,
     verificado: item?.verificado ?? false,
   });
@@ -325,14 +358,17 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     if (manual && f.nombre.trim().length > 150) return setError("El nombre puede tener hasta 150 caracteres.");
     if (Number(f.precio_base_unitario) < 0 || Number(f.m2_por_unidad) < 0 || Number(f.mano_obra_m2) < 0) return setError("Los precios y medidas no pueden ser negativos.");
     if (manual && !f.proveedor_id) return setError("Elija la empresa a la que se le compra este material.");
+    if (f.categoria !== "BASE_TERRENO" && !f.unidad_medida) return setError("Elija la unidad de medida del material (cómo se vende: unidad, caja, plancha, m²…).");
+    if (Number(f.descuento_pct) < 0 || Number(f.descuento_pct) > 100) return setError("El descuento debe estar entre 0 y 100 %.");
     setGuardando(true);
     const payload: Record<string, unknown> = {
       categoria: f.categoria, nombre: f.nombre.trim(), activo: f.activo, verificado: f.verificado,
       fuente_url: manual ? "" : f.fuente_url.trim(),
+      unidad_medida: f.categoria === "BASE_TERRENO" ? "M2" : f.unidad_medida,
+      descuento_pct: Number(f.descuento_pct) || 0,
     };
     if (f.proveedor_id) payload.proveedor_id = Number(f.proveedor_id);
     if (manual) {
-      payload.unidad_medida = f.categoria === "BASE_TERRENO" ? "M2" : f.unidad_medida;
       payload.precio_base_unitario = Number(f.precio_base_unitario) || 0;
     }
     if (f.categoria === "REVESTIMIENTO" && f.m2_por_unidad) payload.m2_por_unidad = Number(f.m2_por_unidad);
@@ -404,14 +440,6 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
                 <input id="m-pre" type="number" min="0" step="500" value={f.precio_base_unitario} onFocus={(e) => e.target.select()}
                   onChange={(e) => set("precio_base_unitario", e.target.value)} />
               </div>
-              {f.categoria !== "BASE_TERRENO" && (
-                <div>
-                  <label className={etiqueta} htmlFor="m-uni">Se vende por</label>
-                  <select id="m-uni" value={f.unidad_medida} onChange={(e) => set("unidad_medida", e.target.value)}>
-                    {["UN", "M2", "ML", "KG", "SACO", "CAJA", "ROLLO", "PLANCHA"].map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-              )}
             </div>
             <p className="text-sm text-slate-500">Solo ponga precios reales: el material aparece en el cotizador y puede cambiar el valor de la casa.</p>
           </>
@@ -437,13 +465,35 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
           </>
         )}
 
+        {f.categoria !== "BASE_TERRENO" && (
+          <div>
+            <label className={etiqueta} htmlFor="m-uni">Unidad de medida *</label>
+            <select id="m-uni" value={f.unidad_medida} onChange={(e) => set("unidad_medida", e.target.value)} aria-invalid={error.includes("unidad de medida") ? true : undefined}>
+              <option value="" disabled>Elija cómo se vende…</option>
+              {UNIDADES.map((u) => <option key={u.v} value={u.v}>{u.t}</option>)}
+            </select>
+            <p className="text-sm text-slate-500 mt-1">La tienda no la informa: indique si el producto se vende por unidad, caja, plancha, m², etc.</p>
+          </div>
+        )}
+
+        <div>
+          <label className={etiqueta} htmlFor="m-dcto">Descuento de este material (%)</label>
+          <input id="m-dcto" type="number" min="0" max="100" step="0.01" value={f.descuento_pct} onFocus={(e) => e.target.select()}
+            onChange={(e) => set("descuento_pct", e.target.value)} placeholder="0" />
+          <p className="text-sm text-slate-500 mt-1">
+            Solo si la empresa consigue un descuento en este producto (convenio, cliente frecuente u oferta). Se resta al precio de lista;
+            si lo deja en 0 se cotiza al precio de la tienda. La tienda no informa descuentos, por eso lo escribe usted.
+          </p>
+        </div>
+
         <div>
           <label className={etiqueta} htmlFor="m-mo">Mano de obra por m² instalado (opcional)</label>
           <input id="m-mo" type="number" min="0" step="100" value={f.mano_obra_m2} onFocus={(e) => e.target.select()}
             onChange={(e) => set("mano_obra_m2", e.target.value)} placeholder="Ej.: 2000 para el OSB Smartside Lap" />
           <p className="text-sm text-slate-500 mt-1">
-            Si a cada trabajador se le paga aparte por instalar este material, escriba cuánto por m². Al cotizar, la
-            cantidad de este material se ingresa en m² y la mano de obra se suma sola.
+            Tarifa habitual si a cada trabajador se le paga aparte por instalar este material. Al cotizar, la cantidad se ingresa en m² y la
+            mano de obra se suma sola, pero en cada cotización se puede quitar o cambiar sin tocar este valor. Si la tarifa sube, edítela
+            aquí una vez: las cotizaciones nuevas la usan y las ya emitidas conservan la que tenían.
           </p>
         </div>
 

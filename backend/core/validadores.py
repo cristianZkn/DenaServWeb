@@ -4,18 +4,25 @@ import re
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 
 
-def rut_valido(rut: str) -> bool:
-    cuerpo, dv = rut[:-1], rut[-1]
+def dv_correcto(cuerpo: str) -> str:
+    """Dígito verificador (módulo 11) que le corresponde a los números del RUN/RUT."""
     suma = sum(int(d) * f for d, f in zip(reversed(cuerpo), [2, 3, 4, 5, 6, 7] * 3))
-    esperado = 11 - suma % 11
-    return dv == {11: "0", 10: "K"}.get(esperado, str(esperado))
+    return {11: "0", 10: "K"}.get(11 - suma % 11, str(11 - suma % 11))
+
+
+def rut_valido(rut: str) -> bool:
+    return dv_correcto(rut[:-1]) == rut[-1]
 
 
 def normalizar_rut(valor: str, nombre: str = "RUT") -> str:
     """'12345678-5' / '12.345.678-5' -> '12.345.678-5'. Valida largo (7-8 dígitos + DV) y dígito verificador."""
     limpio = re.sub(r"[.\-\s]", "", valor or "").upper()
-    if not re.fullmatch(r"\d{7,8}[\dK]", limpio) or not rut_valido(limpio):
-        raise ValueError(f"El {nombre} no es válido. Ejemplo: 12.345.678-5")
+    if not re.fullmatch(r"\d{7,8}[\dK]", limpio):
+        raise ValueError(f"El {nombre} debe tener 7 u 8 números y un dígito verificador (0-9 o K). Ejemplo: 12.345.678-5")
+    if not rut_valido(limpio):
+        cuerpo = f"{int(limpio[:-1]):,}".replace(",", ".")
+        raise ValueError(f"El dígito verificador del {nombre} no corresponde: para {cuerpo} debería ser {dv_correcto(limpio[:-1])}, "
+                         f"no {limpio[-1]}. Revise que lo haya escrito bien.")
     cuerpo = f"{int(limpio[:-1]):,}".replace(",", ".")
     return f"{cuerpo}-{limpio[-1]}"
 
@@ -37,7 +44,11 @@ def normalizar_telefono(valor: str) -> str:
 def validar_email(valor: str) -> str:
     v = (valor or "").strip().lower()
     if len(v) > 254 or not _EMAIL.match(v):
-        raise ValueError("El correo no es válido. Ejemplo: nombre@correo.cl")
+        if "@" not in v:
+            raise ValueError("Al correo le falta el «@». Ejemplo: nombre@correo.cl")
+        if re.search(r"\s", v) or v.count("@") > 1:
+            raise ValueError("El correo no puede llevar espacios ni más de un «@». Ejemplo: nombre@correo.cl")
+        raise ValueError("El correo está incompleto: después del «@» falta el dominio. Ejemplo: nombre@correo.cl")
     return v
 
 

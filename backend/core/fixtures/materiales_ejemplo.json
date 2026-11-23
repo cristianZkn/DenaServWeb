@@ -1,7 +1,7 @@
 [
   {"categoria": "INSUMO", "nombre": "Clavos 3 pulgadas (caja 1 kg)", "unidad_medida": "CAJA", "precio_base_unitario": 3500,
    "etapa_obra": "ETAPA_1", "rendimiento_m2": 0.02,
-   "proveedor": {"rut_empresa": "HOMECENTER", "razon_social": "Homecenter", "descuento_pct": 0}},
+   "proveedor": {"rut_empresa": "HOMECENTER", "razon_social": "Homecenter"}},
   {"categoria": "INSUMO", "nombre": "Lana de vidrio 50 mm (rollo)", "unidad_medida": "ROLLO", "precio_base_unitario": 18900,
    "etapa_obra": "ETAPA_2", "rendimiento_m2": 0.1, "proveedor": "Homecenter"}
 ]
