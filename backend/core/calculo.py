@@ -43,6 +43,30 @@ TARIFAS_META = [
 ]
 
 
+# Tarifas que una cotización puede cambiar solo para sí misma (el resto del cálculo no se toca): clave -> (mínimo, máximo, entero).
+# La ganancia por m² ya tiene su propio campo en la cotización; el valor del radier se elige en el formulario.
+TARIFAS_POR_COTIZACION = {
+    "mano_obra_m2": (0, 10_000_000, False),         # por trabajador y por m² de casa
+    "mo_viga_vista_m2": (0, 10_000_000, False),     # por trabajador y por m² con vigas a la vista
+    "km_por_litro": (0.1, 100, False),              # rendimiento del vehículo (no puede ser 0: se divide por él)
+    "dias_fabricacion_radier": (0, 365, True),      # días que se suman a los maestros si hay que fabricar el radier o la base
+}
+
+
+def validar_tarifas_personalizadas(tarifas) -> dict:
+    """Solo claves conocidas y valores dentro de su rango; devuelve {clave: float}. Lanza ValueError con un mensaje claro."""
+    limpio = {}
+    for clave, valor in (tarifas or {}).items():
+        if clave not in TARIFAS_POR_COTIZACION:
+            raise ValueError(f"La tarifa «{clave}» no se puede cambiar en una cotización.")
+        minimo, maximo, entero = TARIFAS_POR_COTIZACION[clave]
+        nombre = next((n for k, _, n, _, _ in TARIFAS_META if k == clave), clave)
+        if not minimo <= valor <= maximo or (entero and valor != int(valor)):
+            raise ValueError(f"«{nombre}» debe ser {'un número entero' if entero else 'un valor'} entre {minimo:g} y {maximo:,.0f}.".replace(",", "."))
+        limpio[clave] = float(valor)
+    return limpio
+
+
 def vigentes() -> dict:
     """Tarifas en uso: valores de fábrica con los cambios hechos desde la web (tabla `tarifa`)."""
     from .models import Tarifa  # import tardío: este módulo no depende de Django

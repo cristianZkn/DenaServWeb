@@ -1,7 +1,7 @@
 from ninja import Schema
 from datetime import datetime, date
 import uuid
-from typing import List, Optional
+from typing import Dict, List, Optional
 from urllib.parse import quote
 from django.conf import settings
 from decimal import Decimal
@@ -413,11 +413,17 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
     traslados: List[TrasladoInSchema] = Field([], max_length=4)  # modo vigente: maestros, materiales, flete y camión
+    tarifas_personalizadas: Dict[str, float] = {}  # tarifas cambiadas solo para esta cotización
 
     @field_validator("traslados")
     @classmethod
     def _traslados_unicos(cls, x):
         return _sin_traslados_repetidos(x)
+
+    @field_validator("tarifas_personalizadas")
+    @classmethod
+    def _tarifas(cls, x):
+        return calculo.validar_tarifas_personalizadas(x)
 
 class CotizacionEstadoUpdateSchema(Schema):
     estado: str  # 'BORRADOR', 'ACEPTADA', 'FINALIZADA'
@@ -447,6 +453,7 @@ class CotizacionSchema(Schema):
     costo_nivelacion: float = 0
     ganancia_m2: float = 0
     m2_vigas_vista: float = 0
+    tarifas_personalizadas: Dict[str, float] = {}
     radier_m2: float = 0
     ajuste_monto: float = 0
     modo_lista: bool = False
@@ -719,11 +726,17 @@ class CalculoInSchema(Schema):
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
     traslados: List[TrasladoInSchema] = Field([], max_length=4)
+    tarifas_personalizadas: Dict[str, float] = {}
 
     @field_validator("traslados")
     @classmethod
     def _traslados_unicos(cls, x):
         return _sin_traslados_repetidos(x)
+
+    @field_validator("tarifas_personalizadas")
+    @classmethod
+    def _tarifas(cls, x):
+        return calculo.validar_tarifas_personalizadas(x)
 
 
 class NivelacionInSchema(Schema):
@@ -840,8 +853,14 @@ class CotizacionEditSchema(_ContactoMixin, Schema):
     lleva_radier: Optional[bool] = None
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    tarifas_personalizadas: Optional[Dict[str, float]] = None  # reemplaza las tarifas propias de la cotización ({} = todas las vigentes)
     motivo: Optional[str] = None
     aplicar: bool = False  # False = solo vista previa
+
+    @field_validator("tarifas_personalizadas")
+    @classmethod
+    def _tarifas(cls, x):
+        return None if x is None else calculo.validar_tarifas_personalizadas(x)
 
 
 class CambioCotizacionSchema(Schema):

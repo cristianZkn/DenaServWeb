@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { erroresDatosCliente, formatearRut, formatearTelefono, marcarInvalido } from "@/lib/validar";
 import ErrorCampo, { useErrores } from "@/components/ErrorCampo";
+import TarifasCotizacion from "@/components/TarifasCotizacion";
+import { AJUSTE_DIAS_RADIER, AJUSTE_MANO_OBRA, AJUSTE_RENDIMIENTO, AJUSTE_VIGAS, errorAjuste, tarifasPersonalizadas, valoresDesde, type AjusteTarifa } from "@/lib/tarifas";
 import ContratoNotarial from "@/components/ContratoNotarial";
 import { bajarContrato, unirContrato } from "@/lib/contrato";
 import BitacoraAvance, { type RegistroBitacora } from "@/components/BitacoraAvance";
@@ -31,6 +33,9 @@ interface Obra {
 }
 interface Detalle extends FichaData {
   modo_lista?: boolean;
+  modo_tarifas?: boolean;
+  lleva_radier?: boolean;
+  tarifas_personalizadas?: Record<string, number>;
   cliente_rut?: string | null;
   distancia_flete_km: number;
   token_publico?: string;
@@ -205,6 +210,14 @@ function MaterialesProyecto({ cot }: { cot: Detalle }) {
   );
 }
 
+/** Tarifas que esta cotización puede ajustar según su tipo (la ganancia ya tiene su propio campo en «Opciones avanzadas»). */
+const ajustesDe = (c: Detalle, vigas: number): AjusteTarifa[] => [
+  ...(c.tipo_proyecto !== "SOLO_RADIER" ? [AJUSTE_MANO_OBRA] : []),
+  ...(c.tipo_proyecto !== "SOLO_RADIER" && vigas > 0 ? [AJUSTE_VIGAS] : []),
+  ...(c.lleva_radier ? [AJUSTE_DIAS_RADIER] : []),
+  AJUSTE_RENDIMIENTO,
+];
+
 export default function ProyectoInternoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [cot, setCot] = useState<Detalle | null>(null);
@@ -221,6 +234,15 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
   const [previa, setPrevia] = useState<{ total_anterior: string; total_nuevo: string; diferencia: string } | null>(null);
   const [avance, setAvance] = useState(0);
   const [bitacora, setBitacora] = useState<RegistroBitacora[]>([]);
+  // Tarifas vigentes y las que esta cotización cambió solo para sí misma (texto de los campos; vacío = la vigente).
+  const [vigentes, setVigentes] = useState<Record<string, number>>({});
+  const [ajustes, setAjustes] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch("/api/tarifas/")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((ts: { clave: string; valor: number }[]) => setVigentes(Object.fromEntries(ts.map((x) => [x.clave, Number(x.valor)]))))
+      .catch(() => {});
+  }, []);
 
   const cargar = useCallback(async () => {
     try {
@@ -248,6 +270,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
         radier_m2: c.radier_m2,
         ajuste_monto: c.ajuste_monto,
       });
+      setAjustes(valoresDesde(c.tarifas_personalizadas));
       const o = c.obras_ejecucion?.[0];
       setAvance(o ? Number(o.porcentaje_avance_real) : 0);
     } catch (e: any) {
@@ -284,6 +307,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       ganancia_m2: Number(form.ganancia_m2) || 0,
       radier_m2: Number(form.radier_m2) || 0,
       ajuste_monto: Number(form.ajuste_monto) || 0,
+      // Solo cotizaciones por tarifas: las que se apartan de la vigente. Vacío vuelve a todas las vigentes.
+      ...(cot?.modo_tarifas ? { tarifas_personalizadas: tarifasPersonalizadas(ajustes, vigentes, ajustesDe(cot, Number(form.m2_vigas_vista) || 0)) } : {}),
       motivo,
       aplicar,
     };
@@ -298,7 +323,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
     }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, cot, panel]);
+  }, [form, cot, panel, ajustes, vigentes]);
 
   const avisar = (texto: string, esError = false) => {
     setMsg(esError ? "" : texto);
@@ -323,6 +348,8 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
 
   const guardarValor = async () => {
     const dif = previa ? Number(previa.diferencia) : 0;
+    const errorTarifa = cot?.modo_tarifas ? ajustesDe(cot, Number(form.m2_vigas_vista) || 0).map((a) => errorAjuste(a, ajustes[a.clave] ?? "")).find(Boolean) : "";
+    if (errorTarifa) return avisar(errorTarifa, true);
     if (dif !== 0 && !motivo.trim()) { marcarInvalido("pv-motivo"); return avisar("Escriba por qué cambia el valor (por ejemplo: subió el precio del zinc).", true); }
     const texto = `El valor de la casa pasará de ${clp(previa!.total_anterior)} a ${clp(previa!.total_nuevo)}. ¿Confirma el cambio?`;
     if (!(await preguntar({ titulo: dif === 0 ? "¿Guardar los cambios?" : "¿Confirma el cambio de valor?", mensaje: dif === 0 ? undefined : texto }))) return;
@@ -546,7 +573,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
 
-          <details className="border border-slate-200 rounded-xl p-4">
+          <details className="border border-slate-200 rounded-xl p-4" open={Object.keys(cot.tarifas_personalizadas ?? {}).length > 0}>
             <summary className="text-lg font-semibold text-slate-700 cursor-pointer">Opciones avanzadas</summary>
             <div className="grid sm:grid-cols-2 gap-4 pt-4">
               {esCasa && !cot.modo_lista && (
@@ -574,6 +601,12 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
                 </>
               )}
             </div>
+            {cot.modo_tarifas && (
+              <div className="pt-4">
+                <TarifasCotizacion ajustes={ajustesDe(cot, Number(form.m2_vigas_vista) || 0)} vigentes={vigentes} valores={ajustes}
+                  onCambiar={(clave, texto) => setAjustes((prev) => ({ ...prev, [clave]: texto }))} />
+              </div>
+            )}
           </details>
 
           <div className="rounded-xl border-2 border-blue-900 p-4 space-y-1">

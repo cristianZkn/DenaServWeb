@@ -21,6 +21,7 @@ Plataforma web de **DenaServ**, empresa de construcción de casas prefabricadas 
 | **Fichas** | La ficha del cliente es un resumen general (sin materiales). La ficha de la empresa (PDF) incluye el desglose completo de materiales, mano de obra, traslado, ganancia, pagos y bitácora con fotos. |
 | **Materiales y precios** | Catálogo con proveedor, unidad de medida, precio de lista, descuento propio de cada material y costo neto. Los precios se actualizan solos cada lunes desde las fichas de las tiendas (la tienda no informa descuentos: los escribe la empresa en cada material). La mano de obra por m² instalado se decide en cada cotización y queda guardada con la tarifa usada. |
 | **Proveedores** | Mantenedor de las empresas a las que se les compra (razón social, RUT y contacto). |
+| **Tarifas** | Valores del cálculo (mano de obra, vigas a la vista, ganancia, rendimiento…) editables desde la web. Cada cotización puede cambiar algunas de ellas solo para sí misma («Tarifas de esta cotización» en el cotizador y en «Opciones avanzadas» del proyecto); las que no se cambian siguen las vigentes. |
 | **Portafolio** | Obras finalizadas con hasta 10 fotos, que se pueden publicar u ocultar de la web. |
 | **Ficha del cliente** | Página pública por enlace con el resumen de la cotización y descarga en PDF. |
 

@@ -81,7 +81,8 @@ def _calcular_desde_catalogo(data):
         tipo_proyecto=data.tipo_proyecto, radier_m2=data.radier_m2, adicionales=adicionales,
         maestros=[m.dict() for m in data.maestros], modo_lista=data.modo_lista,
         modo_tarifas=data.modo_tarifas, n_trabajadores=data.n_trabajadores, dias_obra=data.dias_obra,
-        lleva_radier=data.lleva_radier, tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro)
+        lleva_radier=data.lleva_radier, tarifa_radier_m2=data.tarifa_radier_m2, precio_litro=data.precio_litro,
+        **data.tarifas_personalizadas)
 
 
 def _repartir_en_hitos(cot, delta):
@@ -604,6 +605,7 @@ def crear_cotizacion(request, data: CotizacionInSchema):
                 lleva_radier=data.lleva_radier or data.tipo_proyecto == "SOLO_RADIER",
                 tarifa_radier_m2=data.tarifa_radier_m2 if data.tarifa_radier_m2 is not None else calculo.vigentes()["mo_radier_m2"],
                 precio_litro=data.precio_litro if data.precio_litro is not None else calculo.vigentes()["precio_litro"],
+                tarifas_personalizadas=data.tarifas_personalizadas,
                 usuario=request.auth
             )
 
@@ -758,7 +760,7 @@ def definir_nivelacion(request, cotizacion_id: int, data: NivelacionInSchema):
 ESTADOS_COTIZACION = {"BORRADOR", "ACEPTADA", "FINALIZADA"}
 _CAMPOS_PRECIO = {"superficie_m2", "distancia_flete_km", "base_terreno_id", "revestimiento_id",
                   "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto",
-                  "n_trabajadores", "dias_obra", "lleva_radier", "tarifa_radier_m2", "precio_litro"}
+                  "n_trabajadores", "dias_obra", "lleva_radier", "tarifa_radier_m2", "precio_litro", "tarifas_personalizadas"}
 _CAMPOS_DECIMAL = {"superficie_m2", "distancia_flete_km", "m2_vigas_vista", "ganancia_m2", "radier_m2", "ajuste_monto",
                    "tarifa_radier_m2", "precio_litro"}
 
@@ -791,6 +793,7 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
                 modo_lista=cot.modo_lista, modo_tarifas=cot.modo_tarifas, n_trabajadores=cot.n_trabajadores,
                 dias_obra=cot.dias_obra, lleva_radier=cot.lleva_radier,
                 tarifa_radier_m2=float(cot.tarifa_radier_m2), precio_litro=float(cot.precio_litro),
+                tarifas_personalizadas=cot.tarifas_personalizadas,
                 traslados=[TrasladoInSchema(tipo=x.tipo, combustible=x.combustible, dias=x.dias, precio_litro=float(x.precio_litro))
                            for x in cot.traslados.all()]))
         except ValueError as e:
@@ -1189,15 +1192,16 @@ def desglose_cotizacion(request, cotizacion_id: int):
         "cantidad": float(d.cantidad_calculada), "subtotal": float(d.subtotal_costo), "de_la_lista": d.es_adicional,
     } for d in detalles]
     mano_obra, traslado = [], None
+    tarifas = {**calculo.vigentes(), **{k: Decimal(str(v)) for k, v in cot.tarifas_personalizadas.items()}}  # las de esta cotización mandan
     if cot.modo_tarifas:
         adicionales = [{"nombre": d.catalogo_tipo.nombre, "cantidad": d.cantidad_calculada, "mano_obra_m2": d.mano_obra_m2}
                        for d in detalles if d.es_adicional]
         lineas = calculo.lineas_mano_obra_tarifas(cot.superficie_m2, cot.n_trabajadores, cot.m2_vigas_vista, cot.tipo_proyecto,
-                                                  adicionales, cot.lleva_radier, cot.tarifa_radier_m2, calculo.vigentes())
+                                                  adicionales, cot.lleva_radier, cot.tarifa_radier_m2, tarifas)
         mano_obra = [{"concepto": l["concepto"], "m2": float(l["m2"]), "tarifa": float(l["tarifa"]),
                       "trabajadores": l["trabajadores"], "subtotal": float(l["subtotal"])} for l in lineas]
-        dias = cot.dias_obra + (int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
-        tr = calculo.traslado_combustible(cot.distancia_flete_km, dias, cot.precio_litro, calculo.vigentes()["km_por_litro"])
+        dias = cot.dias_obra + (int(tarifas["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+        tr = calculo.traslado_combustible(cot.distancia_flete_km, dias, cot.precio_litro, tarifas["km_por_litro"])
         traslado = {"km": float(tr["km"]), "dias": tr["dias"], "litros": float(tr["litros"]),
                     "precio_litro": float(tr["precio_litro"]), "costo": float(tr["costo"])}
     else:
@@ -1205,8 +1209,8 @@ def desglose_cotizacion(request, cotizacion_id: int):
                      for l in cot.mano_obra.all()]
     if cot.traslados.exists():  # tres traslados, cada uno con su combustible y sus días
         res = calculo.traslados_combustible(cot.distancia_flete_km, [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
-                                            "precio_litro": x.precio_litro} for x in cot.traslados.all()], calculo.vigentes()["km_por_litro"],
-                                            int(calculo.vigentes()["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
+                                            "precio_litro": x.precio_litro} for x in cot.traslados.all()], tarifas["km_por_litro"],
+                                            int(tarifas["dias_fabricacion_radier"]) if cot.lleva_radier else 0)
         traslado = {"km": float(res["km"]), "costo": float(res["costo"]),
                     "lineas": [{k: (float(v) if isinstance(v, Decimal) else v) for k, v in l.items()} for l in res["lineas"]]}
     total = float(cot.costo_total)

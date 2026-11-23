@@ -137,6 +137,9 @@ class Cotizacion(models.Model):
     lleva_radier = models.BooleanField(default=False)  # la casa lleva radier o base: suma 4 días y su mano de obra
     tarifa_radier_m2 = models.DecimalField(max_digits=12, decimal_places=2, default=35000)  # 35.000 o 38.000 por trabajador
     precio_litro = models.DecimalField(max_digits=10, decimal_places=2, default=1650)  # precio de la bencina
+    # Tarifas del cálculo que se cambiaron solo en esta cotización ({clave: valor}, ver calculo.TARIFAS_POR_COTIZACION).
+    # Las que no están aquí siguen las tarifas vigentes. Se guardan para que reajustar o ver el desglose use los mismos valores.
+    tarifas_personalizadas = models.JSONField(default=dict, blank=True)
     fecha_creacion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(
         Usuario,

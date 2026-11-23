@@ -1842,3 +1842,67 @@ class InstalacionPorCotizacionTests(TestCase):
         CatalogoTipo.objects.filter(id=self.osb.id).update(mano_obra_m2=9999)   # la tarifa del catálogo sube
         desglose = self.client.get(f"/api/cotizaciones/{cot.json()['id']}/desglose/", **self.h).json()
         self.assertFalse(any(l["concepto"].startswith("Instalación") for l in desglose["mano_obra"]))
+
+
+class TarifasPorCotizacionTests(TestCase):
+    """Una cotización puede cambiar una tarifa solo para sí misma; las demás siguen las vigentes."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def cuerpo(self, **extra):
+        return {"superficie_m2": 40, "distancia_km": 10, "modo_tarifas": True, "n_trabajadores": 2, "m2_vigas_vista": 10,
+                "traslados": [{"tipo": "MAESTROS", "combustible": "93", "dias": 1, "precio_litro": 1000},
+                              {"tipo": "MATERIALES", "combustible": "93", "dias": 1, "precio_litro": 1000}], **extra}
+
+    def calcular(self, **extra):
+        return self.client.post("/api/cotizaciones/calcular", self.cuerpo(**extra), content_type="application/json", **self.h)
+
+    def guardar(self, **extra):
+        c = self.cuerpo(**extra)
+        c.update(cliente_nombre="Ana", direccion_terreno="Calle 1234", distancia_flete_km=c.pop("distancia_km"))
+        r = self.client.post("/api/cotizaciones/", c, content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def test_el_cobro_de_vigas_cambia_solo_en_la_cotizacion_que_lo_pide(self):
+        normal = float(self.calcular().json()["costo_mano_obra"])
+        propia = float(self.calcular(tarifas_personalizadas={"mo_viga_vista_m2": 12000}).json()["costo_mano_obra"])
+        self.assertEqual(propia - normal, 10 * (12000 - 8000) * 2)       # 10 m² x diferencia por trabajador x 2 trabajadores
+        self.assertEqual(float(self.calcular().json()["costo_mano_obra"]), normal)   # otra cotización sigue con la tarifa vigente
+
+    def test_la_cotizacion_guarda_sus_tarifas_y_el_desglose_las_usa(self):
+        cot = self.guardar(tarifas_personalizadas={"mo_viga_vista_m2": 12000, "dias_fabricacion_radier": 6}, lleva_radier=True, tarifa_radier_m2=35000)
+        self.assertEqual(cot["tarifas_personalizadas"], {"mo_viga_vista_m2": 12000, "dias_fabricacion_radier": 6})
+        d = self.client.get(f"/api/cotizaciones/{cot['id']}/desglose/", **self.h).json()
+        vigas = next(l for l in d["mano_obra"] if l["concepto"] == "Vigas a la vista")
+        self.assertEqual(vigas["tarifa"], 12000)
+        self.assertEqual(next(l for l in d["traslado"]["lineas"] if l["tipo"] == "MAESTROS")["dias_extra"], 6)
+        # si la tarifa vigente cambia después, la cotización con tarifa propia no se mueve y la demás sí sigue a la vigente
+        self.client.put("/api/tarifas/mo_viga_vista_m2", {"valor": 9000}, content_type="application/json", **self.h)
+        d2 = self.client.get(f"/api/cotizaciones/{cot['id']}/desglose/", **self.h).json()
+        self.assertEqual(next(l for l in d2["mano_obra"] if l["concepto"] == "Vigas a la vista")["tarifa"], 12000)
+        otra = self.guardar()
+        d3 = self.client.get(f"/api/cotizaciones/{otra['id']}/desglose/", **self.h).json()
+        self.assertEqual(next(l for l in d3["mano_obra"] if l["concepto"] == "Vigas a la vista")["tarifa"], 9000)
+
+    def test_se_pueden_cambiar_o_quitar_las_tarifas_al_editar_la_cotizacion(self):
+        cot = self.guardar()
+        previa = self.client.patch(f"/api/cotizaciones/{cot['id']}/", {"tarifas_personalizadas": {"mo_viga_vista_m2": 12000}},
+                                   content_type="application/json", **self.h).json()
+        self.assertEqual(float(previa["diferencia"]), 10 * 4000 * 2)            # vista previa: todavía no se guarda
+        self.assertEqual(self.client.get(f"/api/cotizaciones/{cot['id']}/", **self.h).json()["tarifas_personalizadas"], {})
+        ok = self.client.patch(f"/api/cotizaciones/{cot['id']}/", {"tarifas_personalizadas": {"mo_viga_vista_m2": 12000}, "aplicar": True, "motivo": "Vigas más caras"},
+                               content_type="application/json", **self.h)
+        self.assertEqual(ok.status_code, 200, ok.content)
+        self.assertEqual(self.client.get(f"/api/cotizaciones/{cot['id']}/", **self.h).json()["tarifas_personalizadas"], {"mo_viga_vista_m2": 12000})
+        vuelta = self.client.patch(f"/api/cotizaciones/{cot['id']}/", {"tarifas_personalizadas": {}, "aplicar": True, "motivo": "Vuelve a la tarifa vigente"},
+                                   content_type="application/json", **self.h)
+        self.assertEqual(float(vuelta.json()["diferencia"]), -(10 * 4000 * 2))
+
+    def test_rechaza_tarifas_desconocidas_o_fuera_de_rango(self):
+        for malo in ({"ganancia_m2": 1}, {"km_por_litro": 0}, {"mo_viga_vista_m2": -1}, {"dias_fabricacion_radier": 2.5}, {"mano_obra_m2": 999_999_999}):
+            self.assertEqual(self.calcular(tarifas_personalizadas=malo).status_code, 422, malo)

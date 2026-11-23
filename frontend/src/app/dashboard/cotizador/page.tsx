@@ -13,6 +13,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { erroresDatosCliente, formatearRut, formatearTelefono } from "@/lib/validar";
 import ErrorCampo, { useErrores } from "@/components/ErrorCampo";
+import TarifasCotizacion from "@/components/TarifasCotizacion";
+import { AJUSTE_DIAS_RADIER, AJUSTE_GANANCIA, AJUSTE_MANO_OBRA, AJUSTE_RENDIMIENTO, AJUSTE_VIGAS, errorAjuste, tarifasPersonalizadas } from "@/lib/tarifas";
 import SelectorMaterial, { unidadDe } from "@/components/SelectorMaterial";
 import { CATEGORIAS } from "@/lib/categorias";
 
@@ -67,7 +69,6 @@ const TRASLADOS = [
   { tipo: "CAMION", titulo: "Traslado flete", descripcion: "Flete contratado por día. Si no se usa, deje los días en blanco.", camion: true },
 ];
 const PRECIO_CAMION_DIA = 120000;
-const DIAS_RADIER = 4; // días de fabricación del radier o la base (tarifa «dias_fabricacion_radier»)
 const COMBUSTIBLES = [
   { v: "93", t: "Bencina 93" }, { v: "95", t: "Bencina 95" }, { v: "97", t: "Bencina 97" }, { v: "DIESEL", t: "Diésel" },
 ];
@@ -169,10 +170,14 @@ export default function CotizadorPage() {
   const precioDe = (c: string) => combustibles.find((x) => x.tipo === c)?.precio ?? 0;
   // Costo del camión por día: viene de Tarifas (si no responde, el valor de fábrica).
   const [precioCamion, setPrecioCamion] = useState(PRECIO_CAMION_DIA);
+  // Tarifas vigentes (para mostrarlas y para saber cuándo una cotización se aparta de ellas) y los ajustes escritos solo para esta cotización.
+  const [vigentes, setVigentes] = useState<Record<string, number>>({});
+  const [ajustes, setAjustes] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch("/api/tarifas/")
       .then((r) => (r.ok ? r.json() : []))
       .then((ts: { clave: string; valor: number }[]) => {
+        setVigentes(Object.fromEntries(ts.map((x) => [x.clave, Number(x.valor)])));
         const t = ts.find((x) => x.clave === "flete_camion_dia");
         if (t && Number(t.valor) >= 0) setPrecioCamion(Number(t.valor));
       })
@@ -250,8 +255,23 @@ export default function CotizadorPage() {
     cargar();
   }, [router]);
 
-  // Parámetros de tarifas que se envían tanto al calcular como al guardar. El radier suma 4 días de fabricación.
+  // Tarifas que se pueden ajustar según el tipo de obra (solo las que afectan el cálculo de esta cotización).
+  const ajustesAplicables = [
+    ...(esCasa ? [AJUSTE_MANO_OBRA] : []),
+    ...(esCasa && num(formData.m2_vigas_vista) > 0 ? [AJUSTE_VIGAS] : []),
+    ...(llevaRadier || !esCasa ? [AJUSTE_DIAS_RADIER] : []),
+    AJUSTE_RENDIMIENTO,
+    AJUSTE_GANANCIA,
+  ];
+  const { ganancia_m2: gananciaPropia, ...tarifasPropias } = tarifasPersonalizadas(ajustes, vigentes, ajustesAplicables);
+  const errorTarifas = ajustesAplicables.map((a) => errorAjuste(a, ajustes[a.clave] ?? "")).find(Boolean) ?? "";
+  // Días de fabricación del radier: el de esta cotización si se cambió, si no el vigente (4 de fábrica).
+  const diasRadier = tarifasPropias.dias_fabricacion_radier ?? vigentes.dias_fabricacion_radier ?? 4;
+
+  // Parámetros de tarifas que se envían tanto al calcular como al guardar. El radier suma sus días de fabricación.
   const parametrosTarifas = {
+    tarifas_personalizadas: tarifasPropias,
+    ...(gananciaPropia !== undefined ? { ganancia_m2: gananciaPropia } : {}),
     modo_tarifas: true,
     n_trabajadores: Math.floor(num(nTrabajadores)),
     lleva_radier: !esCasa || llevaRadier,
@@ -328,7 +348,7 @@ export default function CotizadorPage() {
     return () => clearTimeout(temporizador);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cargandoCatalogo, formData.superficie_m2, formData.distancia_flete_km, formData.m2_vigas_vista, formData.tipo_proyecto,
-      llevaRadier, tarifaRadier, nTrabajadores, claveLista, JSON.stringify(parametrosTarifas.traslados)]);
+      llevaRadier, tarifaRadier, nTrabajadores, claveLista, JSON.stringify(parametrosTarifas.traslados), JSON.stringify(tarifasPropias), gananciaPropia]);
 
   // Guarda la cotización: el servidor vuelve a calcular todo con estos mismos datos.
   const guardar = async (e: React.FormEvent) => {
@@ -348,6 +368,7 @@ export default function CotizadorPage() {
     if (num(formData.superficie_m2) <= 0) return setError("Los metros cuadrados deben ser mayores a 0.");
     if ((llevaRadier || !esCasa) && num(tarifaRadier) <= 0) return setError("Elija el valor de la mano de obra del radier.");
     if (num(nTrabajadores) < 1) return setError("Indique la cantidad de trabajadores: la mano de obra se calcula por trabajador.");
+    if (errorTarifas) return setError(errorTarifas);
     if (num(formData.distancia_flete_km) <= 0) return setError("Indique la distancia hasta el terreno para calcular el traslado.");
     if (faltanTraslados) return setError("Indique el combustible y los días de los traslados de maestros y materiales. Si alguno no se usa, escriba 0 días.");
     if (!presupuesto) return setError("Espere a que se calcule el valor de la obra antes de guardar.");
@@ -576,7 +597,7 @@ export default function CotizadorPage() {
                 const e = traslados[x.tipo];
                 const km = num(formData.distancia_flete_km);
                 const precio = precioDe(e.combustible);
-                const extra = x.tipo === "MAESTROS" && (llevaRadier || !esCasa) ? DIAS_RADIER : 0; // el terreno no tiene radier: los maestros lo fabrican
+                const extra = x.tipo === "MAESTROS" && (llevaRadier || !esCasa) ? diasRadier : 0; // el terreno no tiene radier: los maestros lo fabrican
                 const diasTotal = num(e.dias) + extra;
                 const litrosDia = km / 10;
                 const costoDia = litrosDia * precio;
@@ -588,6 +609,8 @@ export default function CotizadorPage() {
                       <p className="text-sm text-slate-500 -mt-1">{x.descripcion}</p>
                       <NumberField label="Días de traslado" name={`dias-${x.tipo}`} value={e.dias} onChange={(_, v) => setTraslado(x.tipo, "dias", v)}
                         step="1" suffix="días" max={365} />
+                      <NumberField label="Valor del flete por día" name="precio-camion" value={String(precioCamion)} onChange={(_, v) => setPrecioCamion(num(v))}
+                        step="1000" suffix="$/día" help={`Valor vigente: ${clp(vigentes.flete_camion_dia ?? PRECIO_CAMION_DIA)}. Cámbielo solo si en esta obra se cobra distinto.`} />
                       {e.dias !== "" && (
                         <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
                           {clp(precioCamion)} por día × {diasCamion} {diasCamion === 1 ? "día" : "días"} = <strong>{clp(precioCamion * diasCamion)}</strong>
@@ -613,7 +636,7 @@ export default function CotizadorPage() {
                     </div>
                     {extra > 0 && (
                       <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        Como el terreno no tiene radier ni base, se suman <strong>{DIAS_RADIER} días</strong> de fabricación al traslado de maestros.
+                        Como el terreno no tiene radier ni base, se suman <strong>{diasRadier} días</strong> de fabricación al traslado de maestros.
                       </p>
                     )}
                     {km > 0 && precio > 0 && e.dias !== "" && (
@@ -719,6 +742,12 @@ export default function CotizadorPage() {
                 </li>
               </ul>
             )}
+          </Seccion>
+
+          {/* Paso 6: tarifas propias de esta cotización (opcional) */}
+          <Seccion titulo="6. Tarifas de esta cotización">
+            <TarifasCotizacion ajustes={ajustesAplicables} vigentes={vigentes} valores={ajustes}
+              onCambiar={(clave, texto) => setAjustes((prev) => ({ ...prev, [clave]: texto }))} />
           </Seccion>
 
         </div>
