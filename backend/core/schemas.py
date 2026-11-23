@@ -5,7 +5,7 @@ from typing import List, Optional
 from urllib.parse import quote
 from django.conf import settings
 from decimal import Decimal
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from . import calculo
 from .models import METODOS_PAGO
 from . import validadores as v
@@ -329,9 +329,10 @@ class ManoObraInSchema(Schema):
 
 
 class TrasladoInSchema(Schema):
-    """Un traslado de la cotización. Si no se informa `precio_litro` se usa el precio vigente del combustible (CNE)."""
+    """Un traslado de la cotización. Si no se informa `precio_litro` se usa el precio vigente del combustible (CNE).
+    El traslado en camión no lleva combustible y, en ese caso, `precio_litro` es el costo del camión por día."""
     tipo: str
-    combustible: str
+    combustible: str = ""
     dias: int = Field(ge=0, le=365)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
 
@@ -339,15 +340,16 @@ class TrasladoInSchema(Schema):
     @classmethod
     def _tipo(cls, x):
         if x not in calculo.TIPOS_TRASLADO:
-            raise ValueError("El tipo de traslado debe ser maestros, materiales o flete.")
+            raise ValueError("El tipo de traslado debe ser maestros, materiales, flete o traslado de flete.")
         return x
 
-    @field_validator("combustible")
-    @classmethod
-    def _combustible(cls, x):
-        if x not in ("93", "95", "97", "DIESEL"):
+    @model_validator(mode="after")
+    def _combustible(self):
+        if self.tipo == calculo.TRASLADO_CAMION:
+            self.combustible = ""
+        elif self.combustible not in ("93", "95", "97", "DIESEL"):
             raise ValueError("El combustible debe ser 93, 95, 97 o diésel.")
-        return x
+        return self
 
 
 def _sin_traslados_repetidos(lista):
@@ -385,7 +387,7 @@ class CotizacionInSchema(_ContactoMixin, Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
-    traslados: List[TrasladoInSchema] = Field([], max_length=3)  # modo vigente: maestros, materiales y flete
+    traslados: List[TrasladoInSchema] = Field([], max_length=4)  # modo vigente: maestros, materiales, flete y camión
 
     @field_validator("traslados")
     @classmethod
@@ -544,7 +546,7 @@ class CalculoInSchema(Schema):
     lleva_radier: bool = False
     tarifa_radier_m2: Optional[float] = Field(None, ge=0, le=1_000_000)
     precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
-    traslados: List[TrasladoInSchema] = Field([], max_length=3)
+    traslados: List[TrasladoInSchema] = Field([], max_length=4)
 
     @field_validator("traslados")
     @classmethod

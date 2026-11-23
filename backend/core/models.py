@@ -344,8 +344,8 @@ class PrecioCombustible(models.Model):
 # que regía al cotizar (queda fijo aunque el combustible cambie después).
 class TrasladoCotizacion(models.Model):
     cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='traslados')
-    tipo = models.CharField(max_length=10)  # MAESTROS | MATERIALES | FLETE
-    combustible = models.CharField(max_length=10)  # 93 | 95 | 97 | DIESEL
+    tipo = models.CharField(max_length=10)  # MAESTROS | MATERIALES | FLETE | CAMION
+    combustible = models.CharField(max_length=10)  # 93 | 95 | 97 | DIESEL ('' en CAMION)
     dias = models.PositiveIntegerField(default=0)
     precio_litro = models.DecimalField(max_digits=10, decimal_places=2)
 

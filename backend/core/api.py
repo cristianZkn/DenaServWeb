@@ -70,7 +70,8 @@ def _calcular_desde_catalogo(data):
     insumos = [{'id': i.id, 'nombre': i.nombre, 'unidad': i.unidad_medida, 'etapa': i.etapa_obra,
                 'rendimiento': i.rendimiento_m2, 'precio_neto': _neto(i)} for i in insumos_db]
     traslados = [{"tipo": x.tipo, "combustible": x.combustible, "dias": x.dias,
-                  "precio_litro": x.precio_litro if x.precio_litro is not None else combustibles.precio(x.combustible)}
+                  "precio_litro": x.precio_litro if x.precio_litro is not None else (
+                      calculo.vigentes()["flete_camion_dia"] if x.tipo == calculo.TRASLADO_CAMION else combustibles.precio(x.combustible))}
                  for x in data.traslados]
     return calculo.calcular(
         m2=data.superficie_m2, km=data.distancia_km, traslados=traslados,

@@ -1596,3 +1596,19 @@ class LimiteDeRutaTests(TestCase):
         with mock.patch("core.combustibles.actualizar", return_value=[]):
             codigos = [self.client.post("/api/combustibles/actualizar/", **h).status_code for _ in range(7)]
         self.assertEqual(codigos, [200] * 6 + [429])   # «6/m» cuenta solo sus propias llamadas
+
+
+class TrasladoCamionTests(TestCase):
+    def test_el_traslado_flete_cuesta_la_tarifa_diaria_sin_combustible_y_es_opcional(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        base = {"superficie_m2": 40, "distancia_km": 30, "modo_tarifas": True, "n_trabajadores": 2}
+        tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 1, "precio_litro": 1000},
+              {"tipo": "MATERIALES", "combustible": "93", "dias": 1, "precio_litro": 1000}]
+        sin = self.client.post("/api/cotizaciones/calcular", {**base, "traslados": tr}, content_type="application/json", **h).json()
+        con = self.client.post("/api/cotizaciones/calcular", {**base, "traslados": tr + [{"tipo": "CAMION", "dias": 2}]},
+                               content_type="application/json", **h)
+        self.assertEqual(con.status_code, 200)
+        self.assertEqual(float(con.json()["costo_flete"]) - float(sin["costo_flete"]), 2 * 120000)  # 2 días x tarifa «flete_camion_dia»
