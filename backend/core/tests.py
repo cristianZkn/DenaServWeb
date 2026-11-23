@@ -1730,3 +1730,25 @@ class RendimientoTests(TestCase):
                 self.assertEqual(self.client.post("/api/cotizaciones/calcular", cuerpo, content_type="application/json", **self.h).status_code, 200)
             return len(q)
         self.assertEqual(calcular(1), calcular(8))
+
+
+class FichaPublicaPrivacidadTests(TestCase):
+    def test_la_ficha_publica_no_expone_notas_ni_empleados_ni_comprobantes(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="Empleada Secreta", email="e@d.cl", google_id="g1", activo=True)
+        h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        cot = Cotizacion.objects.create(codigo_cotizacion="COT-PUB", cliente_nombre="Ana", direccion_terreno="Calle 1234", superficie_m2=50, costo_total=1000, usuario=u)
+        hito = HitoPago.objects.create(cotizacion=cot, fase="ANTICIPO_40", porcentaje=40, monto_pago=400)
+        r = self.client.post(f"/api/hitos-pago/{hito.id}/registros/", {"monto": 100, "metodo": "TRANSFERENCIA", "nota": "NOTA-INTERNA", "comprobante_nombre": "COMPROBANTE-SECRETO.pdf"},
+                             content_type="application/json", **h)
+        self.assertEqual(r.status_code, 200)
+        pub = self.client.get(f"/api/cotizaciones/public/{cot.token_publico}")
+        self.assertEqual(pub.status_code, 200)
+        cuerpo = pub.content.decode()
+        for secreto in ("NOTA-INTERNA", "Empleada Secreta", "COMPROBANTE-SECRETO", "registros", "comprobante_ref"):
+            self.assertNotIn(secreto, cuerpo)
+        hito_pub = pub.json()["hitos_pago"][0]
+        self.assertEqual((hito_pub["fase"], hito_pub["monto_abonado"], hito_pub["estado"]), ("ANTICIPO_40", 100, "ABONADO"))   # lo que el cliente sí necesita
+        interno = self.client.get(f"/api/cotizaciones/{cot.id}/", **h).json()["hitos_pago"][0]
+        self.assertEqual(interno["registros"][0]["nota"], "NOTA-INTERNA")   # el panel interno sigue viéndolo todo

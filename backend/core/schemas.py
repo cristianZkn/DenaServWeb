@@ -276,6 +276,19 @@ class HitoPagoSchema(Schema):
         return filas
 
 
+class HitoPagoPublicoSchema(Schema):
+    """Un hito de pago tal como lo ve el cliente en su ficha pública: solo montos, estado y fecha. No incluye el libro de pagos
+    (notas internas, quién registró cada abono, nombres de comprobantes) ni referencias internas."""
+    id: int
+    fase: str
+    porcentaje: float
+    monto_pago: float
+    monto_abonado: float = 0
+    monto_pendiente: float = 0
+    estado: str
+    fecha_pago: Optional[date] = None
+
+
 class HitoPagoUpdateSchema(Schema):
     """Compatibilidad: el panel usa `RegistroPagoInSchema`. Aquí `monto_abonado` es el total recibido (nunca baja)."""
     estado: Optional[str] = None
@@ -733,7 +746,7 @@ class CotizacionPublicaSchema(Schema):
     nivelacion_modalidad: str = ""
     nivelacion_m3: float = 0
     fecha_creacion: datetime
-    hitos_pago: List[HitoPagoSchema] = []
+    hitos_pago: List[HitoPagoPublicoSchema] = []
     avance: float = 0  # % de avance de la obra
 
     tiene_contrato: bool = False
