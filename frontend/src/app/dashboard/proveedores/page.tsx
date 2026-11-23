@@ -21,7 +21,6 @@ export default function ProveedoresPage() {
   const [loading, setLoading] = useState(true);
   const { preguntar, dialogo } = useDialogo();
   const avisar = (mensaje: string) => void preguntar({ titulo: "No se pudo completar la acción", mensaje, soloAviso: true });
-  const [error, setError] = useState("");
 
   const [formData, setFormData] = useState({
     id: 0,
@@ -42,10 +41,10 @@ export default function ProveedoresPage() {
       if (res.ok) {
         setProveedores(await res.json());
       } else {
-        setError("Error al cargar proveedores");
+        avisar("Error al cargar proveedores");
       }
-    } catch (err) {
-      setError("Error de red");
+    } catch {
+      avisar("Error de red");
     } finally {
       setLoading(false);
     }
@@ -97,7 +96,7 @@ export default function ProveedoresPage() {
         const err = await res.json();
         avisar(err.message || "Error al procesar la solicitud.");
       }
-    } catch (err) {
+    } catch {
       avisar("Error de conexión");
     }
   };
@@ -128,7 +127,7 @@ export default function ProveedoresPage() {
         const err = await res.json();
         avisar(err.message || "No se pudo eliminar.");
       }
-    } catch (e) {
+    } catch {
       avisar("Error al comunicarse con el backend.");
     }
   };

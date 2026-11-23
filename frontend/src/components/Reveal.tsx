@@ -9,7 +9,6 @@ export function useVisible<T extends HTMLElement>(umbral = 0.15) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
     const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold: umbral });
     obs.observe(el);
     return () => obs.disconnect();
@@ -25,7 +24,7 @@ export default function Reveal({ children, delay = 0, desde = "abajo", className
   const oculto = { abajo: "translate-y-8", izquierda: "-translate-x-8", derecha: "translate-x-8", escala: "scale-95" }[desde];
   return (
     <div ref={ref} style={{ transitionDelay: visible ? `${delay}ms` : "0ms" }}
-      className={`transition-all duration-700 ease-out motion-reduce:transition-none ${visible ? "opacity-100 translate-x-0 translate-y-0 scale-100" : `opacity-0 ${oculto}`} ${className}`}>
+      className={`transition-all duration-700 ease-out motion-reduce:duration-500 motion-reduce:transform-none ${visible ? "opacity-100 translate-x-0 translate-y-0 scale-100" : `opacity-0 ${oculto}`} ${className}`}>
       {children}
     </div>
   );
@@ -36,7 +35,7 @@ export function Resaltado({ children, tono = "claro", retraso = 0 }: { children:
   const { ref, visible } = useVisible<HTMLSpanElement>(0.6);
   const color = tono === "oscuro" ? "rgb(251 191 36 / 0.45)" : "rgb(252 211 77 / 0.75)";
   return (
-    <span ref={ref} className={`font-bold ${tono === "oscuro" ? "text-white" : "text-blue-900"} bg-no-repeat bg-left-bottom transition-[background-size] duration-[900ms] ease-out motion-reduce:transition-none`}
+    <span ref={ref} className={`font-bold ${tono === "oscuro" ? "text-white" : "text-blue-900"} bg-no-repeat bg-left-bottom transition-[background-size] duration-[900ms] ease-out`}
       style={{ backgroundImage: `linear-gradient(${color}, ${color})`, backgroundSize: `${visible ? 100 : 0}% 42%`, transitionDelay: `${retraso}ms` }}>
       {children}
     </span>

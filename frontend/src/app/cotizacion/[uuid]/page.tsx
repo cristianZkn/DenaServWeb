@@ -56,7 +56,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
         } else {
           setError("Proyecto no encontrado o enlace inválido.");
         }
-      } catch (err) {
+      } catch {
         setError("Error de conexión al servidor backend.");
       } finally {
         setLoading(false);

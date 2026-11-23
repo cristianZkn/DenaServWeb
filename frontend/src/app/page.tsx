@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { TarjetaObra, VisorObra, type Obra } from "@/components/GaleriaObra";
 import Reveal, { Resaltado } from "@/components/Reveal";
@@ -41,24 +41,42 @@ const METAS = [
   { icono: "M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8", titulo: "Su recomendación", texto: "Queremos que cada cliente satisfecho nos recomiende." },
 ];
 
-/** Sección que está a la vista: sirve para marcar el enlace del menú. */
-function useSeccionActiva(ids: string[]) {
-  const [activa, setActiva] = useState(ids[0]);
+interface CasaApi {
+  id: number; nombre: string; etiqueta: string; m2: number; dormitorios: number; banos: number;
+  resumen: string; ideal: string; incluye: string[]; imagenes: string[]; personalizado: boolean;
+}
+
+const IDS = SECCIONES.map((s) => s.id);
+
+/** Un solo oyente de scroll, agrupado por fotograma: marca la sección actual y el menú sólido, y mueve la barra de lectura
+ *  tocando el DOM directamente (así la página no se vuelve a dibujar en cada evento de scroll). */
+function useScrollPagina(barra: React.RefObject<HTMLSpanElement | null>) {
+  const [activa, setActiva] = useState(IDS[0]);
+  const [bajo, setBajo] = useState(false);
   useEffect(() => {
-    const onScroll = () => {
+    let pendiente = false;
+    const medir = () => {
+      pendiente = false;
+      const y = window.scrollY;
       const linea = window.innerHeight * 0.35;
-      let actual = ids[0];
-      for (const id of ids) {
+      let actual = IDS[0];
+      for (const id of IDS) {
         const el = document.getElementById(id);
         if (el && el.getBoundingClientRect().top <= linea) actual = id;
       }
       setActiva(actual);
+      setBajo(y > 24);
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      if (barra.current) barra.current.style.transform = `scaleX(${total > 0 ? Math.min(1, y / total) : 0})`;
+    };
+    const onScroll = () => {
+      if (!pendiente) { pendiente = true; requestAnimationFrame(medir); }
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [ids]);
-  return activa;
+  }, [barra]);
+  return { activa, bajo };
 }
 
 function Encabezado({ sobre, titulo, texto, claro }: { sobre: string; titulo: string; texto?: string; claro?: boolean }) {
@@ -87,9 +105,8 @@ export default function PortafolioPage() {
   const [verTodas, setVerTodas] = useState(false);
   const [casas, setCasas] = useState<ModeloCasa[]>(MODELOS); // modelos de ejemplo hasta que la empresa cargue los reales
   const [menu, setMenu] = useState(false);
-  const [bajo, setBajo] = useState(false);
-  const [progreso, setProgreso] = useState(0);
-  const activa = useSeccionActiva(useMemo(() => SECCIONES.map((s) => s.id), []));
+  const barraRef = useRef<HTMLSpanElement>(null);
+  const { activa, bajo } = useScrollPagina(barraRef);
 
   useEffect(() => {
     fetch("/api/portafolio/")
@@ -102,7 +119,7 @@ export default function PortafolioPage() {
   useEffect(() => {
     fetch("/api/catalogo-casas/")
       .then((res) => (res.ok ? res.json() : []))
-      .then((data: any[]) => {
+      .then((data: CasaApi[]) => {
         if (!Array.isArray(data) || data.length === 0) return;
         setCasas(data.map((c) => ({
           id: String(c.id), nombre: c.nombre, etiqueta: c.etiqueta || undefined, m2: c.m2, dormitorios: c.dormitorios, banos: c.banos,
@@ -112,21 +129,9 @@ export default function PortafolioPage() {
       .catch(() => {}); // sin respuesta se quedan los modelos de ejemplo
   }, []);
 
-  useEffect(() => {
-    const f = () => {
-      setBajo(window.scrollY > 24);
-      const total = document.documentElement.scrollHeight - window.innerHeight;
-      setProgreso(total > 0 ? Math.min(1, window.scrollY / total) : 0);
-    };
-    f();
-    window.addEventListener("scroll", f, { passive: true });
-    return () => window.removeEventListener("scroll", f);
-  }, []);
-
   const etiquetasPresentes = useMemo(() => Object.keys(ETIQUETAS).filter((e) => proyectos.some((p) => p.etiqueta === e)), [proyectos]);
   const filtradas = proyectos.filter((p) => filtro === "TODAS" || p.etiqueta === filtro);
   const mostradas = verTodas ? filtradas : filtradas.slice(0, 6);
-  const contacto = WHATSAPP_GENERAL || proyectos.find((p) => p.whatsapp_url)?.whatsapp_url || "";
 
   const enlace = (s: { id: string; texto: string }) => (
     <a key={s.id} href={`#${s.id}`} onClick={() => setMenu(false)} aria-current={activa === s.id ? "true" : undefined}
@@ -159,7 +164,7 @@ export default function PortafolioPage() {
             <Link href="/login" className="mt-2 text-center text-sm font-bold bg-white/10 border border-white/25 text-white px-4 py-2.5 rounded-lg">Acceso de la empresa</Link>
           </div>
         )}
-        <span aria-hidden className="absolute bottom-0 left-0 h-0.5 w-full origin-left bg-gradient-to-r from-amber-400 to-blue-300" style={{ transform: `scaleX(${progreso})` }} />
+        <span ref={barraRef} aria-hidden className="absolute bottom-0 left-0 h-0.5 w-full origin-left scale-x-0 bg-gradient-to-r from-amber-400 to-blue-300" />
       </nav>
 
       {/* Inicio */}
@@ -167,15 +172,15 @@ export default function PortafolioPage() {
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60rem_28rem_at_50%_-8%,rgba(70,149,141,0.55),transparent_70%),radial-gradient(34rem_22rem_at_88%_18%,rgba(217,154,43,0.28),transparent_70%)]" />
         <div aria-hidden className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:56px_56px]" />
         <div aria-hidden className="absolute left-1/2 -translate-x-1/2 -top-[34rem] w-[56rem] h-[56rem] rounded-full border border-blue-300/25 shadow-[0_0_140px_30px_rgba(70,149,141,0.35)]" />
-        <div aria-hidden className="animate-flotar absolute left-[8%] top-[38%] h-40 w-40 rounded-full bg-blue-400/15 blur-2xl" />
-        <div aria-hidden className="animate-flotar-lento absolute right-[10%] top-[52%] h-52 w-52 rounded-full bg-amber-400/15 blur-3xl" />
+        <div aria-hidden className=" absolute left-[8%] top-[38%] h-40 w-40 rounded-full bg-blue-400/15 blur-2xl" />
+        <div aria-hidden className=" absolute right-[10%] top-[52%] h-52 w-52 rounded-full bg-amber-400/15 blur-3xl" />
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 pt-36 pb-32 sm:pt-44 sm:pb-40 text-center">
           <span className="animate-entrar-arriba inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur px-4 py-1.5 text-sm font-semibold text-blue-100">
-            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulso-anillo" aria-hidden /> Casas prefabricadas y radieres · Los Ángeles, Chile
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulso-anillo [animation-iteration-count:4]" aria-hidden /> Casas prefabricadas y radieres · Los Ángeles, Chile
           </span>
           <h1 className="animate-entrar-arriba retraso-1 mt-6 text-4xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[1.05]">
-            Construimos <span className="animate-brillo-texto bg-gradient-to-r from-blue-300 via-amber-200 to-blue-300 bg-clip-text text-transparent">tu hogar</span> con calidad estructural
+            Construimos <span className="animate-brillo-texto [animation-iteration-count:3] bg-gradient-to-r from-blue-300 via-amber-200 to-blue-300 bg-clip-text text-transparent">tu hogar</span> con calidad estructural
           </h1>
           <p className="animate-entrar-arriba retraso-2 mt-6 text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto font-light">
             Proyectos personalizados, materiales de calidad y un servicio con garantías. Conozca algunas de las obras que ya entregamos.
@@ -189,7 +194,7 @@ export default function PortafolioPage() {
 
       {/* Ventajas: panel de vidrio con borde animado, montado sobre el borde de la cabecera */}
       <section aria-label="Por qué elegirnos" className="relative z-10 -mt-20 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
-        <div className="animate-brillo-texto rounded-3xl bg-gradient-to-r from-amber-400 via-blue-400 to-amber-400 p-[1.5px] shadow-2xl shadow-blue-950/30">
+        <div className="rounded-3xl bg-gradient-to-r from-amber-400 via-blue-400 to-amber-400 p-[1.5px] shadow-2xl shadow-blue-950/30">
           <div className="relative overflow-hidden rounded-[calc(1.5rem-1.5px)] bg-gradient-to-br from-blue-950 via-blue-900 to-blue-950">
             <div aria-hidden className="absolute -top-24 left-1/4 h-48 w-96 rounded-full bg-blue-400/20 blur-3xl" />
             <div aria-hidden className="absolute -bottom-24 right-1/4 h-48 w-96 rounded-full bg-amber-400/15 blur-3xl" />
@@ -227,8 +232,8 @@ export default function PortafolioPage() {
 
       {/* Nosotros */}
       <section id="nosotros" className="scroll-mt-16 relative overflow-hidden">
-        <div aria-hidden className="absolute -left-32 top-10 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl animate-flotar-lento" />
-        <div aria-hidden className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-amber-300/25 blur-3xl animate-flotar" />
+        <div aria-hidden className="absolute -left-32 top-10 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl" />
+        <div aria-hidden className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-amber-300/25 blur-3xl" />
         <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           <Reveal className="text-center max-w-3xl mx-auto">
             <p className="text-sm font-bold uppercase tracking-widest text-amber-600">Quiénes somos</p>
@@ -305,8 +310,8 @@ export default function PortafolioPage() {
 
       {/* Catálogo: casas prediseñadas por la empresa */}
       <section id="catalogo" className="scroll-mt-16 relative overflow-hidden bg-slate-50">
-        <div aria-hidden className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl animate-flotar-lento" />
-        <div aria-hidden className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-amber-300/20 blur-3xl animate-flotar" />
+        <div aria-hidden className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-blue-300/20 blur-3xl" />
+        <div aria-hidden className="absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-amber-300/20 blur-3xl" />
         <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           <Reveal><Encabezado sobre="Catálogo" titulo="Casas prediseñadas" texto="Modelos listos para elegir. Cada uno se adapta a su terreno y a su presupuesto: pida su cotización sin compromiso." /></Reveal>
           <div className="mt-12 grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -319,7 +324,7 @@ export default function PortafolioPage() {
                     <div className="relative aspect-[3/2] overflow-hidden bg-blue-950">
                       {m.imagen ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={m.imagen} alt={`${m.nombre} de ${m.m2} m²`} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        <img src={m.imagen} alt={`${m.nombre} de ${m.m2} m²`} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                       ) : (
                         <div className="h-full w-full transition-transform duration-700 group-hover:scale-105"><CasaIlustrada m2={m.m2 || 54} dormitorios={m.dormitorios} plano={m.personalizado} /></div>
                       )}
@@ -414,11 +419,9 @@ export default function PortafolioPage() {
           <Reveal className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-black leading-tight">¿Listo para construir su casa?</h2>
             <p className="mt-4 text-lg text-blue-100">Cuéntenos su idea y su terreno. Le respondemos con una cotización clara y sin compromiso.</p>
-            {contacto && (
-              <a href={contacto} target="_blank" rel="noopener noreferrer" className="brillo-boton mt-8 inline-flex items-center gap-2 rounded-full bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 shadow-lg hover:-translate-y-0.5 transition">
-                <span aria-hidden>💬</span> Escribir por WhatsApp
-              </a>
-            )}
+            <a href={WHATSAPP_GENERAL} target="_blank" rel="noopener noreferrer" className="brillo-boton mt-8 inline-flex items-center gap-2 rounded-full bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 shadow-lg hover:-translate-y-0.5 transition">
+              <span aria-hidden>💬</span> Escribir por WhatsApp
+            </a>
           </Reveal>
 
           <h3 className="mt-14 text-center text-sm font-bold uppercase tracking-widest text-amber-300">Síganos en nuestras redes</h3>

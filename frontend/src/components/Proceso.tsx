@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useVisible } from "@/components/Reveal";
+import { useEffect, useRef, useState } from "react";
 
 const PASOS = [
   { titulo: "Visita y cotización", texto: "Conversamos su idea, vemos el terreno y le entregamos una cotización detallada.", etiqueta: "Paso 1",
@@ -16,15 +15,25 @@ const PASOS = [
 
 /** Línea de tiempo: al llegar a la sección la línea se dibuja y los pasos aparecen uno tras otro; luego un foco recorre los pasos. */
 export default function Proceso() {
-  const { ref, visible } = useVisible<HTMLOListElement>(0.2);
+  const ref = useRef<HTMLOListElement>(null);
+  const [visible, setVisible] = useState(false);   // ya se llegó a la sección alguna vez (dibuja la línea y muestra los pasos)
+  const [enVista, setEnVista] = useState(false);   // la sección está ahora en pantalla (solo entonces gira el foco)
   const [foco, setFoco] = useState(0);
   const [pausa, setPausa] = useState(false);
 
   useEffect(() => {
-    if (!visible || pausa || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { setEnVista(e.isIntersecting); if (e.isIntersecting) setVisible(true); }, { threshold: 0.2 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!enVista || pausa || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const t = window.setInterval(() => setFoco((f) => (f + 1) % PASOS.length), 3200);
     return () => window.clearInterval(t);
-  }, [visible, pausa]);
+  }, [enVista, pausa]);
 
   return (
     <ol ref={ref} className="relative mt-14 grid lg:grid-cols-4 gap-x-6 gap-y-10">

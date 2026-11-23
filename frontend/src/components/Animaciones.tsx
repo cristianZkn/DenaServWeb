@@ -8,8 +8,7 @@ const sinMovimiento = () => typeof window !== "undefined" && window.matchMedia("
 export function useMontado(retardo = 60) {
   const [listo, setListo] = useState(false);
   useEffect(() => {
-    if (sinMovimiento()) { setListo(true); return; }
-    const t = window.setTimeout(() => setListo(true), retardo);
+    const t = window.setTimeout(() => setListo(true), sinMovimiento() ? 0 : retardo);
     return () => window.clearTimeout(t);
   }, [retardo]);
   return listo;
@@ -19,11 +18,11 @@ export function useMontado(retardo = 60) {
 export function useContador(objetivo: number, ms = 900) {
   const [valor, setValor] = useState(0);
   useEffect(() => {
-    if (!Number.isFinite(objetivo) || sinMovimiento()) { setValor(objetivo); return; }
     let id = 0;
     const t0 = performance.now();
+    const duracion = sinMovimiento() || !Number.isFinite(objetivo) ? 1 : ms;
     const paso = (t: number) => {
-      const p = Math.min(1, (t - t0) / ms);
+      const p = Math.min(1, (t - t0) / duracion);
       setValor(Math.round(objetivo * (1 - Math.pow(1 - p, 3))));
       if (p < 1) id = requestAnimationFrame(paso);
     };

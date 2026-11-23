@@ -87,7 +87,7 @@ export function TarjetaObra({ obra, onAbrir }: { obra: Obra; onAbrir: () => void
         <div className="absolute inset-0 flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${c.i * 100}%)` }}>
           {fotos.map((f, k) => (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={f} src={f} alt={`${obra.titulo}, foto ${k + 1} de ${fotos.length}`} loading={k === 0 ? "eager" : "lazy"} className="h-full w-full shrink-0 object-cover transition-transform duration-700 group-hover:scale-105" />
+            <img key={f} src={f} alt={`${obra.titulo}, foto ${k + 1} de ${fotos.length}`} loading={k === 0 ? "eager" : "lazy"} decoding="async" className="h-full w-full shrink-0 object-cover transition-transform duration-700 group-hover:scale-105" />
           ))}
         </div>
         <div aria-hidden className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-blue-950/80 to-transparent pointer-events-none" />
@@ -160,7 +160,7 @@ export function VisorObra({ obra, onCerrar }: { obra: Obra; onCerrar: () => void
                   <button type="button" onClick={() => c.ir(k)} aria-label={`Ver foto ${k + 1}`} aria-current={k === c.i}
                     className={`!min-h-0 block h-14 w-20 rounded-lg overflow-hidden border-2 transition cursor-pointer ${k === c.i ? "border-amber-400" : "border-transparent opacity-60 hover:opacity-100"}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={f} alt="" className="h-full w-full object-cover" />
+                    <img src={f} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   </button>
                 </li>
               ))}

@@ -98,7 +98,7 @@ export default function CatalogoAdmin({ onCantidad, onAviso, onError }: { onCant
               <div className="relative h-44 bg-slate-200 overflow-hidden">
                 {c.imagenes[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.imagenes[0]} alt={c.nombre} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <img src={c.imagenes[0]} alt={c.nombre} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos (se usará una ilustración)</div>
                 )}

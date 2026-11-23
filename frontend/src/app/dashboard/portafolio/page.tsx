@@ -85,7 +85,7 @@ export default function PortafolioAdminPage() {
             <h1 className="text-2xl font-extrabold">Portafolio y catálogo</h1>
             <p className="text-blue-100 mt-1">Lo que se muestra en la página pública: obras terminadas y casas prediseñadas.</p>
           </div>
-          <a href="/portafolio" target="_blank" className="rounded-lg border border-white/30 hover:bg-white/10 px-4 py-2 font-semibold transition">Ver página pública ↗</a>
+          <a href="/" target="_blank" className="rounded-lg border border-white/30 hover:bg-white/10 px-4 py-2 font-semibold transition">Ver página pública ↗</a>
         </div>
         <dl className="relative mt-5 grid grid-cols-3 gap-3 max-w-xl">
           {[["Obras publicadas", `${visibles} de ${proyectos.length}`], ["Casas en el catálogo", String(nCasas)], ["Fotos en obras", String(proyectos.reduce((t, p) => t + p.imagenes.length, 0))]].map(([k, v]) => (
@@ -138,7 +138,7 @@ export default function PortafolioAdminPage() {
                   <div className="relative h-44 bg-slate-200 overflow-hidden">
                     {p.imagenes[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imagenes[0]} alt={p.titulo} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      <img src={p.imagenes[0]} alt={p.titulo} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos</div>
                     )}

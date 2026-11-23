@@ -20,6 +20,14 @@ const csp = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  compress: true,
+  // Rutas antiguas que solo redirigían desde el navegador: ahora lo hace el servidor, sin descargar una página.
+  async redirects() {
+    return [
+      { source: "/dashboard/inventario", destination: "/dashboard/catalogos", permanent: true },
+      { source: "/portafolio", destination: "/", permanent: true },
+    ];
+  },
   async headers() {
     const comunes = [
       { key: "X-Content-Type-Options", value: "nosniff" },

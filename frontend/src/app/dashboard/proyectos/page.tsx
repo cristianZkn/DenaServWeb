@@ -111,7 +111,7 @@ export default function ProyectosPage() {
       } else {
         setError("No fue posible obtener la lista de proyectos.");
       }
-    } catch (err) {
+    } catch {
       setError("Error de red al conectar con el servidor backend.");
     } finally {
       setLoading(false);

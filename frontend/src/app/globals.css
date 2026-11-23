@@ -114,10 +114,6 @@ body {
 .animate-subir { animation: subir 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .animate-entrar { animation: entrar 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
-}
-
 html { scroll-behavior: smooth; }
 
 /* Respuesta sutil al tocar un botón y transición de colores en toda la aplicación */
@@ -138,7 +134,7 @@ html { scroll-behavior: smooth; }
 .animate-cinta { animation: cinta 38s linear infinite; }
 .animate-pulso-anillo { animation: pulso-anillo 2.4s ease-out infinite; }
 .animate-entrar-arriba { animation: entrar-arriba 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.retraso-1 { animation-delay: 0.1s; } .retraso-2 { animation-delay: 0.25s; } .retraso-3 { animation-delay: 0.4s; } .retraso-4 { animation-delay: 0.55s; }
+.retraso-1 { animation-delay: 0.1s; } .retraso-2 { animation-delay: 0.25s; } .retraso-3 { animation-delay: 0.4s; }
 
 /* Barrido de luz al pasar sobre un botón destacado */
 .brillo-boton { position: relative; overflow: hidden; }
@@ -173,3 +169,15 @@ html { scroll-behavior: smooth; }
 /* Campos: el borde y el resplandor del foco cambian suavemente */
 input, select, textarea { transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease; }
 input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px rgb(31 97 89 / 0.12); }
+
+/* Si el sistema pide menos movimiento (en Windows: «Mostrar animaciones» desactivado) se conservan los fundidos suaves,
+   pero se quitan los desplazamientos grandes y todo lo que se repite sin parar. Va al final para ganar a las definiciones anteriores. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-flotar, .animate-flotar-lento, .animate-brillo-texto, .animate-cinta, .animate-pulso-anillo { animation: none !important; }
+  @keyframes entrar-arriba { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes panel-entrar { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes panel-lado { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes subir { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes entrar { from { opacity: 0; } to { opacity: 1; } }
+  html { scroll-behavior: auto; }
+}
