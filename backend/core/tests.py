@@ -1676,3 +1676,57 @@ class OrdenDeHitosTests(TestCase):
             HitoPago.objects.create(cotizacion=cot, fase=fase, porcentaje=pct, monto_pago=pct)
         HitoPago.objects.filter(fase="ANTICIPO_40").update(estado="PAGADO")   # actualizar la fila no debe cambiar el orden en que se lista
         self.assertEqual([h.fase for h in cot.hitos_pago.all()], ["ANTICIPO_40", "AVANCE_30", "ENTREGA_30"])
+
+
+class RendimientoTests(TestCase):
+    """Que las consultas no crezcan con la cantidad de filas (N+1) y que no se lean los bytes de las fotos al listar."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.u)}"}
+
+    def _cotizaciones(self, n):
+        prov = Proveedor.objects.create(rut_empresa=f"P{n}-{Cotizacion.objects.count()}", razon_social="Prov", descuento_pct=5)
+        base = CatalogoTipo.objects.create(categoria="BASE_TERRENO", nombre="Base", unidad_medida="M2", proveedor=prov, precio_base_unitario=100)
+        for i in range(n):
+            Cotizacion.objects.create(codigo_cotizacion=f"COT-R{Cotizacion.objects.count()}{i}", cliente_nombre="Ana", direccion_terreno="Calle 1234",
+                                      superficie_m2=50, costo_total=100, usuario=self.u, base_terreno=base, revestimiento=base)
+
+    def test_listar_cotizaciones_usa_las_mismas_consultas_con_pocas_o_muchas_filas(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self._cotizaciones(1)
+        with CaptureQueriesContext(connection) as pocas:
+            self.assertEqual(len(self.client.get("/api/cotizaciones/", **self.h).json()), 1)
+        self._cotizaciones(6)
+        with CaptureQueriesContext(connection) as muchas:
+            self.assertEqual(len(self.client.get("/api/cotizaciones/", **self.h).json()), 7)
+        self.assertEqual(len(muchas), len(pocas))
+
+    def test_los_listados_publicos_no_leen_los_bytes_de_las_fotos(self):
+        import base64
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+        h = self.h
+        pid = self.client.post("/api/portafolio/", {"titulo": "Casa 54 m²", "imagenes": [f"data:image/png;base64,{png}"]}, content_type="application/json", **h).json()["id"]
+        self.client.post("/api/catalogo-casas/", {"nombre": "Modelo", "imagenes": [f"data:image/png;base64,{png}"]}, content_type="application/json", **h)
+        for url in ("/api/portafolio/", "/api/catalogo-casas/"):
+            with CaptureQueriesContext(connection) as q:
+                r = self.client.get(url).json()
+            self.assertEqual(len(r[0]["imagenes"]), 1)
+            self.assertFalse(any('"contenido"' in c["sql"] for c in q.captured_queries), url)
+
+    def test_calcular_no_consulta_una_vez_por_material(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        prov = Proveedor.objects.create(rut_empresa="PM-1", razon_social="Prov")
+        mats = [CatalogoTipo.objects.create(categoria="OTRO", nombre=f"M{i}", unidad_medida="UN", proveedor=prov, precio_base_unitario=1000, etapa_obra="ETAPA_1") for i in range(8)]
+        def calcular(n):
+            cuerpo = {"superficie_m2": 40, "distancia_km": 10, "materiales": [{"catalogo_id": m.id, "cantidad": 1} for m in mats[:n]]}
+            with CaptureQueriesContext(connection) as q:
+                self.assertEqual(self.client.post("/api/cotizaciones/calcular", cuerpo, content_type="application/json", **self.h).status_code, 200)
+            return len(q)
+        self.assertEqual(calcular(1), calcular(8))

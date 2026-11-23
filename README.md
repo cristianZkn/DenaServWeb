@@ -99,6 +99,7 @@ Crea el archivo `backend/.env` a partir de [`backend/.env.example`](backend/.env
 | `DJANGO_DEBUG` | `1` en desarrollo (exactamente `1`, sin comillas); `0` en producción |
 | `DJANGO_SECRET_KEY` | Obligatoria si `DJANGO_DEBUG` no es `1`. Genera una propia con `python -c "import secrets; print(secrets.token_urlsafe(50))"`. **Nunca uses la de producción.** |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | Conexión a PostgreSQL |
+| `DB_CONN_MAX_AGE` | Segundos que se reutiliza una conexión a la base (por defecto 60; 0 = una por petición) |
 | `GOOGLE_CLIENT_ID` | Cliente OAuth de Google para el inicio de sesión |
 | `WHATSAPP_NUMERO` | Número de contacto del portafolio, con código de país (`569XXXXXXXX`) |
 | `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | Orígenes permitidos (los valores por defecto sirven en local) |

@@ -13,8 +13,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Prefetch
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.security import APIKeyHeader, HttpBearer
 
@@ -60,8 +60,9 @@ def _calcular_desde_catalogo(data):
     insumos_db = list(CatalogoTipo.objects.select_related('proveedor').filter(
         categoria__in=precios.CATEGORIAS_INSUMO, activo=True, rendimiento_m2__gt=0))
     adicionales = []
+    elegidos = CatalogoTipo.objects.select_related('proveedor').filter(activo=True).in_bulk({m.catalogo_id for m in data.materiales})
     for mat in data.materiales:
-        it = CatalogoTipo.objects.select_related('proveedor').filter(id=mat.catalogo_id, activo=True).first()
+        it = elegidos.get(mat.catalogo_id)
         if not it:
             raise ValueError("Uno de los materiales de la lista ya no está disponible en el catálogo.")
         adicionales.append({'id': it.id, 'nombre': it.nombre, 'unidad': it.unidad_medida,
@@ -556,7 +557,7 @@ def eliminar_catalogo_tipo(request, catalogo_id: int):
 # ==============================================================================
 @router.get("/cotizaciones/", response=List[CotizacionSchema], auth=AuthBearer())
 def listar_cotizaciones(request):
-    return Cotizacion.objects.select_related("base_terreno", "revestimiento", "usuario").all().order_by("-fecha_creacion")
+    return Cotizacion.objects.select_related("base_terreno__proveedor", "revestimiento__proveedor", "usuario").order_by("-fecha_creacion")
 
 
 @router.post("/cotizaciones/", response={200: CotizacionSchema, 400: MessageSchema}, auth=AuthBearer())
@@ -673,7 +674,8 @@ def estadisticas_panel(request):
     ventana.reverse()
     filas = {t: {"clave": f"{t[0]}-T{t[1]}", "etiqueta": f"T{t[1]} {t[0]}", "creados": 0, "terminados": 0} for t in ventana}
     conteo = {"BORRADOR": 0, "ACEPTADA": 0, "FINALIZADA": 0}
-    for c in Cotizacion.objects.prefetch_related("hitos_pago"):
+    pagos_ = Prefetch("hitos_pago", queryset=HitoPago.objects.only("cotizacion_id", "fecha_pago"))
+    for c in Cotizacion.objects.only("estado", "fecha_creacion").prefetch_related(pagos_):
         conteo[c.estado] = conteo.get(c.estado, 0) + 1
         creada = _trimestre(timezone.localtime(c.fecha_creacion).date())
         if creada in filas:
@@ -691,7 +693,7 @@ def estadisticas_panel(request):
 def obtener_cotizacion_detalle(request, cotizacion_id: int):
     try:
         cotizacion = Cotizacion.objects.select_related(
-            "base_terreno", "revestimiento", "usuario"
+            "base_terreno__proveedor", "revestimiento__proveedor", "usuario"
         ).prefetch_related(
             "hitos_pago", "detalles_insumo__catalogo_tipo__proveedor", "obras_ejecucion"
         ).get(id=cotizacion_id)
@@ -824,7 +826,7 @@ def historial_cambios(request, cotizacion_id: int):
 def obtener_cotizacion_publica(request, token: uuid.UUID):
     try:
         cotizacion = Cotizacion.objects.select_related(
-            "base_terreno", "revestimiento", "usuario"
+            "base_terreno__proveedor", "revestimiento__proveedor", "usuario"
         ).prefetch_related(
             "hitos_pago", "detalles_insumo__catalogo_tipo__proveedor", "obras_ejecucion"
         ).get(token_publico=token)
@@ -1059,7 +1061,8 @@ def _guardar_fotos_bitacora(bitacora, data_urls):
 
 @router.get("/cotizaciones/{cotizacion_id}/bitacora/", response=List[BitacoraSchema], auth=AuthBearer())
 def listar_bitacora(request, cotizacion_id: int):
-    return BitacoraAvance.objects.select_related("usuario").prefetch_related("fotos").filter(cotizacion_id=cotizacion_id)
+    fotos = Prefetch("fotos", queryset=BitacoraFoto.objects.defer("contenido"))
+    return BitacoraAvance.objects.select_related("usuario").prefetch_related(fotos).filter(cotizacion_id=cotizacion_id)
 
 
 @router.post("/cotizaciones/{cotizacion_id}/bitacora/", response={200: BitacoraSchema, 400: MessageSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
@@ -1248,14 +1251,20 @@ def _guardar_imagenes(proyecto, data_urls):
         PortafolioImagen.objects.create(proyecto=proyecto, contenido=contenido, tipo_mime=mime, orden=n)
 
 
+def _portafolio():
+    """Obras con sus fotos, sin leer los bytes de cada foto (solo se necesita el id para su dirección)."""
+    fotos = Prefetch("imagenes", queryset=PortafolioImagen.objects.defer("contenido"))
+    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").prefetch_related(fotos).order_by("-id")
+
+
 @router.get("/portafolio/", response=List[PortafolioProyectoSchema])
 def listar_portafolio(request):
-    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").prefetch_related("imagenes").filter(publicado=True).order_by("-id")
+    return _portafolio().filter(publicado=True)
 
 
 @router.get("/portafolio/admin/", response=List[PortafolioProyectoSchema], auth=AuthBearer())
 def listar_portafolio_admin(request):
-    return PortafolioProyecto.objects.select_related("cotizacion__revestimiento").prefetch_related("imagenes").order_by("-id")
+    return _portafolio()
 
 
 @router.get("/portafolio/imagenes/{imagen_id}/")
@@ -1312,14 +1321,18 @@ def _guardar_imagenes_casa(casa, data_urls):
         CasaCatalogoImagen.objects.create(casa=casa, contenido=contenido, tipo_mime=mime, orden=n)
 
 
+def _catalogo_casas():
+    return CasaCatalogo.objects.prefetch_related(Prefetch("imagenes", queryset=CasaCatalogoImagen.objects.defer("contenido")))
+
+
 @router.get("/catalogo-casas/", response=List[CasaCatalogoSchema])
 def listar_catalogo_casas(request):
-    return CasaCatalogo.objects.prefetch_related("imagenes").filter(publicado=True)
+    return _catalogo_casas().filter(publicado=True)
 
 
 @router.get("/catalogo-casas/admin/", response=List[CasaCatalogoSchema], auth=AuthBearer())
 def listar_catalogo_casas_admin(request):
-    return CasaCatalogo.objects.prefetch_related("imagenes")
+    return _catalogo_casas()
 
 
 @router.get("/catalogo-casas/imagenes/{imagen_id}/")

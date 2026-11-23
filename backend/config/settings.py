@@ -108,6 +108,8 @@ if os.getenv('DB_HOST'):
             # Supabase exige TLS; en desarrollo local se permite sin él.
             'OPTIONS': {'sslmode': os.getenv('DB_SSLMODE', 'prefer' if DEBUG else 'require')},
             'DISABLE_SERVER_SIDE_CURSORS': True,  # necesario con el pooler de Supabase en modo transacción
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),  # reutiliza la conexión 60 s (0 = una por petición)
+            'CONN_HEALTH_CHECKS': True,  # si el pooler cerró una conexión ociosa, abre otra sin dar error
         }
     }
 else:
