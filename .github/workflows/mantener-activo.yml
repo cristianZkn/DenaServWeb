@@ -1,0 +1,29 @@
+# Evita que el backend gratuito de Render se duerma (lo hace tras 15 min sin visitas y la primera carga tarda ~1 minuto).
+# Pide la dirección /api/ (no toca la base de datos) cada 13 minutos, solo en el horario en que hay visitas:
+# 10:00-01:59 UTC = 07:00-22:59 en horario de verano de Chile (UTC-3), 06:00-21:59 en invierno (UTC-4).
+# Fuera de ese horario el backend se duerme solo y ahorra horas de la capa gratuita (el plan da 750 h al mes).
+# Secreto del repositorio: API_URL (https://<tu-api>.onrender.com), el mismo que usa precios-semanales.yml.
+# Límite conocido: GitHub puede retrasar las ejecuciones programadas unos minutos; si un retraso supera los 2 min de margen,
+# el backend se duerme una vez y despierta con la siguiente visita.
+name: Mantener activo el backend
+on:
+  schedule:
+    - cron: "*/13 10-23,0-1 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: mantener-activo
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Pedir /api/ al backend
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        # Un ping fallido no es una falla del proyecto (el backend puede estar despertando): se registra y no envía correos.
+        run: |
+          curl -sS --retry 2 --retry-delay 15 --retry-all-errors --max-time 90 -o /dev/null \
+            -w "HTTP %{http_code} en %{time_total}s\n" "$API_URL/api/" || echo "Sin respuesta del backend"

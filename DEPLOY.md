@@ -64,5 +64,13 @@ lista, aplica el descuento del proveedor y guarda `costo neto = precio de lista 
 - Para dejar el catálogo con las fichas mapeadas y las cuatro categorías obligatorias (Techumbre, Revestimiento,
   Tabiquería, Base/Radier) en una base nueva: `python manage.py mapear_catalogo` y luego el comando anterior.
 
+## Mantener activo el backend (anti-sueño)
+
+Render gratuito duerme el backend tras 15 min sin visitas y la primera carga tarda cerca de 1 minuto (la portada pide las obras a la API).
+[.github/workflows/mantener-activo.yml](.github/workflows/mantener-activo.yml) lo despierta con un `GET /api/` cada 13 minutos, de 07:00 a 23:00 hora de Chile
+(verano; en invierno 06:00 a 22:00). Usa el mismo secreto `API_URL` de arriba. Fuera de ese horario el backend se duerme y se ahorran horas de la
+capa gratuita (750 h al mes). Para cambiar el horario edita el `cron` del archivo (la hora es UTC). Si GitHub retrasa una ejecución más de 2 minutos el
+backend se duerme una vez; se puede probar a mano en *Actions → Mantener activo el backend → Run workflow*.
+
 ## Variables locales
 Plantillas sin secretos: [backend/.env.example](backend/.env.example) y [frontend/.env.example](frontend/.env.example).
