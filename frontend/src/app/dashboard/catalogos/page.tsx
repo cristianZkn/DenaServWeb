@@ -394,129 +394,175 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
     else setError((await r.json().catch(() => ({}))).message || "No se pudo eliminar (puede estar usado en una cotización). Desactívelo en su lugar.");
   };
 
-  const etiqueta = "block text-base font-semibold text-slate-800 mb-1";
+  // Esc cierra la ventana (también se cierra al hacer clic fuera del recuadro).
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape" && !guardando) onCerrar(); };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  });
+
+  const etiqueta = "block text-sm font-semibold text-slate-700 mb-1";
+  const ayuda = "text-sm text-slate-500 mt-1";
+  const tarjeta = "rounded-xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm";
+  const titulo = (icono: string, texto: string) => (
+    <h3 className="flex items-center gap-2 text-base font-extrabold text-blue-900"><span aria-hidden className="text-lg">{icono}</span>{texto}</h3>
+  );
+  const conFicha = !manual;
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 bg-blue-950/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="m-titulo"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !guardando) onCerrar(); }}>
       {dialogo}
-      <form onSubmit={guardar} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-slate-900">{item ? "Editar material" : "Agregar material"}</h2>
-        {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm">{error}</div>}
+      <form onSubmit={guardar} className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden ring-1 ring-black/10">
+        <header className="flex items-start gap-3 bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-4 text-white">
+          <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-2xl">🧱</span>
+          <div className="min-w-0 mr-auto">
+            <h2 id="m-titulo" className="text-xl font-extrabold leading-tight">{item ? "Editar material" : "Agregar material"}</h2>
+            <p className="truncate text-sm text-blue-100">{item ? item.nombre : "Complete los datos del producto para poder cotizarlo."}</p>
+          </div>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="!min-h-0 h-9 w-9 shrink-0 rounded-lg text-lg text-blue-100 hover:bg-white/15 cursor-pointer">✕</button>
+        </header>
 
-        <div>
-          <label className={etiqueta} htmlFor="m-cat">Categoría</label>
-          <select id="m-cat" value={f.categoria} onChange={(e) => set("categoria", e.target.value)}>
-            {GRUPOS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
-          </select>
-        </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md text-sm font-semibold">{error}</div>}
 
-        <div>
-          <label className={etiqueta} htmlFor="m-prov">Empresa (proveedor){manual ? " *" : ""}</label>
-          <select id="m-prov" required={manual} value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
-            <option value="">{manual ? "Elija una empresa…" : "Detectar por la dirección de la ficha"}</option>
-            {proveedores.filter((p) => p.activo !== false).map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
-          </select>
-          <p className="text-sm text-slate-500 mt-1">
-            La lista sale de «Proveedores». ¿Falta una empresa? Agréguela primero en esa sección.
-          </p>
-        </div>
-
-        {f.categoria !== "BASE_TERRENO" && (
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" className="!w-5 !min-h-0 mt-1" checked={f.sin_ficha} onChange={(e) => set("sin_ficha", e.target.checked)} />
-            <span>Este material no tiene ficha en línea: ingresaré el precio a mano.</span>
-          </label>
-        )}
-
-        {manual ? (
-          <>
-            <div>
-              <label className={etiqueta} htmlFor="m-nom">Nombre del material *</label>
-              <input id="m-nom" required maxLength={150} value={f.nombre} onChange={(e) => set("nombre", e.target.value)}
-                placeholder={f.categoria === "BASE_TERRENO" ? "Ej: Radier H20 10 cm" : "Ej: Clavos 3 pulgadas"} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          {/* Producto */}
+          <section className={tarjeta}>
+            {titulo("📦", "Producto")}
+            <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className={etiqueta} htmlFor="m-pre">{f.categoria === "BASE_TERRENO" ? "Precio por m² (lista)" : "Precio de lista ($)"}</label>
-                <input id="m-pre" type="number" min="0" step="500" value={f.precio_base_unitario} onFocus={(e) => e.target.select()}
-                  onChange={(e) => set("precio_base_unitario", e.target.value)} />
+                <label className={etiqueta} htmlFor="m-cat">Categoría</label>
+                <select id="m-cat" value={f.categoria} onChange={(e) => set("categoria", e.target.value)}>
+                  {GRUPOS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={etiqueta} htmlFor="m-prov">Empresa (proveedor){manual ? " *" : ""}</label>
+                <select id="m-prov" required={manual} value={f.proveedor_id} onChange={(e) => set("proveedor_id", e.target.value)}>
+                  <option value="">{manual ? "Elija una empresa…" : "Detectar por la ficha"}</option>
+                  {proveedores.filter((p) => p.activo !== false).map((p) => <option key={p.id} value={p.id}>{p.razon_social}</option>)}
+                </select>
               </div>
             </div>
-            <p className="text-sm text-slate-500">Solo ponga precios reales: el material aparece en el cotizador y puede cambiar el valor de la casa.</p>
-          </>
-        ) : (
-          <>
-            <div>
-              <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto *</label>
-              <input id="m-url" type="url" required value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
-                placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
-              <p className="text-sm text-slate-500 mt-1">Hoy se leen solas las fichas de Easy, Sodimac, MCT y Ferrelan. El nombre y el precio salen de esa página.</p>
-            </div>
-            <div>
-              <label className={etiqueta} htmlFor="m-nom2">Nombre (opcional)</label>
-              <input id="m-nom2" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Si lo deja vacío se usa el de la tienda" />
-            </div>
-            {f.categoria === "REVESTIMIENTO" && (
+            <p className={ayuda}>La lista de empresas sale de «Proveedores». ¿Falta una? Agréguela primero en esa sección.</p>
+
+            {f.categoria !== "BASE_TERRENO" && (
+              <label className="flex items-start gap-2 cursor-pointer rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+                <input type="checkbox" className="!w-5 !min-h-0 mt-0.5" checked={f.sin_ficha} onChange={(e) => set("sin_ficha", e.target.checked)} />
+                <span className="text-sm">Este material no tiene ficha en línea: ingresaré el precio a mano.</span>
+              </label>
+            )}
+
+            {manual ? (
               <div>
-                <label className={etiqueta} htmlFor="m-m2">m² que cubre cada unidad (opcional)</label>
-                <input id="m-m2" type="number" min="0" step="0.01" value={f.m2_por_unidad} onFocus={(e) => e.target.select()}
-                  onChange={(e) => set("m2_por_unidad", e.target.value)} placeholder="Se calcula con las medidas del nombre" />
+                <label className={etiqueta} htmlFor="m-nom">Nombre del material *</label>
+                <input id="m-nom" required maxLength={150} value={f.nombre} onChange={(e) => set("nombre", e.target.value)}
+                  placeholder={f.categoria === "BASE_TERRENO" ? "Ej: Radier H20 10 cm" : "Ej: Clavos 3 pulgadas"} />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className={etiqueta} htmlFor="m-url">Dirección de la ficha del producto *</label>
+                  <input id="m-url" type="url" required value={f.fuente_url} onChange={(e) => set("fuente_url", e.target.value)}
+                    placeholder="https://www.sodimac.cl/sodimac-cl/product/…" />
+                  <p className={ayuda}>Hoy se leen solas las fichas de Easy, Sodimac, MCT y Ferrelan. El nombre, el precio y el descuento salen de esa página.</p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={etiqueta} htmlFor="m-nom2">Nombre (opcional)</label>
+                    <input id="m-nom2" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Si lo deja vacío se usa el de la tienda" />
+                  </div>
+                  {f.categoria === "REVESTIMIENTO" && (
+                    <div>
+                      <label className={etiqueta} htmlFor="m-m2">m² que cubre cada unidad</label>
+                      <input id="m-m2" type="number" min="0" step="0.01" value={f.m2_por_unidad} onFocus={(e) => e.target.select()}
+                        onChange={(e) => set("m2_por_unidad", e.target.value)} placeholder="Se calcula con las medidas" />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {f.categoria !== "BASE_TERRENO" && (
+              <div>
+                <label className={etiqueta} htmlFor="m-uni">Unidad de medida *</label>
+                <select id="m-uni" value={f.unidad_medida} onChange={(e) => set("unidad_medida", e.target.value)} aria-invalid={error.includes("unidad de medida") ? true : undefined}>
+                  <option value="" disabled>Elija cómo se vende…</option>
+                  {UNIDADES.map((u) => <option key={u.v} value={u.v}>{u.t}</option>)}
+                </select>
+                <p className={ayuda}>Cómo se vende el producto: por unidad, saco, caja, plancha, rollo, m², etc.</p>
               </div>
             )}
-          </>
-        )}
+          </section>
 
-        {f.categoria !== "BASE_TERRENO" && (
-          <div>
-            <label className={etiqueta} htmlFor="m-uni">Unidad de medida *</label>
-            <select id="m-uni" value={f.unidad_medida} onChange={(e) => set("unidad_medida", e.target.value)} aria-invalid={error.includes("unidad de medida") ? true : undefined}>
-              <option value="" disabled>Elija cómo se vende…</option>
-              {UNIDADES.map((u) => <option key={u.v} value={u.v}>{u.t}</option>)}
-            </select>
-            <p className="text-sm text-slate-500 mt-1">La tienda no la informa: indique si el producto se vende por unidad, caja, plancha, m², etc.</p>
-          </div>
-        )}
+          {/* Precio */}
+          <section className={tarjeta}>
+            {titulo("💲", "Precio y descuento")}
+            {manual ? (
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={etiqueta} htmlFor="m-pre">{f.categoria === "BASE_TERRENO" ? "Precio por m² (lista)" : "Precio de lista ($)"}</label>
+                  <input id="m-pre" type="number" min="0" step="500" value={f.precio_base_unitario} onFocus={(e) => e.target.select()}
+                    onChange={(e) => set("precio_base_unitario", e.target.value)} />
+                  <p className={ayuda}>Precio normal, sin descuento. Use solo precios reales: el material aparece en el cotizador.</p>
+                </div>
+                <div>
+                  <label className={etiqueta} htmlFor="m-dcto">Descuento (%)</label>
+                  <input id="m-dcto" type="number" min="0" max="100" step="0.01" value={f.descuento_pct} onFocus={(e) => e.target.select()}
+                    onChange={(e) => set("descuento_pct", e.target.value)} placeholder="0" />
+                  <p className={ayuda}>Si consigue un descuento en este producto, escríbalo: se resta al precio de lista.</p>
+                </div>
+              </div>
+            ) : item ? (
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200"><div className="text-xs font-semibold text-slate-500">Precio de lista</div><div className="font-extrabold tabular-nums">{clp(item.precio_lista)}</div></div>
+                <div className="rounded-lg bg-green-50 p-3 ring-1 ring-green-200"><div className="text-xs font-semibold text-green-800">Descuento</div><div className="font-extrabold tabular-nums text-green-800">{item.descuento_pct ? `−${item.descuento_pct}%` : "Sin descuento"}</div></div>
+                <div className="rounded-lg bg-blue-50 p-3 ring-1 ring-blue-200"><div className="text-xs font-semibold text-blue-800">Costo neto</div><div className="font-extrabold tabular-nums text-blue-900">{clp(item.costo_neto)}</div></div>
+              </div>
+            ) : null}
+            {conFicha && (
+              <p className="text-sm text-slate-600 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+                El precio de lista (sin descuento), el descuento y el costo neto se leen solos de la ficha de la tienda y se actualizan cada lunes.
+              </p>
+            )}
+          </section>
 
-        <div>
-          <label className={etiqueta} htmlFor="m-dcto">Descuento de este material (%)</label>
-          <input id="m-dcto" type="number" min="0" max="100" step="0.01" value={f.descuento_pct} onFocus={(e) => e.target.select()}
-            onChange={(e) => set("descuento_pct", e.target.value)} placeholder="0" />
-          <p className="text-sm text-slate-500 mt-1">
-            Solo si la empresa consigue un descuento en este producto (convenio, cliente frecuente u oferta). Se resta al precio de lista;
-            si lo deja en 0 se cotiza al precio de la tienda. La tienda no informa descuentos, por eso lo escribe usted.
-          </p>
+          {/* Instalación */}
+          <section className={tarjeta}>
+            {titulo("🔨", "Mano de obra por instalación")}
+            <div>
+              <label className={etiqueta} htmlFor="m-mo">Tarifa por m² instalado (opcional)</label>
+              <input id="m-mo" type="number" min="0" step="100" value={f.mano_obra_m2} onFocus={(e) => e.target.select()}
+                onChange={(e) => set("mano_obra_m2", e.target.value)} placeholder="Ej.: 2000 para el OSB Smartside Lap" />
+              <p className={ayuda}>
+                Tarifa habitual si a cada trabajador se le paga aparte por instalar este material. En cada cotización se puede quitar o cambiar sin
+                tocar este valor; si la tarifa sube, edítela aquí una vez: las cotizaciones nuevas la usan y las ya emitidas conservan la suya.
+              </p>
+            </div>
+          </section>
+
+          {/* Estado */}
+          <section className={tarjeta}>
+            {titulo("✅", "Estado")}
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" className="!w-5 !min-h-0 mt-0.5" checked={f.verificado} onChange={(e) => set("verificado", e.target.checked)} />
+              <span><strong>Confirmo que es el producto correcto.</strong> <span className="text-sm text-slate-500">Al marcarlo se vuelve a leer el precio de la ficha.</span></span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" className="!w-5 !min-h-0" checked={f.activo} onChange={(e) => set("activo", e.target.checked)} />
+              <span>Disponible para cotizar</span>
+            </label>
+          </section>
         </div>
 
-        <div>
-          <label className={etiqueta} htmlFor="m-mo">Mano de obra por m² instalado (opcional)</label>
-          <input id="m-mo" type="number" min="0" step="100" value={f.mano_obra_m2} onFocus={(e) => e.target.select()}
-            onChange={(e) => set("mano_obra_m2", e.target.value)} placeholder="Ej.: 2000 para el OSB Smartside Lap" />
-          <p className="text-sm text-slate-500 mt-1">
-            Tarifa habitual si a cada trabajador se le paga aparte por instalar este material. Al cotizar, la cantidad se ingresa en m² y la
-            mano de obra se suma sola, pero en cada cotización se puede quitar o cambiar sin tocar este valor. Si la tarifa sube, edítela
-            aquí una vez: las cotizaciones nuevas la usan y las ya emitidas conservan la que tenían.
-          </p>
-        </div>
-
-        <div className="space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" className="!w-5 !min-h-0 mt-1" checked={f.verificado} onChange={(e) => set("verificado", e.target.checked)} />
-            <span><strong>Confirmo que es el producto correcto.</strong> <span className="text-sm text-slate-500">Al marcarlo se vuelve a leer el precio de la ficha.</span></span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" className="!w-5 !min-h-0" checked={f.activo} onChange={(e) => set("activo", e.target.checked)} />
-            <span>Disponible para cotizar</span>
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3 pt-1">
-          {item && <button type="button" onClick={eliminar} className="text-red-700 font-semibold hover:underline !min-h-0">Eliminar</button>}
+        <footer className="flex items-center gap-3 border-t border-slate-200 bg-white px-4 sm:px-5 py-3">
+          {item && <button type="button" onClick={eliminar} className="!min-h-0 text-red-700 font-semibold hover:bg-red-50 px-3 py-2 rounded-lg cursor-pointer">Eliminar</button>}
           <div className="ml-auto flex gap-2">
-            <button type="button" onClick={onCerrar} className="px-5 h-11 bg-slate-100 hover:bg-slate-200 rounded-lg">Cancelar</button>
-            <button type="submit" disabled={guardando} className="px-6 h-11 bg-blue-900 hover:bg-blue-800 text-white rounded-lg disabled:opacity-60">
+            <button type="button" onClick={onCerrar} className="px-5 h-11 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold cursor-pointer">Cancelar</button>
+            <button type="submit" disabled={guardando} className="px-6 h-11 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded-lg shadow-sm disabled:opacity-60 cursor-pointer">
               {guardando ? "Leyendo la ficha…" : "Guardar"}
             </button>
           </div>
-        </div>
+        </footer>
       </form>
     </div>
   );

@@ -134,8 +134,9 @@ def parsear_mct(html: str, url: str = "") -> dict:
     if not precio or not _precio(precio.get_text()):
         raise ErrorExtraccion("La ficha de MCT no muestra un precio (puede estar agotada o haber cambiado de formato).")
     m = re.search(r"/ficha/(\d+)", url)
-    return {"nombre": nombre.get_text(strip=True) if nombre else "", "sku": m.group(1) if m else "",
-            "precio": _precio(precio.get_text())}
+    normal = soup.select_one(".precio-ficha span.precioNormal")  # precio tachado, solo cuando hay oferta
+    return _con_normal({"nombre": nombre.get_text(strip=True) if nombre else "", "sku": m.group(1) if m else "",
+                        "precio": _precio(precio.get_text())}, _precio(normal.get_text()) if normal else None)
 
 
 def _precio_meta(valor) -> Decimal | None:
@@ -166,15 +167,48 @@ def parsear_meta(html: str) -> dict:
         raise ErrorExtraccion("La ficha no muestra un precio legible (¿producto sin precio o agotado?).")
     h1 = soup.select_one("h1")
     nombre = meta("og:title") or (h1.get_text(strip=True) if h1 else "")
-    return {"nombre": html_lib.unescape(nombre), "sku": meta("product:retailer_item_id", "og:id"), "precio": precio}
+    return _con_normal({"nombre": html_lib.unescape(nombre), "sku": meta("product:retailer_item_id", "og:id"), "precio": precio},
+                       _precio_meta(meta("product:original_price:amount")))
+
+
+def _normal_easy(html: str, vigente: Decimal) -> Decimal | None:
+    """Easy publica en la página {normalPrice, offerPrice}: hay descuento cuando el precio de oferta es el vigente."""
+    for m in re.finditer(r'"normalPrice":(\d+),"currency":"CLP","offerPrice":(null|\d+)|"normalPrice":(\d+),"offerPrice":(null|\d+)', html):
+        normal, oferta = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        if oferta != "null" and Decimal(oferta) == vigente:   # la oferta debe ser el precio de ESTE producto (la página trae otros)
+            return Decimal(normal)
+    return None
+
+
+def _normal_sodimac(html: str) -> Decimal | None:
+    """Sodimac: en los datos del producto, el precio normal viene tachado (`crossed`) junto al precio vigente."""
+    nd = BeautifulSoup(html, "html.parser").find("script", id="__NEXT_DATA__")
+    precios = json.loads(nd.string)["props"]["pageProps"]["productData"]["variants"][0]["prices"]
+    for p in precios:
+        if p.get("type") == "normalPrice" and p.get("crossed"):
+            return _precio_meta(p["price"][0])  # «7.414»: el punto es separador de miles
+    return None
+
+
+def _con_normal(lectura: dict, normal) -> dict:
+    """Agrega `precio_normal` solo si es mayor al vigente (si no, la ficha no tiene descuento)."""
+    if normal and normal > lectura["precio"]:
+        lectura["precio_normal"] = normal
+    return lectura
 
 
 def extraer(url: str) -> dict:
-    """{'nombre', 'sku', 'precio'(Decimal CLP)} de la ficha. Lanza ErrorExtraccion con un mensaje claro."""
+    """{'nombre', 'sku', 'precio'(vigente, Decimal CLP) y, si la tienda muestra un descuento, 'precio_normal'} de la ficha.
+    Lanza ErrorExtraccion con un mensaje claro."""
     tienda = tienda_de(url)
     html = descargar(url)
     if tienda == "mct":
         return parsear_mct(html, url)
     if tienda == "ferrelan":
         return parsear_meta(html)
-    return parsear_json_ld(html)
+    lectura = parsear_json_ld(html)
+    try:  # el precio normal es un dato extra: si la página cambió de formato se sigue con el precio vigente
+        normal = _normal_easy(html, lectura["precio"]) if tienda == "easy" else _normal_sodimac(html)
+    except (ValueError, KeyError, IndexError, TypeError, InvalidOperation):
+        normal = None
+    return _con_normal(lectura, normal)

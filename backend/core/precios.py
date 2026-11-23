@@ -1,8 +1,9 @@
 """Actualización de precios de mercado del catálogo.
 
-Cada producto guarda la URL exacta de su ficha en la tienda (mapeo 1 a 1, sin buscadores). Al actualizar se lee
-el precio de lista, se aplica el descuento propio del material (el que la empresa le puso; 0 si no tiene) y se guarda:
-    costo_neto = precio_lista * (1 - descuento_pct / 100)
+Cada producto guarda la URL exacta de su ficha en la tienda (mapeo 1 a 1, sin buscadores). Al actualizar se lee de la
+ficha el precio normal (sin descuento) y el precio vigente; el descuento es la diferencia y se guarda:
+    precio_lista = precio normal · descuento_pct = (normal - vigente) / normal · costo_neto = precio vigente
+Sin descuento en la tienda: precio_lista = costo_neto = precio vigente y descuento_pct = 0.
 """
 import re
 import threading
@@ -26,12 +27,30 @@ GRUPOS_OBLIGATORIOS = {
 # Categorías de insumos informativos (cubicación/BOM); las bases y revestimientos sí entran al valor de la cotización.
 CATEGORIAS_INSUMO = ["INSUMO", *[c for c in GRUPOS_OBLIGATORIOS if c != "REVESTIMIENTO"]]
 
-CAMPOS_LECTURA = ["precio_lista", "costo_neto", "precio_base_unitario", "sku", "nombre_tienda",
+CAMPOS_LECTURA = ["precio_lista", "descuento_pct", "costo_neto", "precio_base_unitario", "sku", "nombre_tienda",
                   "precio_actualizado_en", "ultimo_error"]
 
 
 def costo_neto(precio_lista, descuento_pct) -> Decimal:
     return calculo.costo_neto(precio_lista, descuento_pct).quantize(Decimal("0.01"))
+
+
+# Cómo se vende cada producto, según su nombre (el primero que coincida). Lo que no coincide es una pieza: «UN».
+_UNIDADES_POR_NOMBRE = [
+    (r"\besquinero\b", "UN"),  # lleva «siding» en el nombre pero es una pieza
+    (r"\b(saco|hormig[oó]n|cemento|concreto|bemezcla|fastcrete|homecrete)\b.*\b25\s?kgs?\b|\b25\s?kgs?\b.*\b(saco|hormig[oó]n|cemento|concreto)\b", "SACO"),
+    (r"\bbolsa\b", "BOLSA"),
+    (r"\b(caja|blister)\b|\b1000\s?u\b", "CAJA"),
+    (r"\b(rollo|membrana)\b", "ROLLO"),
+    (r"\bgal[oó]n\b", "GL"),
+    (r"\b(plancha|placa|tablero|terciado|osb|volcanita|poliestireno|yeso|siding|panel|teja)\b", "PLANCHA"),
+]
+
+
+def unidad_sugerida(nombre: str) -> str:
+    """Unidad de medida más probable de un producto según su nombre: SACO, BOLSA, CAJA, ROLLO, GL, PLANCHA o UN (pieza)."""
+    n = (nombre or "").lower()
+    return next((u for patron, u in _UNIDADES_POR_NOMBRE if re.search(patron, n)), "UN")
 
 
 def _m2_unidad(nombre: str):
@@ -56,11 +75,14 @@ def proveedor_de(url: str) -> Proveedor:
 
 def aplicar_lectura(item: CatalogoTipo, lectura: dict, ahora) -> None:
     """Vuelca en el ítem lo leído de la ficha (no guarda). `precio_base_unitario` queda por unidad de cotización
-    (m² en revestimientos) y SIN descuento: el motor de cálculo aplica el descuento del propio material."""
-    lista = lectura["precio"]
+    (m² en revestimientos) y SIN descuento (el precio normal): el motor de cálculo aplica el descuento del material."""
+    vigente = lectura["precio"]
+    lista = lectura.get("precio_normal") or vigente
+    lista = max(lista, vigente)
     m2 = Decimal(str(item.m2_por_unidad or 0))
     item.precio_lista = lista
-    item.costo_neto = costo_neto(lista, item.descuento_pct or 0)
+    item.descuento_pct = ((lista - vigente) / lista * 100).quantize(Decimal("0.01")) if lista > vigente else Decimal(0)
+    item.costo_neto = vigente
     item.precio_base_unitario = (lista / m2).quantize(Decimal("1")) if m2 > 0 else lista
     item.sku = lectura.get("sku") or item.sku
     item.nombre_tienda = (lectura.get("nombre") or item.nombre_tienda)[:250]
@@ -103,7 +125,7 @@ def actualizar_item(item: CatalogoTipo, extractor=None, ahora=None) -> str:
         item.verificado = False
         item.save(update_fields=["ultimo_error", "verificado"])
         return "revision"
-    cambio = item.precio_lista != lectura["precio"]
+    cambio = item.costo_neto != lectura["precio"] or item.precio_lista != (lectura.get("precio_normal") or lectura["precio"])
     aplicar_lectura(item, lectura, ahora or timezone.now())
     item.save(update_fields=CAMPOS_LECTURA)
     return "actualizado" if cambio else "sin_cambio"

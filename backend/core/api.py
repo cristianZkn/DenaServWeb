@@ -526,9 +526,9 @@ def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSche
         item = CatalogoTipo.objects.get(id=catalogo_id)
         url_antes, verificado_antes = item.fuente_url, item.verificado
         for attr, value in data.dict(exclude_unset=True).items():
+            if attr == "descuento_pct" and item.fuente_url:
+                continue  # con ficha, el descuento es el que muestra la tienda (se lee solo); a mano solo en materiales sin ficha
             setattr(item, attr, value)
-        if item.precio_lista is not None:  # si cambió el descuento, el costo neto guardado se recalcula sin volver a leer la tienda
-            item.costo_neto = precios.costo_neto(item.precio_lista, item.descuento_pct)
         # Si cambia la ficha o el usuario confirma el producto, se vuelve a leer y se acepta lo que muestre hoy.
         if item.fuente_url and (item.fuente_url != url_antes or (item.verificado and not verificado_antes)):
             item.sku = ""

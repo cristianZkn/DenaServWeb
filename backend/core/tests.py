@@ -299,11 +299,11 @@ class PreciosTests(TestCase):
 
     def test_actualiza_lista_descuento_neto_y_fecha(self):
         from . import precios
-        it = self._item(descuento_pct=10)
-        r = precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(10000)}, pausa=0)
+        it = self._item()
+        r = precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(9000), "precio_normal": Decimal(10000)}, pausa=0)
         it.refresh_from_db()
         self.assertEqual((it.precio_lista, it.descuento_pct, it.costo_neto), (Decimal("10000.00"), Decimal("10.00"), Decimal("9000.00")))
-        self.assertEqual(it.precio_base_unitario, Decimal("10000.00"))
+        self.assertEqual(it.precio_base_unitario, Decimal("10000.00"))   # el cálculo parte del precio normal y le aplica el descuento
         self.assertIsNotNone(it.precio_actualizado_en)
         self.assertEqual((r["actualizados"], r["errores"]), (1, []))
 
@@ -354,12 +354,12 @@ class PreciosTests(TestCase):
         CatalogoTipo.objects.filter(categoria="TECHUMBRE").update(verificado=False)
         self.assertEqual([g["codigo"] for g in precios.grupos_sin_cobertura()], ["TECHUMBRE"])
 
-    def test_la_lectura_de_la_tienda_respeta_el_descuento_propio_del_material(self):
+    def test_sin_descuento_en_la_tienda_lista_y_neto_son_iguales_y_un_descuento_que_termino_se_quita(self):
         from . import precios
-        it = self._item(precio_lista=10000, costo_neto=10000, descuento_pct=20)
+        it = self._item(precio_lista=10000, costo_neto=8000, descuento_pct=20)
         precios.actualizar_precios_mercado(extractor=lambda u: {"nombre": "Pino 2x3", "sku": "1", "precio": Decimal(12000)}, pausa=0)
         it.refresh_from_db()
-        self.assertEqual((it.descuento_pct, it.precio_lista, it.costo_neto), (Decimal("20.00"), Decimal("12000.00"), Decimal("9600.00")))
+        self.assertEqual((it.descuento_pct, it.precio_lista, it.costo_neto), (Decimal("0.00"), Decimal("12000.00"), Decimal("12000.00")))
 
     def test_actualizacion_en_segundo_plano(self):
         import time
@@ -426,13 +426,13 @@ class InsumosApiTests(TestCase):
         from decimal import Decimal as D
         from unittest import mock
         from . import scraper
-        ficha = {"nombre": "Cemento 25 kg", "sku": "7", "precio": D(5090)}
+        ficha = {"nombre": "Cemento 25 kg", "sku": "7", "precio": D(4836), "precio_normal": D(5090)}
         with mock.patch("core.precios.scraper.extraer", return_value=ficha):
-            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/7/", "unidad_medida": "SACO", "descuento_pct": 5},
+            r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/7/", "unidad_medida": "SACO"},
                                  content_type="application/json", **self.h)
         self.assertEqual(r.status_code, 200)
         j = r.json()
-        self.assertEqual((j["nombre"], j["precio_lista"], j["costo_neto"]), ("Cemento 25 kg", 5090, 4835.5))  # 5 % de descuento propio del material
+        self.assertEqual((j["nombre"], j["precio_lista"], j["descuento_pct"], j["costo_neto"]), ("Cemento 25 kg", 5090, 4.99, 4836))  # lista normal, descuento de la tienda y neto
         with mock.patch("core.precios.scraper.extraer", side_effect=scraper.ErrorExtraccion("La ficha ya no existe en la tienda (404).")):
             r = self.client.post("/api/catalogo-tipos/", {"categoria": "BASE_RADIER", "fuente_url": "https://www.sodimac.cl/sodimac-cl/product/9/"},
                                  content_type="application/json", **self.h)
@@ -1789,16 +1789,20 @@ class DescuentoPorMaterialTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertNotIn("descuento_pct", r.json())
 
-    def test_el_descuento_se_pone_en_el_material_y_recalcula_su_neto(self):
-        item = CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino", unidad_medida="UN", precio_base_unitario=10000, precio_lista=10000,
-                                           costo_neto=10000, fuente_url="https://www.easy.cl/pino-1/p", verificado=True)
-        cuerpo = {"categoria": "TABIQUERIA", "nombre": "Pino", "unidad_medida": "UN", "fuente_url": item.fuente_url, "verificado": True, "descuento_pct": 20}
-        r = self.client.put(f"/api/catalogo-tipos/{item.id}", cuerpo, content_type="application/json", **self.h)
-        self.assertEqual(r.status_code, 200, r.content)
-        self.assertEqual((r.json()["descuento_pct"], r.json()["costo_neto"], r.json()["precio_neto"]), (20, 8000, 8000))
-        fila = next(i for i in self.client.get("/api/insumos/", **self.h).json() if i["id"] == item.id)
-        self.assertEqual((fila["descuento_pct"], fila["costo_neto"]), (20, 8000))
-        self.assertEqual(self.client.put(f"/api/catalogo-tipos/{item.id}", {**cuerpo, "descuento_pct": 150}, content_type="application/json", **self.h).status_code, 422)
+    def test_en_materiales_sin_ficha_el_descuento_se_escribe_a_mano_y_con_ficha_lo_pone_la_tienda(self):
+        manual = CatalogoTipo.objects.create(categoria="INSUMO", nombre="Clavos", unidad_medida="UN", precio_base_unitario=10000)
+        r = self.client.put(f"/api/catalogo-tipos/{manual.id}", {"categoria": "INSUMO", "nombre": "Clavos", "unidad_medida": "UN", "descuento_pct": 20},
+                            content_type="application/json", **self.h)
+        self.assertEqual((r.status_code, r.json()["descuento_pct"], r.json()["precio_neto"]), (200, 20, 8000))
+        fila = next(i for i in self.client.get("/api/insumos/", **self.h).json() if i["id"] == manual.id)
+        self.assertEqual((fila["precio_lista"], fila["descuento_pct"], fila["costo_neto"]), (10000, 20, 8000))
+        self.assertEqual(self.client.put(f"/api/catalogo-tipos/{manual.id}", {"categoria": "INSUMO", "nombre": "Clavos", "unidad_medida": "UN", "descuento_pct": 150},
+                                         content_type="application/json", **self.h).status_code, 422)
+        ficha = CatalogoTipo.objects.create(categoria="TABIQUERIA", nombre="Pino", unidad_medida="UN", precio_base_unitario=10000, precio_lista=10000,
+                                            costo_neto=9000, descuento_pct=10, fuente_url="https://www.easy.cl/pino-1/p", verificado=True)
+        r = self.client.put(f"/api/catalogo-tipos/{ficha.id}", {"categoria": "TABIQUERIA", "nombre": "Pino", "unidad_medida": "UN", "fuente_url": ficha.fuente_url,
+                                                                "verificado": True, "descuento_pct": 50}, content_type="application/json", **self.h)
+        self.assertEqual((r.json()["descuento_pct"], r.json()["costo_neto"]), (10, 9000))   # lo que diga el usuario no pisa el de la tienda
 
     def test_la_unidad_de_medida_es_obligatoria_y_debe_ser_conocida(self):
         crear = lambda **kw: self.client.post("/api/catalogo-tipos/", {"categoria": "INSUMO", "nombre": "Clavos", "precio_base_unitario": 100, **kw}, content_type="application/json", **self.h)
@@ -1906,3 +1910,36 @@ class TarifasPorCotizacionTests(TestCase):
     def test_rechaza_tarifas_desconocidas_o_fuera_de_rango(self):
         for malo in ({"ganancia_m2": 1}, {"km_por_litro": 0}, {"mo_viga_vista_m2": -1}, {"dias_fabricacion_radier": 2.5}, {"mano_obra_m2": 999_999_999}):
             self.assertEqual(self.calcular(tarifas_personalizadas=malo).status_code, 422, malo)
+
+
+class PrecioNormalTiendasTests(TestCase):
+    def test_easy_toma_el_precio_normal_cuando_la_oferta_es_el_precio_del_producto(self):
+        from . import scraper
+        html = '"prices":{"normalPrice":6490,"currency":"CLP","offerPrice":5192},"otro":{"normalPrice":999,"currency":"CLP","offerPrice":null}'
+        self.assertEqual(scraper._normal_easy(html, Decimal(5192)), Decimal(6490))
+        self.assertIsNone(scraper._normal_easy(html, Decimal(1000)))                    # una oferta de otro producto no se usa
+        self.assertIsNone(scraper._normal_easy('"normalPrice":21990,"currency":"CLP","offerPrice":null', Decimal(21990)))
+
+    def test_sodimac_toma_el_precio_tachado_y_mct_y_ferrelan_su_precio_normal(self):
+        import json
+        from . import scraper
+        datos = {"props": {"pageProps": {"productData": {"variants": [{"prices": [
+            {"type": "eventPrice", "crossed": False, "price": ["2.490"]}, {"type": "normalPrice", "crossed": True, "price": ["3.990"]}]}]}}}}
+        html = f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(datos)}</script>'
+        self.assertEqual(scraper._normal_sodimac(html), Decimal(3990))
+        mct = '<h1>OSB</h1><div class="precio-ficha"><span class="precioNormal">$35.000</span><span class="precioOfertaFicha">$28.907</span></div>'
+        self.assertEqual(scraper.parsear_mct(mct, "https://mct.cl/ficha/1/x")["precio_normal"], Decimal(35000))
+        meta = ('<meta property="og:title" content="Monomando"><meta property="product:price:amount" content="12500.0">'
+                '<meta property="product:original_price:amount" content="19790.0">')
+        self.assertEqual(scraper.parsear_meta(meta)["precio_normal"], Decimal(19790))
+        sin = '<meta property="og:title" content="X"><meta property="product:price:amount" content="12500.0"><meta property="product:original_price:amount" content="12500.0">'
+        self.assertNotIn("precio_normal", scraper.parsear_meta(sin))                     # sin descuento no hay precio normal
+
+
+class UnidadSugeridaTests(TestCase):
+    def test_la_unidad_sale_del_nombre(self):
+        from .precios import unidad_sugerida
+        for nombre, unidad in (("Cemento Bio Bio 25 kg Saco", "SACO"), ("Clavo corriente 4" + chr(34) + " bolsa 500 gr", "BOLSA"), ("Grapas caja 1000 u", "CAJA"),
+                               ("Rollo polietileno 10x1 m", "ROLLO"), ("Esmalte 1 gal" + chr(243) + "n", "GL"), ("Tablero OSB 9 mm", "PLANCHA"),
+                               ("Esquinero exterior siding PVC 3 m", "UN"), ("Pino impregnado 2x4 3,2 m", "UN")):
+            self.assertEqual(unidad_sugerida(nombre), unidad, nombre)
