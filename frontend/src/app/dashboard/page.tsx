@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Contador, useMontado } from "@/components/Animaciones";
+import { useVisible } from "@/components/Reveal";
 
 interface ProgresoObra {
   id: number;
@@ -38,12 +40,14 @@ function etapa(av: number) {
 function BarraSegmentada({ av, nombre }: { av: number; nombre: string }) {
   const llenos = Math.round((av / 100) * SEGMENTOS);
   const { barra } = etapa(av);
+  const montado = useMontado(150);
   return (
     <div className="flex gap-[3px]" role="progressbar" aria-valuenow={av} aria-valuemin={0} aria-valuemax={100} aria-label={`Avance de ${nombre}`}>
       {Array.from({ length: SEGMENTOS }, (_, i) => (
         <span
           key={i}
-          className={`h-7 flex-1 rounded-[5px] transition-colors duration-500 ${i < llenos ? `${barra} shadow-sm` : "bg-slate-100"} ${i === SEGMENTOS / 2 - 1 ? "mr-1.5" : ""}`}
+          style={{ transitionDelay: `${i * 35}ms` }}
+          className={`h-7 flex-1 rounded-[5px] origin-bottom transition-all duration-500 ease-out ${montado && i < llenos ? `${barra} shadow-sm scale-y-100` : i < llenos ? "bg-slate-100 scale-y-50" : "bg-slate-100"} ${i === SEGMENTOS / 2 - 1 ? "mr-1.5" : ""}`}
         />
       ))}
     </div>
@@ -56,8 +60,9 @@ function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
 }) {
   const max = Math.max(1, ...datos.map((d) => d[campo]));
   const total = datos.reduce((t, d) => t + d[campo], 0);
+  const { ref, visible: montado } = useVisible<HTMLElement>(0.35); // las columnas crecen cuando el gráfico entra en pantalla
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <section ref={ref} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">{titulo}</h2>
@@ -66,13 +71,16 @@ function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
         <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700 whitespace-nowrap">{total} en 4 trimestres</span>
       </div>
       <div className="mt-5 flex gap-3 sm:gap-5" role="img" aria-label={`${titulo}: ${datos.map((d) => `${d.etiqueta} ${d[campo]}`).join(", ")}`}>
-        {datos.map((d) => {
+        {datos.map((d, i) => {
           const valor = d[campo];
           return (
             <div key={d.clave} className="flex-1 flex flex-col items-center">
               <div className="h-40 w-full flex flex-col items-center justify-end">
-                <span className="mb-1 text-sm font-extrabold tabular-nums text-slate-800">{valor}</span>
-                <div className={`w-full max-w-16 rounded-t-xl ${valor ? color : "bg-slate-200"} transition-[height] duration-700`} style={{ height: `${valor ? Math.max((valor / max) * 82, 8) : 3}%` }} />
+                <span className={`mb-1 text-sm font-extrabold tabular-nums text-slate-800 transition-opacity duration-500 ${montado ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: `${500 + i * 140}ms` }}>
+                  <Contador valor={valor} ms={900} />
+                </span>
+                <div className={`w-full max-w-16 rounded-t-xl ${valor ? color : "bg-slate-200"} transition-[height] duration-[1100ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]`}
+                  style={{ transitionDelay: `${i * 140}ms`, height: montado ? `${valor ? Math.max((valor / max) * 82, 8) : 3}%` : "0%" }} />
               </div>
               <span className="mt-2 text-xs font-semibold text-slate-500">{d.etiqueta}</span>
             </div>
@@ -84,14 +92,15 @@ function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
 }
 
 function Tarjeta({ icono, titulo, valor, detalle, acento }: { icono: string; titulo: string; valor: number | string; detalle: string; acento: string }) {
+  const montado = useMontado(100);
   return (
     <Link href="/dashboard/proyectos" className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition">
-      <span aria-hidden className={`absolute left-0 top-0 h-full w-1.5 ${acento}`} />
+      <span aria-hidden className={`absolute left-0 top-0 h-full w-1.5 origin-top ${acento} transition-transform duration-700 ease-out ${montado ? "scale-y-100" : "scale-y-0"}`} />
       <div className="flex items-center gap-4">
-        <span aria-hidden className="h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-2xl">{icono}</span>
+        <span aria-hidden className={`h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-2xl transition-transform duration-500 ease-[cubic-bezier(0.34,1.8,0.64,1)] group-hover:rotate-6 group-hover:scale-110 ${montado ? "scale-100" : "scale-50"}`}>{icono}</span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-500">{titulo}</p>
-          <p className="text-3xl font-black tabular-nums text-slate-900 leading-tight">{valor}</p>
+          <p className="text-3xl font-black tabular-nums text-slate-900 leading-tight">{typeof valor === "number" ? <Contador valor={valor} /> : valor}</p>
         </div>
       </div>
       <p className="mt-3 text-sm text-slate-500">{detalle}</p>
@@ -181,7 +190,7 @@ export default function DashboardPage() {
                       <p className="text-xs font-mono text-slate-400">{p.codigo_cotizacion}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-3xl font-black tabular-nums leading-none text-slate-900">{av}<span className="text-lg">%</span></p>
+                      <p className="text-3xl font-black tabular-nums leading-none text-slate-900"><Contador valor={av} ms={1000} /><span className="text-lg">%</span></p>
                       <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${e.chip}`}>{e.texto}</span>
                     </div>
                   </div>

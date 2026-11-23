@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TarjetaObra, VisorObra, type Obra } from "@/components/GaleriaObra";
-import Reveal from "@/components/Reveal";
+import Reveal, { Resaltado } from "@/components/Reveal";
 import Proceso from "@/components/Proceso";
 import CasaIlustrada from "@/components/CasaIlustrada";
 import { MODELOS } from "@/lib/catalogo";
@@ -20,11 +20,13 @@ const SECCIONES = [
 ];
 
 const VENTAJAS = [
-  { icono: "📄", titulo: "Cotización clara", texto: "Un valor por escrito, con el detalle de materiales, mano de obra y traslado." },
-  { icono: "🏷️", titulo: "Precios al día", texto: "Los materiales se cotizan con el precio real de las tiendas, no con estimaciones." },
-  { icono: "📸", titulo: "Avance con fotos", texto: "Usted ve cómo progresa su obra: cada avance queda registrado con fotos." },
-  { icono: "🤝", titulo: "Pagos por etapas", texto: "Anticipo, avance y entrega: paga a medida que la obra avanza." },
+  { icono: "M7 3h8l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 12h6M9 16h6", titulo: "Cotización clara", texto: "Sepa cuánto paga, todo por escrito." },
+  { icono: "M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9zM8 8h.01", titulo: "Precios al día", texto: "Valores reales, sin sorpresas." },
+  { icono: "M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", titulo: "Avance con fotos", texto: "Vea su obra crecer paso a paso." },
+  { icono: "M12 6v12M15 9.5a3 3 0 0 0-3-1.5c-1.7 0-3 .9-3 2s1.3 2 3 2 3 .9 3 2-1.3 2-3 2a3 3 0 0 1-3-1.5M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z", titulo: "Pagos por etapas", texto: "Pague a medida que avanza." },
 ];
+
+const FRASES = ["Cotización clara", "Precios al día", "Avance con fotos", "Pagos por etapas", "Tu casa, tu presupuesto", "Atención cercana", "Calidad que perdura", "Servicio con garantías", "Recomendados por nuestros clientes"];
 
 const SERVICIOS = [
   { icono: "🏠", titulo: "Casas prefabricadas", texto: "Fabricación y armado de casas a la medida de su terreno y su presupuesto." },
@@ -34,9 +36,9 @@ const SERVICIOS = [
 ];
 
 const METAS = [
-  { icono: "🏠", titulo: "Calidad que perdura", texto: "Construcciones sólidas, con buenos materiales y terminaciones cuidadas en cada obra." },
-  { icono: "🛡️", titulo: "Servicio con garantías", texto: "Acompañamos al cliente antes, durante y después de la obra, con respaldo y responsabilidades claras." },
-  { icono: "⭐", titulo: "Recomendación", texto: "Queremos que cada cliente satisfecho nos recomiende y así seguir creciendo con confianza." },
+  { icono: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9z", titulo: "Calidad que perdura", texto: "Construcciones sólidas, con buenos materiales y terminaciones cuidadas." },
+  { icono: "M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3zM9 12l2 2 4-4", titulo: "Servicio con garantías", texto: "Lo acompañamos antes, durante y después de la obra, con respaldo claro." },
+  { icono: "M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8", titulo: "Su recomendación", texto: "Queremos que cada cliente satisfecho nos recomiende." },
 ];
 
 /** Sección que está a la vista: sirve para marcar el enlace del menú. */
@@ -171,27 +173,37 @@ export default function PortafolioPage() {
         </div>
       </header>
 
-      {/* Ventajas, montadas sobre el borde de la cabecera */}
-      <section aria-label="Por qué elegirnos" className="relative z-10 -mt-16 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {VENTAJAS.map((v, i) => (
-            <Reveal key={v.titulo} delay={i * 120} className="h-full">
-            <div className="h-full rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-xl shadow-blue-950/10 hover:-translate-y-1 hover:shadow-2xl transition duration-300">
-              <div className="h-11 w-11 rounded-xl bg-blue-900 text-xl flex items-center justify-center" aria-hidden>{v.icono}</div>
-              <h3 className="mt-3 font-extrabold text-blue-900">{v.titulo}</h3>
-              <p className="mt-1 text-sm text-slate-600">{v.texto}</p>
-            </div>
-            </Reveal>
-          ))}
+      {/* Ventajas: panel de vidrio con borde animado, montado sobre el borde de la cabecera */}
+      <section aria-label="Por qué elegirnos" className="relative z-10 -mt-20 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+        <div className="animate-brillo-texto rounded-3xl bg-gradient-to-r from-amber-400 via-blue-400 to-amber-400 p-[1.5px] shadow-2xl shadow-blue-950/30">
+          <div className="relative overflow-hidden rounded-[calc(1.5rem-1.5px)] bg-gradient-to-br from-blue-950 via-blue-900 to-blue-950">
+            <div aria-hidden className="absolute -top-24 left-1/4 h-48 w-96 rounded-full bg-blue-400/20 blur-3xl" />
+            <div aria-hidden className="absolute -bottom-24 right-1/4 h-48 w-96 rounded-full bg-amber-400/15 blur-3xl" />
+            <ul className="relative grid sm:grid-cols-2 lg:grid-cols-4 sm:divide-x sm:divide-white/10">
+              {VENTAJAS.map((v, i) => (
+                <li key={v.titulo} className="border-b border-white/10 last:border-b-0 sm:border-b-0 sm:[&:nth-child(-n+2)]:border-b sm:[&:nth-child(-n+2)]:border-white/10 lg:[&:nth-child(-n+2)]:border-b-0">
+                  <Reveal delay={i * 130} className="h-full">
+                    <div className="group h-full p-6 sm:p-7 text-center hover:bg-white/5 transition-colors duration-300">
+                      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-amber-500 text-blue-950 shadow-lg shadow-amber-500/30 transition-transform duration-500 ease-[cubic-bezier(0.34,1.8,0.64,1)] group-hover:scale-110 group-hover:-rotate-6">
+                        <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={v.icono} /></svg>
+                      </span>
+                      <h3 className="mt-4 text-lg font-black text-white group-hover:text-amber-300 transition-colors">{v.titulo}</h3>
+                      <p className="mt-1 text-sm text-blue-100/90">{v.texto}</p>
+                    </div>
+                  </Reveal>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
-      {/* Cinta con lo que hacemos */}
-      <div aria-hidden className="mt-14 overflow-hidden border-y border-slate-200 bg-white py-3">
-        <div className="animate-cinta flex w-max gap-10 whitespace-nowrap text-sm font-bold uppercase tracking-widest text-blue-900/70">
+      {/* Cinta de frases */}
+      <div aria-hidden className="mt-14 overflow-hidden border-y border-slate-200 bg-white py-3.5">
+        <div className="animate-cinta flex w-max gap-10 whitespace-nowrap text-sm font-black uppercase tracking-widest text-blue-900/75">
           {[0, 1].map((k) => (
             <div key={k} className="flex gap-10">
-              {["Casas prefabricadas", "Radieres", "Smart Panel", "Cubiertas de zinc", "Proyectos a medida", "Cotización clara", "Avance con fotos"].map((x) => (
+              {FRASES.map((x) => (
                 <span key={`${k}-${x}`} className="flex items-center gap-10">{x}<span className="text-amber-500">◆</span></span>
               ))}
             </div>
@@ -200,36 +212,62 @@ export default function PortafolioPage() {
       </div>
 
       {/* Nosotros */}
-      <section id="nosotros" className="scroll-mt-16 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-        <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 items-start">
-          <Reveal desde="izquierda">
+      <section id="nosotros" className="scroll-mt-16 relative overflow-hidden">
+        <div aria-hidden className="absolute -left-32 top-10 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl animate-flotar-lento" />
+        <div aria-hidden className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-amber-300/25 blur-3xl animate-flotar" />
+        <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <Reveal className="text-center max-w-3xl mx-auto">
             <p className="text-sm font-bold uppercase tracking-widest text-amber-600">Quiénes somos</p>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-black text-blue-900 leading-tight">Una empresa de Los Ángeles que construye con confianza</h2>
-            <p className="mt-4 text-slate-600 text-lg">
-              Nos dedicamos a la construcción de casas y radieres. Trabajamos con proyectos personalizados y mejorados, y la mayoría de nuestros clientes
-              llega por la recomendación de obras que ya hemos entregado.
+            <h2 className="mt-2 text-3xl sm:text-5xl font-black text-blue-900 leading-tight">
+              Una empresa de Los Ángeles que construye con <Resaltado retraso={300}>confianza</Resaltado>
+            </h2>
+            <p className="mt-5 text-lg text-slate-600">
+              Nos dedicamos a la <Resaltado retraso={500}>construcción de casas y radieres</Resaltado>, con proyectos personalizados y mejorados. La mayoría de nuestros clientes llega por la{" "}
+              <Resaltado retraso={700}>recomendación de obras que ya entregamos</Resaltado>.
             </p>
-            <p className="mt-4 text-slate-600 text-lg">Cada proyecto se cotiza de forma clara, se acuerda con el cliente y se ejecuta con un equipo de maestros de confianza.</p>
-            <ul className="mt-6 grid sm:grid-cols-3 gap-3">
-              {METAS.map((m) => (
-                <li key={m.titulo} className="rounded-xl bg-white ring-1 ring-slate-200 p-4">
-                  <span aria-hidden className="text-xl">{m.icono}</span>
-                  <p className="mt-1 font-extrabold text-blue-900 text-sm">{m.titulo}</p>
-                  <p className="mt-1 text-xs text-slate-600">{m.texto}</p>
-                </li>
-              ))}
-            </ul>
           </Reveal>
-          <Reveal desde="derecha" delay={150} className="grid gap-4">
-            <div className="rounded-2xl bg-gradient-to-br from-blue-900 to-blue-700 text-white p-6 sm:p-8 shadow-xl">
-              <p className="text-sm font-bold uppercase tracking-widest text-amber-300">Misión</p>
-              <p className="mt-2 text-blue-50">Entregar construcciones de calidad y un servicio con garantías a nuestros clientes, para lograr su satisfacción y crecer en reputación y clientela.</p>
-            </div>
-            <div className="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-6 sm:p-8">
-              <p className="text-sm font-bold uppercase tracking-widest text-amber-700">Visión</p>
-              <p className="mt-2 text-slate-700">Masificar nuestros servicios para llegar tanto a clientes con presupuestos reducidos como a clientes con presupuestos altos, con buena calidad en materiales y en nuestros trabajos.</p>
-            </div>
-          </Reveal>
+
+          {/* Valores */}
+          <ul className="mt-12 grid md:grid-cols-3 gap-5">
+            {METAS.map((m, i) => (
+              <li key={m.titulo}>
+                <Reveal delay={i * 130} className="h-full">
+                  <div className="group relative h-full overflow-hidden rounded-3xl bg-white p-7 ring-1 ring-slate-200 shadow-lg shadow-blue-950/5 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-blue-950/10 transition duration-300">
+                    <span aria-hidden className="absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-gradient-to-r from-amber-400 to-blue-500 transition-transform duration-500 group-hover:scale-x-100" />
+                    <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-800 to-blue-600 text-white shadow-md transition-transform duration-500 ease-[cubic-bezier(0.34,1.8,0.64,1)] group-hover:scale-110 group-hover:rotate-6">
+                      <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={m.icono} /></svg>
+                    </span>
+                    <h3 className="mt-5 text-xl font-black text-blue-900">{m.titulo}</h3>
+                    <p className="mt-2 text-slate-600">{m.texto}</p>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ul>
+
+          {/* Misión y visión */}
+          <div className="mt-6 grid lg:grid-cols-2 gap-5">
+            <Reveal desde="izquierda">
+              <div className="relative h-full overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 p-8 sm:p-10 text-white shadow-xl">
+                <svg viewBox="0 0 24 24" aria-hidden className="absolute -right-6 -bottom-6 h-44 w-44 text-white/10 animate-flotar" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" /></svg>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-amber-300">Misión</span>
+                <p className="relative mt-5 text-xl sm:text-2xl leading-relaxed text-blue-50">
+                  Entregar <Resaltado tono="oscuro" retraso={300}>construcciones de calidad</Resaltado> y un <Resaltado tono="oscuro" retraso={600}>servicio con garantías</Resaltado> a nuestros
+                  clientes, para lograr su <Resaltado tono="oscuro" retraso={900}>satisfacción</Resaltado> y crecer en reputación y clientela.
+                </p>
+              </div>
+            </Reveal>
+            <Reveal desde="derecha" delay={150}>
+              <div className="relative h-full overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 via-white to-amber-100 p-8 sm:p-10 ring-1 ring-amber-200 shadow-xl">
+                <svg viewBox="0 0 24 24" aria-hidden className="absolute -right-6 -bottom-6 h-44 w-44 text-amber-400/20 animate-flotar-lento" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /></svg>
+                <span className="inline-flex items-center gap-2 rounded-full bg-amber-200/70 px-4 py-1.5 text-sm font-black uppercase tracking-widest text-amber-800">Visión</span>
+                <p className="relative mt-5 text-xl sm:text-2xl leading-relaxed text-slate-700">
+                  <Resaltado retraso={300}>Masificar</Resaltado> nuestros servicios para llegar tanto a clientes con <Resaltado retraso={600}>presupuestos reducidos</Resaltado> como a
+                  clientes con presupuestos altos, con <Resaltado retraso={900}>buena calidad</Resaltado> en materiales y en nuestros trabajos.
+                </p>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
