@@ -88,15 +88,25 @@ export default function ProyectosPage() {
       await llamarNivelacion(visita, true);
       setVisita(null);
       fetchCotizaciones();
-    } catch (e: any) {
-      void preguntar({ titulo: "No se pudo guardar", mensaje: e.message, soloAviso: true });
+    } catch (error: unknown) {
+      void preguntar({
+        titulo: "No se pudo guardar",
+        mensaje: error instanceof Error ? error.message : "No se pudo guardar la nivelación.",
+        soloAviso: true,
+      });
     } finally {
       setGuardandoVisita(false);
     }
   };
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
-  const [filtro, setFiltro] = useState("TODOS"); // estado del proyecto
+  // Estado del proyecto. Las tarjetas del panel principal llegan con ?estado=BORRADOR | ACEPTADA | FINALIZADA y la lista se abre ya filtrada.
+  // Mientras carga se muestra solo "Cargando…", así que leer la dirección aquí no provoca diferencias con el servidor.
+  const [filtro, setFiltro] = useState(() => {
+    if (typeof window === "undefined") return "TODOS";
+    const estado = new URLSearchParams(window.location.search).get("estado");
+    return estado && ESTADOS_PROYECTO.some((e) => e.key === estado) ? estado : "TODOS";
+  });
   const [pagina, setPagina] = useState(1);
   const { preguntar, dialogo } = useDialogo();
 

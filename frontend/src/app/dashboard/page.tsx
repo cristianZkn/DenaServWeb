@@ -91,10 +91,10 @@ function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
   );
 }
 
-function Tarjeta({ icono, titulo, valor, detalle, acento }: { icono: string; titulo: string; valor: number | string; detalle: string; acento: string }) {
+function Tarjeta({ icono, titulo, valor, detalle, acento, href }: { icono: string; titulo: string; valor: number | string; detalle: string; acento: string; href: string }) {
   const montado = useMontado(100);
   return (
-    <Link href="/dashboard/proyectos" className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition">
+    <Link href={href} className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition">
       <span aria-hidden className={`absolute left-0 top-0 h-full w-1.5 origin-top ${acento} transition-transform duration-700 ease-out ${montado ? "scale-y-100" : "scale-y-0"}`} />
       <div className="flex items-center gap-4">
         <span aria-hidden className={`h-12 w-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-2xl transition-transform duration-500 ease-[cubic-bezier(0.34,1.8,0.64,1)] group-hover:rotate-6 group-hover:scale-110 ${montado ? "scale-100" : "scale-50"}`}>{icono}</span>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    cargar();
+    void Promise.resolve().then(cargar);
   }, [cargar]);
 
   const reintentar = () => {
@@ -160,9 +160,9 @@ export default function DashboardPage() {
 
       {/* Resumen por estado */}
       <div className="grid sm:grid-cols-3 gap-4">
-        <Tarjeta icono="📝" titulo="Proyectos cotizados" valor={stats ? stats.cotizados : "—"} detalle="Esperando que se pague por completo el anticipo del 40 %." acento="bg-amber-400" />
-        <Tarjeta icono="🏗️" titulo="Obras en ejecución" valor={stats ? stats.en_ejecucion : "—"} detalle="Con el anticipo pagado y la obra en marcha." acento="bg-blue-500" />
-        <Tarjeta icono="✅" titulo="Obras terminadas" valor={stats ? stats.terminados : "—"} detalle="Con todos sus pagos completos." acento="bg-green-500" />
+        <Tarjeta icono="📝" titulo="Proyectos cotizados" valor={stats ? stats.cotizados : "—"} detalle="Esperando que se pague por completo el anticipo del 40 %." acento="bg-amber-400" href="/dashboard/proyectos?estado=BORRADOR" />
+        <Tarjeta icono="🏗️" titulo="Obras en ejecución" valor={stats ? stats.en_ejecucion : "—"} detalle="Con el anticipo pagado y la obra en marcha." acento="bg-blue-500" href="/dashboard/proyectos?estado=ACEPTADA" />
+        <Tarjeta icono="✅" titulo="Obras terminadas" valor={stats ? stats.terminados : "—"} detalle="Con todos sus pagos completos." acento="bg-green-500" href="/dashboard/proyectos?estado=FINALIZADA" />
       </div>
 
       {/* Avance físico de las obras en ejecución */}

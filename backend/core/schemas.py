@@ -359,7 +359,7 @@ class TrasladoInSchema(Schema):
     tipo: str
     combustible: str = ""
     dias: int = Field(ge=0, le=365)
-    precio_litro: Optional[float] = Field(None, gt=0, le=100_000)
+    precio_litro: Optional[float] = Field(None, gt=0, le=100_000_000)  # el camión cuesta por día (p. ej. $120.000); el tope del litro se valida abajo
 
     @field_validator("tipo")
     @classmethod
@@ -374,6 +374,8 @@ class TrasladoInSchema(Schema):
             self.combustible = ""
         elif self.combustible not in ("93", "95", "97", "DIESEL"):
             raise ValueError("El combustible debe ser 93, 95, 97 o diésel.")
+        elif self.precio_litro is not None and self.precio_litro > 100_000:
+            raise ValueError("El precio del litro no puede superar $100.000.")
         return self
 
 

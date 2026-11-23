@@ -1607,8 +1607,12 @@ class TrasladoCamionTests(TestCase):
         tr = [{"tipo": "MAESTROS", "combustible": "93", "dias": 1, "precio_litro": 1000},
               {"tipo": "MATERIALES", "combustible": "93", "dias": 1, "precio_litro": 1000}]
         sin = self.client.post("/api/cotizaciones/calcular", {**base, "traslados": tr}, content_type="application/json", **h).json()
+        uno = self.client.post("/api/cotizaciones/calcular", {**base, "traslados": tr + [{"tipo": "CAMION", "dias": 1}]},
+                               content_type="application/json", **h)
         con = self.client.post("/api/cotizaciones/calcular", {**base, "traslados": tr + [{"tipo": "CAMION", "dias": 2}]},
                                content_type="application/json", **h)
+        self.assertEqual(uno.status_code, 200)
+        self.assertEqual(float(uno.json()["costo_flete"]) - float(sin["costo_flete"]), 120000)
         self.assertEqual(con.status_code, 200)
         self.assertEqual(float(con.json()["costo_flete"]) - float(sin["costo_flete"]), 2 * 120000)  # 2 días x tarifa «flete_camion_dia»
 
