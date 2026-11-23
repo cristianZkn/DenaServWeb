@@ -1627,3 +1627,52 @@ class PortafolioEtiquetaTests(TestCase):
         self.assertEqual(crear(etiqueta="OFERTON").status_code, 422)
         p = self.client.patch(f"/api/portafolio/{r.json()['id']}/", {"etiqueta": None}, content_type="application/json", **h)
         self.assertEqual((p.status_code, p.json()["etiqueta"]), (200, ""))
+
+
+class CatalogoCasasTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+
+    def crear(self, **kw):
+        base = {"nombre": "Modelo Familia", "m2": 54, "dormitorios": 2, "banos": 1, "incluye": ["Cubierta de zinc", "Ventanas de aluminio"]}
+        return self.client.post("/api/catalogo-casas/", {**base, **kw}, content_type="application/json", **self.h)
+
+    def test_crud_publico_y_admin(self):
+        r = self.crear(etiqueta="Más consultado", resumen="Dos dormitorios.")
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertEqual((d["m2"], d["incluye"], d["etiqueta"]), (54, ["Cubierta de zinc", "Ventanas de aluminio"], "Más consultado"))
+        self.crear(nombre="Oculta", publicado=False)
+        self.assertEqual([c["nombre"] for c in self.client.get("/api/catalogo-casas/").json()], ["Modelo Familia"])       # el público no ve las ocultas
+        self.assertEqual(len(self.client.get("/api/catalogo-casas/admin/", **self.h).json()), 2)
+        self.assertEqual(self.client.get("/api/catalogo-casas/admin/").status_code, 401)                                  # el admin exige sesión
+        p = self.client.patch(f"/api/catalogo-casas/{d['id']}/", {"m2": 60, "incluye": ["Solo una"]}, content_type="application/json", **self.h)
+        self.assertEqual((p.status_code, p.json()["m2"], p.json()["incluye"]), (200, 60, ["Solo una"]))
+        self.assertEqual(self.client.delete(f"/api/catalogo-casas/{d['id']}/", **self.h).status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/catalogo-casas/{d['id']}/", **self.h).status_code, 404)
+
+    def test_valida_los_datos_y_exige_sesion_para_escribir(self):
+        self.assertEqual(self.crear(nombre="ab").status_code, 422)
+        self.assertEqual(self.crear(m2=-5).status_code, 422)
+        self.assertEqual(self.crear(incluye=["x"] * 9).status_code, 422)
+        self.assertEqual(self.client.post("/api/catalogo-casas/", {"nombre": "Sin sesión"}, content_type="application/json").status_code, 401)
+
+    def test_sube_y_sirve_imagenes(self):
+        import base64
+        png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+        d = self.crear(imagenes=[f"data:image/png;base64,{png}"]).json()
+        self.assertEqual(len(d["imagenes"]), 1)
+        self.assertEqual(self.client.get(d["imagenes"][0]).status_code, 200)
+
+
+class OrdenDeHitosTests(TestCase):
+    def test_los_hitos_salen_siempre_en_el_orden_del_cronograma_aunque_se_actualicen(self):
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        cot = Cotizacion.objects.create(codigo_cotizacion="COT-H", cliente_nombre="Ana", direccion_terreno="Calle 1234", superficie_m2=50, costo_total=100, usuario=u)
+        for fase, pct in (("ANTICIPO_40", 40), ("AVANCE_30", 30), ("ENTREGA_30", 30)):
+            HitoPago.objects.create(cotizacion=cot, fase=fase, porcentaje=pct, monto_pago=pct)
+        HitoPago.objects.filter(fase="ANTICIPO_40").update(estado="PAGADO")   # actualizar la fila no debe cambiar el orden en que se lista
+        self.assertEqual([h.fase for h in cot.hitos_pago.all()], ["ANTICIPO_40", "AVANCE_30", "ENTREGA_30"])

@@ -1,7 +1,8 @@
 "use client";
 
 import { useDialogo } from "@/components/ConfirmDialog";
-import { reducirImagen } from "@/lib/imagenes";
+import CatalogoAdmin from "@/components/CatalogoAdmin";
+import SelectorFotos from "@/components/SelectorFotos";
 import { ETIQUETAS } from "@/lib/empresa";
 
 import { useCallback, useEffect, useState } from "react";
@@ -19,8 +20,12 @@ interface Proyecto {
 }
 const MAX_IMAGENES = 10;
 
+type Pestana = "obras" | "catalogo";
+
 export default function PortafolioAdminPage() {
+  const [pestana, setPestana] = useState<Pestana>("obras");
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [nCasas, setNCasas] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [aviso, setAviso] = useState("");
   const [error, setError] = useState("");
@@ -43,6 +48,8 @@ export default function PortafolioAdminPage() {
     cargar();
   }, [cargar]);
 
+  const cambiarPestana = (p: Pestana) => { setAviso(""); setError(""); setPestana(p); };
+
   const alternarPublicado = async (p: Proyecto) => {
     const r = await fetch(`/api/portafolio/${p.id}`, { method: "PATCH", headers: JSON_HDR, body: JSON.stringify({ publicado: !p.publicado }) });
     if (r.ok) {
@@ -60,61 +67,104 @@ export default function PortafolioAdminPage() {
     } else setError("No se pudo eliminar el proyecto.");
   };
 
+  const visibles = proyectos.filter((p) => p.publicado).length;
+  const pestanas: { clave: Pestana; texto: string; n: number }[] = [
+    { clave: "obras", texto: "Obras terminadas", n: proyectos.length },
+    { clave: "catalogo", texto: "Catálogo de casas", n: nCasas },
+  ];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {dialogo}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto">
-          <h1 className="text-2xl font-extrabold text-slate-900">Portafolio</h1>
-          <p className="text-slate-600">Obras finalizadas que se exhiben en la página pública.</p>
+
+      {/* Encabezado */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 text-white p-5 sm:p-6 shadow-md">
+        <div aria-hidden className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-amber-400/20 blur-2xl" />
+        <div className="relative flex flex-wrap items-center gap-4">
+          <div className="mr-auto">
+            <h1 className="text-2xl font-extrabold">Portafolio y catálogo</h1>
+            <p className="text-blue-100 mt-1">Lo que se muestra en la página pública: obras terminadas y casas prediseñadas.</p>
+          </div>
+          <a href="/portafolio" target="_blank" className="rounded-lg border border-white/30 hover:bg-white/10 px-4 py-2 font-semibold transition">Ver página pública ↗</a>
         </div>
-        <a href="/portafolio" target="_blank" className="text-blue-800 font-semibold hover:underline">Ver página pública ↗</a>
-        <button onClick={() => { setAviso(""); setError(""); setEditando("nuevo"); }} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer">
-          + Agregar obra terminada
-        </button>
+        <dl className="relative mt-5 grid grid-cols-3 gap-3 max-w-xl">
+          {[["Obras publicadas", `${visibles} de ${proyectos.length}`], ["Casas en el catálogo", String(nCasas)], ["Fotos en obras", String(proyectos.reduce((t, p) => t + p.imagenes.length, 0))]].map(([k, v]) => (
+            <div key={k} className="rounded-xl bg-white/10 ring-1 ring-white/15 p-3">
+              <dt className="text-xs font-semibold text-blue-100">{k}</dt>
+              <dd className="text-xl font-black tabular-nums">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Pestañas */}
+      <div className="flex gap-2 border-b border-slate-200" role="tablist" aria-label="Secciones del portafolio">
+        {pestanas.map((p) => (
+          <button key={p.clave} type="button" role="tab" aria-selected={pestana === p.clave} onClick={() => cambiarPestana(p.clave)}
+            className={`relative !min-h-0 px-4 py-3 text-base font-bold transition-colors cursor-pointer after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-amber-500 after:origin-center after:transition-transform after:duration-300 ${
+              pestana === p.clave ? "text-blue-900 after:scale-x-100" : "text-slate-500 hover:text-blue-800 after:scale-x-0"}`}>
+            {p.texto} <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${pestana === p.clave ? "bg-blue-900 text-white" : "bg-slate-200 text-slate-600"}`}>{p.n}</span>
+          </button>
+        ))}
       </div>
 
       {aviso && <div role="status" className="bg-green-50 border-l-4 border-green-600 text-green-900 p-3 rounded-r-md font-semibold">{aviso}</div>}
       {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md font-semibold">{error}</div>}
 
-      {cargando ? (
-        <p className="text-center text-slate-500 py-10 font-semibold">Cargando portafolio...</p>
-      ) : proyectos.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-600">
-          Aún no hay obras en el portafolio. Agregue la primera con «Agregar obra terminada».
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {proyectos.map((p) => (
-            <article key={p.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="relative h-44 bg-slate-200 overflow-hidden">
-                {p.imagenes[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imagenes[0]} alt={p.titulo} className="absolute inset-0 w-full h-full object-cover" />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos</div>
-                )}
-                {p.etiqueta && ETIQUETAS[p.etiqueta] && (
-                  <span className={`absolute top-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-black shadow ${ETIQUETAS[p.etiqueta].clase}`}>{ETIQUETAS[p.etiqueta].texto}</span>
-                )}
-                <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded">{p.imagenes.length} {p.imagenes.length === 1 ? "foto" : "fotos"}</span>
-              </div>
-              <div className="p-4 flex-1 flex flex-col gap-2">
-                <h2 className="font-bold text-lg leading-tight">{p.titulo}</h2>
-                {p.ubicacion_comuna && <p className="text-sm text-slate-500">{p.ubicacion_comuna}</p>}
-                <span className={`self-start px-2 py-0.5 rounded border text-sm font-bold ${p.publicado ? "bg-green-100 text-green-900 border-green-600" : "bg-slate-100 text-slate-700 border-slate-400"}`}>
-                  {p.publicado ? "Visible en la web" : "Oculto"}
-                </span>
-                <div className="mt-auto pt-3 flex flex-wrap gap-2">
-                  <button onClick={() => { setAviso(""); setError(""); setEditando(p); }} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>
-                  <button onClick={() => alternarPublicado(p)} className="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold hover:bg-slate-50 cursor-pointer">
-                    {p.publicado ? "Ocultar de la web" : "Publicar en la web"}
-                  </button>
-                  <button onClick={() => eliminar(p)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>
-                </div>
-              </div>
-            </article>
-          ))}
+      {/* La pestaña del catálogo se mantiene montada para conservar su cantidad en la etiqueta */}
+      <div hidden={pestana !== "catalogo"}>
+        <CatalogoAdmin onCantidad={setNCasas} onAviso={setAviso} onError={setError} />
+      </div>
+
+      {pestana === "obras" && (
+        <div className="space-y-4 animate-entrar">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 p-4">
+            <p className="mr-auto text-blue-900">Obras finalizadas que se exhiben en la sección «Obras» de la página pública.</p>
+            <button onClick={() => { setAviso(""); setError(""); setEditando("nuevo"); }} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer whitespace-nowrap">
+              + Agregar obra terminada
+            </button>
+          </div>
+
+          {cargando ? (
+            <p className="text-center text-slate-500 py-10 font-semibold">Cargando portafolio...</p>
+          ) : proyectos.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-600">
+              Aún no hay obras en el portafolio. Agregue la primera con «Agregar obra terminada».
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {proyectos.map((p) => (
+                <article key={p.id} className="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-lg hover:-translate-y-0.5 transition duration-300">
+                  <div className="relative h-44 bg-slate-200 overflow-hidden">
+                    {p.imagenes[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.imagenes[0]} alt={p.titulo} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">Sin fotos</div>
+                    )}
+                    {p.etiqueta && ETIQUETAS[p.etiqueta] && (
+                      <span className={`absolute top-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-black shadow ${ETIQUETAS[p.etiqueta].clase}`}>{ETIQUETAS[p.etiqueta].texto}</span>
+                    )}
+                    <span className="absolute top-2 right-2 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded">{p.imagenes.length} {p.imagenes.length === 1 ? "foto" : "fotos"}</span>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col gap-2">
+                    <h2 className="font-bold text-lg leading-tight">{p.titulo}</h2>
+                    {p.ubicacion_comuna && <p className="text-sm text-slate-500">📍 {p.ubicacion_comuna}</p>}
+                    <span className={`self-start px-2 py-0.5 rounded border text-sm font-bold ${p.publicado ? "bg-green-100 text-green-900 border-green-600" : "bg-slate-100 text-slate-700 border-slate-400"}`}>
+                      {p.publicado ? "Visible en la web" : "Oculto"}
+                    </span>
+                    <div className="mt-auto pt-3 flex flex-wrap gap-2">
+                      <button onClick={() => { setAviso(""); setError(""); setEditando(p); }} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>
+                      <button onClick={() => alternarPublicado(p)} className="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold hover:bg-slate-50 cursor-pointer">
+                        {p.publicado ? "Ocultar de la web" : "Publicar en la web"}
+                      </button>
+                      <button onClick={() => eliminar(p)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -143,21 +193,6 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   const [nuevas, setNuevas] = useState<string[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
-
-  const total = existentes.length + nuevas.length;
-
-  const elegir = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const archivos = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (total + archivos.length > MAX_IMAGENES) return setError(`Un proyecto admite hasta ${MAX_IMAGENES} fotos.`);
-    try {
-      const listas = await Promise.all(archivos.map(reducirImagen));
-      setNuevas((p) => [...p, ...listas]);
-      setError("");
-    } catch (err: any) {
-      setError(err.message || "No se pudo leer la imagen.");
-    }
-  };
 
   const quitarExistente = (url: string) => {
     if (url.startsWith("/api/portafolio/imagenes/")) setQuitar((p) => [...p, Number(url.split("/").filter(Boolean).pop())]);
@@ -223,29 +258,8 @@ function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
             className="w-full px-3 py-2 text-lg border-2 border-slate-300 rounded-lg" placeholder="Cuente en pocas líneas qué se construyó y con qué materiales." />
         </div>
 
-        <div>
-          <label className={etiqueta} htmlFor="pf-i">Fotos ({total} de {MAX_IMAGENES})</label>
-          <input id="pf-i" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={elegir} disabled={total >= MAX_IMAGENES} />
-          <p className="text-sm text-slate-500 mt-1">La primera foto es la portada. Las fotos se achican solas para que la página cargue rápido.</p>
-          {total > 0 && (
-            <ul className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
-              {existentes.map((u, i) => (
-                <li key={u} className="relative h-20 rounded-lg overflow-hidden bg-slate-200">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={u} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => quitarExistente(u)} aria-label={`Quitar foto ${i + 1}`} className="absolute top-1 right-1 bg-black/70 text-white w-6 h-6 rounded-full text-sm leading-none cursor-pointer !min-h-0">✕</button>
-                </li>
-              ))}
-              {nuevas.map((u, i) => (
-                <li key={i} className="relative h-20 rounded-lg overflow-hidden bg-slate-200 ring-2 ring-green-500">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={u} alt={`Foto nueva ${i + 1}`} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => setNuevas((p) => p.filter((_, k) => k !== i))} aria-label={`Quitar foto nueva ${i + 1}`} className="absolute top-1 right-1 bg-black/70 text-white w-6 h-6 rounded-full text-sm leading-none cursor-pointer !min-h-0">✕</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <SelectorFotos existentes={existentes} nuevas={nuevas} max={MAX_IMAGENES} onError={setError}
+          onAgregar={(u) => setNuevas((p) => [...p, ...u])} onQuitarNueva={(i) => setNuevas((p) => p.filter((_, k) => k !== i))} onQuitarExistente={quitarExistente} />
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" className="!w-5 !min-h-0" checked={publicado} onChange={(e) => setPublicado(e.target.checked)} />

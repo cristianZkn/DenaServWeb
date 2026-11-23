@@ -6,7 +6,7 @@ import { TarjetaObra, VisorObra, type Obra } from "@/components/GaleriaObra";
 import Reveal, { Resaltado } from "@/components/Reveal";
 import Proceso from "@/components/Proceso";
 import CasaIlustrada from "@/components/CasaIlustrada";
-import { MODELOS } from "@/lib/catalogo";
+import { MODELOS, type ModeloCasa } from "@/lib/catalogo";
 import { ETIQUETAS, REDES, WHATSAPP_GENERAL } from "@/lib/empresa";
 
 const SECCIONES = [
@@ -85,6 +85,7 @@ export default function PortafolioPage() {
   const [visor, setVisor] = useState<Obra | null>(null);
   const [filtro, setFiltro] = useState("TODAS");
   const [verTodas, setVerTodas] = useState(false);
+  const [casas, setCasas] = useState<ModeloCasa[]>(MODELOS); // modelos de ejemplo hasta que la empresa cargue los reales
   const [menu, setMenu] = useState(false);
   const [bajo, setBajo] = useState(false);
   const [progreso, setProgreso] = useState(0);
@@ -96,6 +97,19 @@ export default function PortafolioPage() {
       .then((data) => setProyectos(Array.isArray(data) ? data : []))
       .catch((err) => console.error("Error al cargar portafolio:", err))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/catalogo-casas/")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: any[]) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setCasas(data.map((c) => ({
+          id: String(c.id), nombre: c.nombre, etiqueta: c.etiqueta || undefined, m2: c.m2, dormitorios: c.dormitorios, banos: c.banos,
+          resumen: c.resumen, ideal: c.ideal, incluye: c.incluye ?? [], imagen: c.imagenes?.[0], personalizado: c.personalizado,
+        })));
+      })
+      .catch(() => {}); // sin respuesta se quedan los modelos de ejemplo
   }, []);
 
   useEffect(() => {
@@ -296,9 +310,9 @@ export default function PortafolioPage() {
         <div className="relative max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           <Reveal><Encabezado sobre="Catálogo" titulo="Casas prediseñadas" texto="Modelos listos para elegir. Cada uno se adapta a su terreno y a su presupuesto: pida su cotización sin compromiso." /></Reveal>
           <div className="mt-12 grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
-            {MODELOS.map((m, i) => {
-              const mensaje = encodeURIComponent(m.personalizado ? "Hola, quiero cotizar un proyecto a medida." : `Hola, me interesa el ${m.nombre} de ${m.m2} m². ¿Me pueden enviar una cotización?`);
-              const href = contacto ? `${contacto}${contacto.includes("?") ? "&" : "?"}text=${mensaje}` : "#contacto";
+            {casas.map((m, i) => {
+              const mensaje = encodeURIComponent(m.personalizado || !m.m2 ? `Hola, me interesa ${m.personalizado ? "un proyecto a medida" : `el ${m.nombre}`}. ¿Me pueden enviar una cotización?` : `Hola, me interesa el ${m.nombre} de ${m.m2} m². ¿Me pueden enviar una cotización?`);
+              const href = `${WHATSAPP_GENERAL}?text=${mensaje}`;
               return (
                 <Reveal key={m.id} delay={i * 120} className="h-full">
                   <article className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-slate-200 shadow-lg shadow-blue-950/5 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-blue-950/15 hover:ring-blue-300 transition duration-300">
@@ -331,7 +345,7 @@ export default function PortafolioPage() {
                         ))}
                       </ul>
                       <p className="mt-auto pt-2 text-xs font-semibold text-slate-500"><span className="text-amber-600">Ideal para:</span> {m.ideal}</p>
-                      <a href={href} target={contacto ? "_blank" : undefined} rel="noopener noreferrer"
+                      <a href={href} target="_blank" rel="noopener noreferrer"
                         className="brillo-boton mt-1 block rounded-xl bg-blue-900 hover:bg-blue-800 px-4 py-3 text-center font-bold text-white transition-colors">
                         {m.personalizado ? "Cotizar a medida" : "Cotizar este modelo"}
                       </a>
@@ -408,14 +422,14 @@ export default function PortafolioPage() {
           </Reveal>
 
           <h3 className="mt-14 text-center text-sm font-bold uppercase tracking-widest text-amber-300">Síganos en nuestras redes</h3>
-          <ul className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ul className="mt-5 grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {REDES.map((r, i) => {
               const cuerpo = (
                 <>
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-amber-300 group-hover:bg-amber-400 group-hover:text-blue-950 transition-colors"><IconoRed clave={r.clave} /></span>
                   <span className="mt-3 block font-extrabold">{r.nombre}</span>
                   <span className="mt-1 block text-sm text-blue-200">{r.descripcion}</span>
-                  <span className="mt-3 block text-xs font-bold text-amber-300">{r.url ? "Visitar" : "Próximamente"}</span>
+                  <span className="mt-3 block text-xs font-bold text-amber-300">{r.cta}</span>
                 </>
               );
               return (

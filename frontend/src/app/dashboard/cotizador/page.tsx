@@ -714,7 +714,6 @@ export default function CotizadorPage() {
                   <section aria-labelledby="detalle-titulo" className="border-t border-slate-200 pt-4">
                     <div className="flex items-baseline justify-between">
                       <h2 id="detalle-titulo" className="text-base font-bold text-slate-900">Detalle de la lista</h2>
-                      <span className="text-sm text-slate-500 shrink-0">{totalLineas} {totalLineas === 1 ? "partida" : "partidas"}</span>
                     </div>
                     {totalLineas === 0 ? (
                       <p className="py-3 text-sm text-slate-500">Indique los trabajadores y agregue materiales para conformar el valor de la obra.</p>

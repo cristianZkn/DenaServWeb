@@ -204,7 +204,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             </h3>
             <div className="space-y-4">
               {cotizacion.hitos_pago && cotizacion.hitos_pago.length > 0 ? (
-                cotizacion.hitos_pago.map((hito, idx) => (
+                [...cotizacion.hitos_pago].sort((a, b) => a.id - b.id).map((hito, idx) => ( // orden fijo: anticipo, avance, entrega
                   <div
                     key={hito.id}
                     className={`p-5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${

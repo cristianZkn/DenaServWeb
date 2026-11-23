@@ -1,13 +1,13 @@
-/** Datos públicos de la empresa. Los enlaces de redes se configuran con variables NEXT_PUBLIC_* (en Vercel) y, mientras no
- *  estén, la tarjeta de esa red aparece como «Próximamente» en vez de apuntar a una página inventada. */
-export const REDES = [
-  { clave: "instagram", nombre: "Instagram", descripcion: "Fotos de obras y avances día a día.", url: process.env.NEXT_PUBLIC_INSTAGRAM_URL || "" },
-  { clave: "facebook", nombre: "Facebook", descripcion: "Novedades, obras entregadas y comentarios de clientes.", url: process.env.NEXT_PUBLIC_FACEBOOK_URL || "" },
-  { clave: "whatsapp", nombre: "WhatsApp", descripcion: "Cuéntenos su proyecto y reciba respuesta directa.", url: process.env.NEXT_PUBLIC_WHATSAPP_URL || "" },
-  { clave: "correo", nombre: "Correo", descripcion: "Escríbanos para cotizaciones y consultas.", url: process.env.NEXT_PUBLIC_CORREO ? `mailto:${process.env.NEXT_PUBLIC_CORREO}` : "" },
-] as const;
+/** Datos públicos de contacto de la empresa (se muestran en la sección «Contacto» y en los botones de WhatsApp). */
+export const FACEBOOK_URL = "https://www.facebook.com/danielenrique.navarretearaneda?locale=es_LA";
+export const CORREO = "dnavarretea@gmail.com";
+export const WHATSAPP_GENERAL = "https://wa.me/56988993703"; // +56 9 8899 3703
 
-export const WHATSAPP_GENERAL = process.env.NEXT_PUBLIC_WHATSAPP_URL || "";
+export const REDES = [
+  { clave: "facebook", nombre: "Facebook", descripcion: "Novedades, obras entregadas y comentarios de clientes.", cta: "Visitar nuestro perfil", url: FACEBOOK_URL },
+  { clave: "whatsapp", nombre: "WhatsApp", descripcion: "Cuéntenos su proyecto y reciba respuesta directa.", cta: "+56 9 8899 3703", url: WHATSAPP_GENERAL },
+  { clave: "correo", nombre: "Correo", descripcion: "Escríbanos para cotizaciones y consultas.", cta: CORREO, url: `mailto:${CORREO}` },
+] as const;
 
 /** Viñetas que se muestran sobre las fotos de cada obra. */
 export const ETIQUETAS: Record<string, { texto: string; clase: string }> = {

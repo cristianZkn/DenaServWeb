@@ -488,6 +488,121 @@ class PortafolioProyectoSchema(Schema):
         texto = f"Hola, me interesa una casa como esta: {detalle}"
         return f"https://wa.me/{settings.WHATSAPP_NUMERO}?text={quote(texto)}"
 
+class CasaCatalogoSchema(Schema):
+    id: int
+    nombre: str
+    etiqueta: str = ""
+    m2: int = 0
+    dormitorios: int = 0
+    banos: int = 0
+    resumen: str = ""
+    ideal: str = ""
+    incluye: List[str] = []
+    personalizado: bool = False
+    publicado: bool = True
+    orden: int = 0
+    imagenes: List[str] = []
+
+    @staticmethod
+    def resolve_incluye(obj):
+        return [x for x in obj.incluye.splitlines() if x.strip()]
+
+    @staticmethod
+    def resolve_imagenes(obj):
+        return [f"/api/catalogo-casas/imagenes/{i.id}/" for i in obj.imagenes.all()]
+
+
+def _lineas_incluye(lista):
+    if len(lista) > 8:
+        raise ValueError("Se admiten hasta 8 características por casa.")
+    return "\n".join(v.texto(x, "Cada característica", 2, 120) for x in lista if x and x.strip())
+
+
+class CasaCatalogoInSchema(Schema):
+    nombre: str
+    etiqueta: str = ""
+    m2: int = Field(0, ge=0, le=1000)
+    dormitorios: int = Field(0, ge=0, le=20)
+    banos: int = Field(0, ge=0, le=20)
+    resumen: str = ""
+    ideal: str = ""
+    incluye: List[str] = []
+    personalizado: bool = False
+    publicado: bool = True
+    orden: int = Field(0, ge=0, le=999)
+    imagenes: List[str] = []  # data URL (data:image/jpeg;base64,...)
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, x):
+        return v.texto(x, "El nombre", 3, 100)
+
+    @field_validator("etiqueta")
+    @classmethod
+    def _etiqueta(cls, x):
+        return v.texto(x, "La viñeta", 0, 30)
+
+    @field_validator("resumen")
+    @classmethod
+    def _resumen(cls, x):
+        return v.texto(x, "La descripción", 0, 600)
+
+    @field_validator("ideal")
+    @classmethod
+    def _ideal(cls, x):
+        return v.texto(x, "«Ideal para»", 0, 200)
+
+    @field_validator("incluye")
+    @classmethod
+    def _incluye(cls, x):
+        _lineas_incluye(x)
+        return [v.texto(i, "Cada característica", 2, 120) for i in x if i and i.strip()]
+
+
+class CasaCatalogoUpdateSchema(Schema):
+    nombre: Optional[str] = None
+    etiqueta: Optional[str] = None
+    m2: Optional[int] = Field(None, ge=0, le=1000)
+    dormitorios: Optional[int] = Field(None, ge=0, le=20)
+    banos: Optional[int] = Field(None, ge=0, le=20)
+    resumen: Optional[str] = None
+    ideal: Optional[str] = None
+    incluye: Optional[List[str]] = None
+    personalizado: Optional[bool] = None
+    publicado: Optional[bool] = None
+    orden: Optional[int] = Field(None, ge=0, le=999)
+    agregar_imagenes: List[str] = []
+    quitar_imagenes: List[int] = []
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, x):
+        return None if x is None else v.texto(x, "El nombre", 3, 100)
+
+    @field_validator("etiqueta")
+    @classmethod
+    def _etiqueta(cls, x):
+        return None if x is None else v.texto(x, "La viñeta", 0, 30)
+
+    @field_validator("resumen")
+    @classmethod
+    def _resumen(cls, x):
+        return None if x is None else v.texto(x, "La descripción", 0, 600)
+
+    @field_validator("ideal")
+    @classmethod
+    def _ideal(cls, x):
+        return None if x is None else v.texto(x, "«Ideal para»", 0, 200)
+
+    @field_validator("incluye")
+    @classmethod
+    def _incluye(cls, x):
+        if x is None:
+            return None
+        _lineas_incluye(x)
+        return [v.texto(i, "Cada característica", 2, 120) for i in x if i and i.strip()]
+
+
 class PortafolioProyectoInSchema(Schema):
     titulo: str = Field(min_length=3, max_length=150)
     descripcion: Optional[str] = Field(None, max_length=2000)

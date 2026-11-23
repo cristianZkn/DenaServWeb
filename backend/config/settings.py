@@ -196,4 +196,4 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY', '').strip()
 GROQ_MODEL = os.getenv('GROQ_MODEL', '').strip() or 'openai/gpt-oss-20b'  # vacío = el predeterminado
 
 # Número de WhatsApp de la empresa (formato internacional sin '+', ej. 56912345678)
-WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '')
+WHATSAPP_NUMERO = os.getenv('WHATSAPP_NUMERO', '').strip() or '56988993703'  # +56 9 8899 3703

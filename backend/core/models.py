@@ -211,6 +211,7 @@ class HitoPago(models.Model):
 
     class Meta:
         db_table = 'hito_pago'
+        ordering = ['id']  # orden fijo del cronograma: anticipo, avance, entrega (sin esto, la base los devuelve en cualquier orden)
         verbose_name = 'Hito de Pago'
         verbose_name_plural = 'Hitos de Pago'
 
@@ -278,6 +279,39 @@ class PortafolioImagen(models.Model):
 
     class Meta:
         db_table = 'portafolio_imagen'
+        ordering = ['orden', 'id']
+
+
+# 8b2. catálogo de casas prediseñadas que se muestra en la página pública (se edita desde el panel, en Portafolio)
+class CasaCatalogo(models.Model):
+    nombre = models.CharField(max_length=100)
+    etiqueta = models.CharField(max_length=30, blank=True, default='')  # viñeta libre sobre la imagen: «Más consultado»…
+    m2 = models.PositiveIntegerField(default=0)
+    dormitorios = models.PositiveSmallIntegerField(default=0)
+    banos = models.PositiveSmallIntegerField(default=0)
+    resumen = models.TextField(max_length=600, blank=True, default='')
+    ideal = models.CharField(max_length=200, blank=True, default='')
+    incluye = models.TextField(blank=True, default='')  # una característica por línea
+    personalizado = models.BooleanField(default=False)  # tarjeta «a medida» (sin m² ni dormitorios)
+    publicado = models.BooleanField(default=True)
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'casa_catalogo'
+        ordering = ['orden', 'id']
+
+    def __str__(self):
+        return self.nombre
+
+
+class CasaCatalogoImagen(models.Model):
+    casa = models.ForeignKey(CasaCatalogo, on_delete=models.CASCADE, related_name='imagenes')
+    contenido = models.BinaryField()
+    tipo_mime = models.CharField(max_length=30, default='image/jpeg')
+    orden = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'casa_catalogo_imagen'
         ordering = ['orden', 'id']
 
 

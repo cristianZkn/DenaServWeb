@@ -20,7 +20,7 @@ from ninja.security import APIKeyHeader, HttpBearer
 
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
-    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CambioCotizacion, ManoObraLinea,
+    DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CasaCatalogo, CasaCatalogoImagen, CambioCotizacion, ManoObraLinea,
     BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO, TrasladoCotizacion
 )
 from .schemas import (
@@ -31,7 +31,7 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CasaCatalogoSchema, CasaCatalogoInSchema, CasaCatalogoUpdateSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
@@ -1298,6 +1298,76 @@ def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyec
         return 200, proyecto
     except ValueError as e:
         return 400, {"message": _msj(e)}
+
+
+# ==============================================================================
+# CATÁLOGO DE CASAS PREDISEÑADAS (se muestra en la página pública; se edita desde el panel)
+# ==============================================================================
+def _guardar_imagenes_casa(casa, data_urls):
+    existentes = casa.imagenes.count()
+    if existentes + len(data_urls) > MAX_IMAGENES:
+        raise ValueError(f"Una casa admite hasta {MAX_IMAGENES} imágenes.")
+    for n, du in enumerate(data_urls, start=existentes):
+        mime, contenido = _decodificar_imagen(du)
+        CasaCatalogoImagen.objects.create(casa=casa, contenido=contenido, tipo_mime=mime, orden=n)
+
+
+@router.get("/catalogo-casas/", response=List[CasaCatalogoSchema])
+def listar_catalogo_casas(request):
+    return CasaCatalogo.objects.prefetch_related("imagenes").filter(publicado=True)
+
+
+@router.get("/catalogo-casas/admin/", response=List[CasaCatalogoSchema], auth=AuthBearer())
+def listar_catalogo_casas_admin(request):
+    return CasaCatalogo.objects.prefetch_related("imagenes")
+
+
+@router.get("/catalogo-casas/imagenes/{imagen_id}/")
+def servir_imagen_casa(request, imagen_id: int):
+    img = CasaCatalogoImagen.objects.filter(id=imagen_id).first()
+    if not img:
+        return HttpResponse(status=404)
+    r = HttpResponse(bytes(img.contenido), content_type=img.tipo_mime)
+    r["Cache-Control"] = "public, max-age=86400"
+    return r
+
+
+@router.post("/catalogo-casas/", response={200: CasaCatalogoSchema, 400: MessageSchema}, auth=AuthBearer())
+def crear_casa_catalogo(request, data: CasaCatalogoInSchema):
+    try:
+        with transaction.atomic():
+            campos = data.dict(exclude={"imagenes", "incluye"})
+            casa = CasaCatalogo.objects.create(**campos, incluye="\n".join(data.incluye))
+            _guardar_imagenes_casa(casa, data.imagenes)
+        return 200, casa
+    except Exception as e:
+        return 400, {"message": _msj(e)}
+
+
+@router.patch("/catalogo-casas/{casa_id}/", response={200: CasaCatalogoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+def editar_casa_catalogo(request, casa_id: int, data: CasaCatalogoUpdateSchema):
+    casa = CasaCatalogo.objects.filter(id=casa_id).first()
+    if not casa:
+        return 404, {"message": "Casa no encontrada"}
+    try:
+        with transaction.atomic():
+            for k, val in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes", "incluye"}).items():
+                if val is not None:
+                    setattr(casa, k, val)
+            if data.incluye is not None:
+                casa.incluye = "\n".join(data.incluye)
+            casa.save()
+            casa.imagenes.filter(id__in=data.quitar_imagenes).delete()
+            _guardar_imagenes_casa(casa, data.agregar_imagenes)
+        return 200, casa
+    except Exception as e:
+        return 400, {"message": _msj(e)}
+
+
+@router.delete("/catalogo-casas/{casa_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def eliminar_casa_catalogo(request, casa_id: int):
+    n, _ = CasaCatalogo.objects.filter(id=casa_id).delete()
+    return (200, {"message": "Casa eliminada"}) if n else (404, {"message": "Casa no encontrada"})
 
 
 @router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())

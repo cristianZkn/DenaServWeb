@@ -451,7 +451,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
             </div>
             <button onClick={() => setResumen(null)} className="!min-h-0 text-sm font-semibold text-slate-600 hover:underline cursor-pointer">Cerrar</button>
           </div>
-          <p className="whitespace-pre-line text-base text-slate-800">{resumen.texto}</p>
+          <p className="whitespace-pre-line text-lg leading-relaxed text-slate-800">{resumen.texto}</p>
           <button onClick={() => navigator.clipboard.writeText(resumen.texto).then(() => avisarResumen("Texto copiado."))}
             className="px-4 py-2 text-base font-semibold border border-slate-300 rounded-xl hover:bg-slate-50 cursor-pointer">Copiar texto</button>
         </section>
