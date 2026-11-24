@@ -1519,6 +1519,18 @@ class EstadisticasPanelTests(TestCase):
         actual = e["trimestres"][-1]                                           # el trimestre en curso es el último
         self.assertEqual((actual["creados"], actual["terminados"]), (3, 1))
 
+    def test_ganancia_del_trimestre_separada_por_estado(self):
+        cot = self.crear("Cliente Uno")
+        for hito in HitoPago.objects.filter(cotizacion_id=cot["id"]).order_by("id"):
+            self.c.patch(f"/api/hitos-pago/{hito.id}/", {"pago_completo": True}, content_type="application/json", **self.h)
+        self.crear("Cliente Dos")                                              # sigue cotizado, con la misma ganancia
+        c = Cotizacion.objects.get(id=cot["id"])
+        esperada = round((c.costo_total - c.costo_materiales - c.costo_mano_obra - c.costo_flete - c.costo_nivelacion) / Decimal("1.19"))
+        self.assertGreater(esperada, 0)
+        actual = self.c.get("/api/cotizaciones/estadisticas/", **self.h).json()["trimestres"][-1]
+        self.assertEqual((actual["ganancia_terminadas"], actual["ganancia_cotizadas"], actual["ganancia_ejecucion"]), (esperada, esperada, 0))
+        self.assertEqual(self.c.get("/api/cotizaciones/estadisticas/", **self.h).json()["trimestres"][0]["ganancia_terminadas"], 0)
+
     def test_requiere_sesion(self):
         self.assertEqual(self.client.get("/api/cotizaciones/estadisticas/").status_code, 401)
 

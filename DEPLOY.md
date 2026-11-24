@@ -72,5 +72,9 @@ Render gratuito duerme el backend tras 15 min sin visitas y la primera carga tar
 capa gratuita (750 h al mes). Para cambiar el horario edita el `cron` del archivo (la hora es UTC). Si GitHub retrasa una ejecución más de 2 minutos el
 backend se duerme una vez; se puede probar a mano en *Actions → Mantener activo el backend → Run workflow*.
 
+**Las ejecuciones programadas de GitHub no son confiables:** las retrasa o las descarta cuando hay mucha carga, y un retraso de más de 2 minutos ya deja dormir
+al backend. Si en *Actions* no aparecen ejecuciones con evento `schedule`, el respaldo es un monitor externo gratuito (UptimeRobot o cron-job.org) que pida
+`https://<tu-api>.onrender.com/api/` cada 5 minutos: es más puntual que GitHub y no necesita cambios en el código.
+
 ## Variables locales
 Plantillas sin secretos: [backend/.env.example](backend/.env.example) y [frontend/.env.example](frontend/.env.example).

@@ -671,8 +671,8 @@ def _trimestre(fecha) -> tuple:
 
 @router.get("/cotizaciones/estadisticas/", response=EstadisticasSchema, auth=AuthBearer())
 def estadisticas_panel(request):
-    """Cifras del panel principal: proyectos por estado y, en los últimos 4 trimestres, cuántos se cotizaron y cuántos se
-    terminaron. Un proyecto se da por terminado en la fecha de su último pago."""
+    """Cifras del panel principal: proyectos por estado y, en los últimos 4 trimestres, cuántos se cotizaron, cuántos se
+    terminaron y cuánta ganancia suman las cotizaciones creadas en cada uno. Un proyecto se da por terminado en la fecha de su último pago."""
     hoy = timezone.localdate()
     año, trim = _trimestre(hoy)
     ventana = []  # los 4 trimestres que terminan en el actual, del más antiguo al más reciente
@@ -680,14 +680,20 @@ def estadisticas_panel(request):
         ventana.append((año, trim))
         año, trim = (año, trim - 1) if trim > 1 else (año - 1, 4)
     ventana.reverse()
-    filas = {t: {"clave": f"{t[0]}-T{t[1]}", "etiqueta": f"T{t[1]} {t[0]}", "creados": 0, "terminados": 0} for t in ventana}
+    filas = {t: {"clave": f"{t[0]}-T{t[1]}", "etiqueta": f"T{t[1]} {t[0]}", "creados": 0, "terminados": 0,
+                 "ganancia_cotizadas": 0, "ganancia_ejecucion": 0, "ganancia_terminadas": 0} for t in ventana}
+    clave_ganancia = {"BORRADOR": "ganancia_cotizadas", "ACEPTADA": "ganancia_ejecucion", "FINALIZADA": "ganancia_terminadas"}
     conteo = {"BORRADOR": 0, "ACEPTADA": 0, "FINALIZADA": 0}
     pagos_ = Prefetch("hitos_pago", queryset=HitoPago.objects.only("cotizacion_id", "fecha_pago"))
-    for c in Cotizacion.objects.only("estado", "fecha_creacion").prefetch_related(pagos_):
+    campos = ("estado", "fecha_creacion", "costo_total", "costo_materiales", "costo_mano_obra", "costo_flete", "costo_nivelacion")
+    for c in Cotizacion.objects.only(*campos).prefetch_related(pagos_):
         conteo[c.estado] = conteo.get(c.estado, 0) + 1
         creada = _trimestre(timezone.localtime(c.fecha_creacion).date())
         if creada in filas:
             filas[creada]["creados"] += 1
+            # Misma cuenta que la ficha: lo cobrado menos el costo presupuestado, sin IVA. Un descuento mayor que el margen no resta.
+            costos = c.costo_materiales + c.costo_mano_obra + c.costo_flete + c.costo_nivelacion
+            filas[creada][clave_ganancia[c.estado]] += max(0, round((c.costo_total - costos) / Decimal("1.19")))
         if c.estado == "FINALIZADA":
             pagos = [h.fecha_pago for h in c.hitos_pago.all() if h.fecha_pago]
             cierre = _trimestre(max(pagos) if pagos else timezone.localtime(c.fecha_creacion).date())

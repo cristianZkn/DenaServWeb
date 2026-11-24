@@ -18,6 +18,9 @@ interface Trimestre {
   etiqueta: string;
   creados: number;
   terminados: number;
+  ganancia_cotizadas: number;
+  ganancia_ejecucion: number;
+  ganancia_terminadas: number;
 }
 
 interface Estadisticas {
@@ -88,6 +91,57 @@ function GraficoTrimestres({ titulo, ayuda, datos, campo, color }: {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+const pesos = (n: number) => "$" + Math.round(n).toLocaleString("es-CL");
+/** Cifra corta para la cabeza de la columna: $2,5 M desde el millón; por debajo, el monto completo. */
+const pesosCorto = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toLocaleString("es-CL", { maximumFractionDigits: 1 })} M` : pesos(n));
+
+const ESTADOS_GANANCIA = [
+  { campo: "ganancia_terminadas", nombre: "Obras terminadas", color: "bg-green-500" },
+  { campo: "ganancia_ejecucion", nombre: "Obras en ejecución", color: "bg-blue-500" },
+  { campo: "ganancia_cotizadas", nombre: "Proyectos cotizados", color: "bg-amber-400" },
+] as const;
+
+/** Ganancia de la empresa por trimestre: cada columna suma todas las cotizaciones creadas en él, apiladas por su estado actual. */
+function GraficoGanancias({ datos }: { datos: Trimestre[] }) {
+  const totales = datos.map((d) => ESTADOS_GANANCIA.reduce((t, e) => t + d[e.campo], 0));
+  const max = Math.max(1, ...totales);
+  const { ref, visible: montado } = useVisible<HTMLElement>(0.35);
+  return (
+    <section ref={ref} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Ganancia por trimestre</h2>
+          <p className="text-sm text-slate-500">Ganancia neta (sin IVA) de todas las cotizaciones creadas en cada trimestre, según su estado actual.</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700 whitespace-nowrap">{pesos(totales.reduce((a, b) => a + b, 0))} en 4 trimestres</span>
+      </div>
+      <div className="mt-5 flex gap-3 sm:gap-8" role="img" aria-label={`Ganancia por trimestre: ${datos.map((d, i) => `${d.etiqueta} ${pesos(totales[i])}`).join(", ")}`}>
+        {datos.map((d, i) => (
+          <div key={d.clave} className="flex-1 flex flex-col items-center">
+            <div className="h-48 w-full flex flex-col items-center justify-end">
+              <span className={`mb-1 text-sm font-extrabold tabular-nums text-slate-800 transition-opacity duration-500 ${montado ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: `${500 + i * 140}ms` }}>
+                {totales[i] ? pesosCorto(totales[i]) : "—"}
+              </span>
+              <div className="w-full max-w-24 flex flex-col-reverse overflow-hidden rounded-t-xl bg-slate-200 transition-[height] duration-[1100ms] ease-[cubic-bezier(0.34,1.4,0.64,1)]"
+                style={{ transitionDelay: `${i * 140}ms`, height: montado ? `${totales[i] ? Math.max((totales[i] / max) * 82, 8) : 3}%` : "0%" }}>
+                {ESTADOS_GANANCIA.map((e) => d[e.campo] > 0 && (
+                  <div key={e.campo} className={e.color} style={{ flexGrow: d[e.campo], flexBasis: 0 }} title={`${e.nombre}: ${pesos(d[e.campo])}`} />
+                ))}
+              </div>
+            </div>
+            <span className="mt-2 text-xs font-semibold text-slate-500">{d.etiqueta}</span>
+          </div>
+        ))}
+      </div>
+      <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
+        {ESTADOS_GANANCIA.map((e) => (
+          <li key={e.campo} className="inline-flex items-center gap-2"><span aria-hidden className={`h-3 w-3 rounded-sm ${e.color}`} />{e.nombre}: <strong className="tabular-nums text-slate-800">{pesos(datos.reduce((t, d) => t + d[e.campo], 0))}</strong></li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -205,10 +259,13 @@ export default function DashboardPage() {
 
       {/* Proyectos por trimestre */}
       {stats && (
-        <div className="grid lg:grid-cols-2 gap-4">
-          <GraficoTrimestres titulo="Proyectos cotizados por trimestre" ayuda="Proyectos creados en cada trimestre." datos={stats.trimestres} campo="creados" color="bg-blue-500" />
-          <GraficoTrimestres titulo="Proyectos terminados por trimestre" ayuda="Obras con todos sus pagos completos, según la fecha del último pago." datos={stats.trimestres} campo="terminados" color="bg-amber-400" />
-        </div>
+        <>
+          <div className="grid lg:grid-cols-2 gap-4">
+            <GraficoTrimestres titulo="Proyectos cotizados por trimestre" ayuda="Proyectos creados en cada trimestre." datos={stats.trimestres} campo="creados" color="bg-blue-500" />
+            <GraficoTrimestres titulo="Proyectos terminados por trimestre" ayuda="Obras con todos sus pagos completos, según la fecha del último pago." datos={stats.trimestres} campo="terminados" color="bg-amber-400" />
+          </div>
+          <GraficoGanancias datos={stats.trimestres} />
+        </>
       )}
     </div>
   );

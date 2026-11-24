@@ -709,6 +709,10 @@ class TrimestreSchema(Schema):
     etiqueta: str
     creados: int
     terminados: int
+    # Ganancia neta (sin IVA) de las cotizaciones creadas en el trimestre, separada por el estado en que están hoy.
+    ganancia_cotizadas: int = 0
+    ganancia_ejecucion: int = 0
+    ganancia_terminadas: int = 0
 
 
 class EstadisticasSchema(Schema):
