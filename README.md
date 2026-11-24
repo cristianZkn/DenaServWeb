@@ -24,6 +24,9 @@ Plataforma web de **DenaServ**, empresa de construcción de casas prefabricadas 
 | **Tarifas** | Valores del cálculo (mano de obra, vigas a la vista, ganancia, rendimiento…) editables desde la web. Cada cotización puede cambiar algunas de ellas solo para sí misma («Tarifas de esta cotización» en el cotizador y en «Opciones avanzadas» del proyecto); las que no se cambian siguen las vigentes. |
 | **Portafolio** | Obras finalizadas con hasta 10 fotos, que se pueden publicar u ocultar de la web. |
 | **Ficha del cliente** | Página pública por enlace con el resumen de la cotización y descarga en PDF. |
+| **Roles y auditoría** | Dos roles: **Admin** (todo) y **Operador** (cotiza y registra pagos y avances; no gestiona usuarios ni proveedores, no edita materiales y solo oculta o publica el portafolio). Cada alta, cambio o baja de las entidades principales y cada exportación queda registrada con quién la hizo (pantalla *Auditoría*, solo Admin). |
+| **Dashboard y reportes** | Indicadores con su fórmula, gráficos con filtros de fecha y estado, y tres reportes (operativo, gerencial, por período) con exportación a Excel, PDF y CSV e impresión. Ver el [manual por rol](docs/manual-de-usuario.md). |
+| **Resumen con IA** | Resumen en lenguaje simple de cada proyecto (Groq, capa gratuita). Si el servicio falla o no hay clave, se entrega un resumen armado por reglas. |
 
 ### Arquitectura
 
@@ -52,10 +55,16 @@ backend/
     api.py             Endpoints de la API
     schemas.py         Validación de entrada y salida
     calculo.py         Motor de cálculo del valor de la obra
+    dominio.py         Reglas de negocio puras de pagos y avance (sin base de datos)
+    servicios.py       Casos de uso de pagos y obra (reciben sus repositorios por constructor)
+    repositorios.py    Patrón Repository: acceso a datos de pagos y obra
+    reportes.py, analisis.py  Reportes, exportación e indicadores (usan las vistas SQL)
+    auditoria.py       Registro automático de quién cambió qué
     validadores.py     Validación de RUT y teléfono
     migrations/        Migraciones (nunca editar una ya aplicada: crear una nueva)
     management/commands/  cargar_materiales, actualizar_precios_mercado, mapear_catalogo
-    tests.py           Pruebas automáticas
+    tests.py, test_negocio.py, test_reportes.py  Pruebas automáticas (integración y unitarias)
+docs/                  Contrato OpenAPI (openapi.json) y manual de usuario
 frontend/
   src/app/             Páginas: portafolio público, login, dashboard, ficha del cliente
   src/components/      Componentes compartidos (modal de pago, ventana de confirmación)
@@ -107,6 +116,7 @@ Crea el archivo `backend/.env` a partir de [`backend/.env.example`](backend/.env
 | `CRON_TOKEN` | Clave del actualizador semanal de precios (solo producción) |
 | `PROXY_SECRET` | Clave compartida con el frontend (el mismo valor en Vercel y en Render). Permite que el backend cuente las peticiones por la IP real del visitante; sin ella usa la IP de la conexión |
 | `COMBUSTIBLE_ZONAS` | Zonas de la CNE cuyo precio del combustible se promedia, separadas por coma: `Zona Norte`, `Zona Centro`, `Metropolitana`, `Zona Sur` (por defecto `Zona Centro,Zona Sur`, la de Los Ángeles) |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Clave y modelo del resumen con IA (Groq). Sin clave se usa el resumen base. El modelo por defecto es `openai/gpt-oss-20b` |
 | `ENABLE_ADMIN` | `1` para habilitar el panel de Django en `/admin/` (en producción está apagado) |
 
 Luego aplica las migraciones y levanta el servidor:
@@ -155,7 +165,7 @@ La aplicación queda en `http://localhost:3000/`. El panel interno está en `/da
 
 - Portafolio público: `http://localhost:3000/`
 - Panel interno: `http://localhost:3000/login`
-- Pruebas del backend (con el entorno virtual activo): `python manage.py test core`
+- Pruebas del backend (con el entorno virtual activo): `python manage.py test core`. **Requieren PostgreSQL**: los reportes usan vistas SQL. Con `DB_HOST` definido corren contra un servidor PostgreSQL (crean y borran su propia base `test_…`); cada push las ejecuta en GitHub Actions ([pruebas.yml](.github/workflows/pruebas.yml)).
 - Compilación del frontend: `npm run build`
 
 ---
@@ -171,8 +181,23 @@ La aplicación queda en `http://localhost:3000/`. El panel interno está en `/da
 - **Sesión:** el token vive en una cookie `httpOnly` que solo el servidor de Next.js lee (no se usa `localStorage`); dura 12 horas. El proxy `/api/*` la convierte en el encabezado que espera el backend y acepta peticiones que modifican datos solo si nacen en el mismo sitio.
 - **Límites de peticiones:** 600 por minuto por IP y por usuario, y 10 por minuto por IP en el inicio de sesión. Para ataques de denegación de servicio a gran escala conviene además activar reglas de límite en el Firewall de Vercel.
 - **Entradas:** todo acceso a la base pasa por el ORM de Django (consultas parametrizadas); los datos se validan en el backend; React escapa lo que muestra; los archivos subidos se aceptan solo con tipos permitidos (JPG, PNG, WebP, PDF).
-- **Cabeceras:** el frontend envía política de contenido (CSP), HSTS, anti-clickjacking y `nosniff`. La documentación de la API (`/api/docs`) y el panel `/admin/` no están disponibles en producción.
+- **Cabeceras:** el frontend envía política de contenido (CSP), HSTS, anti-clickjacking y `nosniff`. El panel `/admin/` está apagado en producción. La documentación de la API (`/api/docs`) solo la abre un Admin con sesión iniciada (se entra desde el enlace del menú del panel).
+- **Roles y control de acceso:** cada endpoint exige sesión y, donde corresponde, rol Admin (403 si no). Lo que el Operador no puede hacer también se oculta en la interfaz, pero el servidor es quien decide.
+- **Validación en tres niveles:** formularios del front (mensajes en línea), API (esquemas con mensajes claros, formato de error `{message}`) y base de datos (restricciones `CHECK`, únicos y claves foráneas).
+- **Auditoría:** cambios de las entidades principales y cada exportación de reportes, con usuario y fecha.
 - **Dependencias:** revisar con `npm audit` (frontend) y `pip-audit` (backend) antes de cada despliegue importante.
+
+## Datos de prueba, respaldo y documentación
+
+- **Datos sintéticos** (para demostrar el dashboard y los reportes): `python manage.py sembrar_datos --base-de-pruebas` crea 520 cotizaciones con 12 meses de historia, hitos, abonos y avance. Todo es inventado y queda marcado (`SIM-…`); `--limpiar` lo borra. Exige el indicador `--base-de-pruebas` porque el `.env` puede apuntar a producción: **córralo solo contra una base de pruebas**.
+- **Respaldo y restauración:** `python manage.py respaldar_bd --salida respaldo.json.gz` y `python manage.py restaurar_bd respaldo.json.gz --reemplazar` (detalle en [DEPLOY.md](DEPLOY.md)).
+- **Contrato OpenAPI:** [docs/openapi.json](docs/openapi.json). Se regenera con el script de [docs/README.md](docs/README.md) cuando cambia la API.
+- **Manual de usuario por rol:** [docs/manual-de-usuario.md](docs/manual-de-usuario.md).
+
+## Uso de herramientas de IA
+
+- **En el producto:** el resumen de proyectos usa la API de **Groq** (modelo `openai/gpt-oss-20b`, capa gratuita). Recibe solo datos del proyecto sin información personal (sin nombre, RUN, teléfono ni dirección), con tiempo máximo de 20 s; la clave es un secreto de entorno y, ante cualquier error, el sistema entrega un resumen armado por reglas. Está probado con el servicio simulado (`ResumenProyectoTests`).
+- **En el desarrollo:** se usó **Claude Code** (Anthropic) como apoyo para escribir y revisar código, pruebas y documentación. Todo lo entregado fue revisado por el equipo y puede explicarse y modificarse en vivo.
 
 ## Convenciones de trabajo
 
