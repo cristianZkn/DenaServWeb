@@ -257,11 +257,18 @@ export default function DashboardPage() {
             })}
           </ul>
         )}
-        {progreso.length > limite && (
-          <div className="mt-4 text-center">
-            <button type="button" onClick={() => setLimite((n) => n + 12)} className="font-semibold text-blue-800 border border-blue-200 hover:bg-blue-50 px-5 h-11 rounded-lg cursor-pointer">
-              Mostrar más obras ({limite} de {progreso.length})
-            </button>
+        {progreso.length > 12 && (
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            {progreso.length > limite && (
+              <button type="button" onClick={() => setLimite((n) => n + 12)} className="font-semibold text-blue-800 border border-blue-200 hover:bg-blue-50 px-5 h-11 rounded-lg cursor-pointer">
+                Mostrar más obras ({limite} de {progreso.length})
+              </button>
+            )}
+            {limite > 12 && (
+              <button type="button" onClick={() => setLimite((n) => Math.max(12, n - 12))} className="font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 px-5 h-11 rounded-lg cursor-pointer">
+                Mostrar menos
+              </button>
+            )}
           </div>
         )}
       </section>
