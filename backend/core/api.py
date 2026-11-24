@@ -29,7 +29,7 @@ from .schemas import (
     CatalogoTipoSchema, CatalogoTipoInSchema, InsumoSchema,
     CotizacionSchema, CotizacionInSchema, CotizacionDetalladaSchema, CotizacionEstadoUpdateSchema,
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
-    HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema,
+    HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema, ConfirmarSchema, ComprobanteInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
     MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CasaCatalogoSchema, CasaCatalogoInSchema, CasaCatalogoUpdateSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
@@ -142,15 +142,20 @@ def _obra_de(cot):
         cotizacion=cot, porcentaje_avance_real=0, fecha_ultima_actualizacion=date.today())
 
 
-def _reconciliar(cot):
-    """Deja el estado y el avance coherentes con los pagos. Devuelve un mensaje de error si el cambio de pagos
-    contradice el avance ya registrado (quien llama debe revertirlo)."""
+def _reconciliar(cot, forzar=False):
+    """Deja el estado y el avance coherentes con los pagos. Si el cambio de pagos contradice el avance ya registrado devuelve
+    un mensaje (quien llama debe revertirlo y pedir confirmación); con `forzar` el avance de la obra baja al máximo que
+    permiten los pagos y los registros de la bitácora se conservan como historial."""
     hitos = list(HitoPago.objects.filter(cotizacion=cot))
     obra = _obra_de(cot)
     minimo, maximo = _limites_avance(hitos)
     avance = obra.porcentaje_avance_real
+    if avance > maximo and not forzar:
+        return (f"Este pago respalda el {int(avance)} % de avance que registra la obra. "
+                f"Si lo anula, el avance de la obra bajará a {int(maximo)} %.")
     if avance > maximo:
-        return f"No se puede cambiar este pago: la obra registra {int(avance)} % de avance y ese avance requiere el pago."
+        obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = maximo, date.today()
+        obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
     if avance < minimo:
         obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = minimo, date.today()
         obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
@@ -878,13 +883,14 @@ def _sincronizar_hito(hito):
     hito.save(update_fields=["monto_abonado", "estado", "fecha_pago"])
 
 
-def _confirmar_cambio_de_pagos(hito):
-    """Sincroniza el hito y el proyecto; si el cambio contradice el avance ya registrado, lo revierte (409)."""
+def _confirmar_cambio_de_pagos(hito, forzar=False):
+    """Sincroniza el hito y el proyecto; si el cambio contradice el avance ya registrado, lo revierte (409 con `confirmar`:
+    el cliente pregunta y repite con `forzar`)."""
     _sincronizar_hito(hito)
-    error = _reconciliar(hito.cotizacion)
+    error = _reconciliar(hito.cotizacion, forzar)
     if error:
         transaction.set_rollback(True)
-        return 409, {"message": error}
+        return 409, {"message": error, "confirmar": True}
     return 200, HitoPago.objects.get(id=hito.id)
 
 
@@ -929,16 +935,32 @@ def registrar_pago(request, hito_id: int, data: RegistroPagoInSchema):
         return _confirmar_cambio_de_pagos(hito)
 
 
-@router.delete("/registros-pago/{registro_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 409: MessageSchema}, auth=AuthBearer())
-def anular_registro_pago(request, registro_id: int):
-    """Corrige un abono mal ingresado: lo elimina del libro y el hito vuelve a calcularse."""
+@router.delete("/registros-pago/{registro_id}/", response={200: HitoPagoSchema, 404: MessageSchema, 409: ConfirmarSchema}, auth=AuthBearer())
+def anular_registro_pago(request, registro_id: int, forzar: bool = False):
+    """Corrige un abono mal ingresado: lo elimina del libro y el hito vuelve a calcularse. Si el pago respalda un avance ya
+    registrado responde 409 con `confirmar`; repetido con `forzar=true` lo anula y baja el avance al que permiten los pagos."""
     reg = DetalleRegistro.objects.select_related("hito__cotizacion").defer("comprobante").filter(id=registro_id).first()
     if not reg:
         return 404, {"message": "Registro de pago no encontrado"}
     hito = reg.hito
     with transaction.atomic():
         reg.delete()
-        return _confirmar_cambio_de_pagos(hito)
+        return _confirmar_cambio_de_pagos(hito, forzar)
+
+
+@router.put("/registros-pago/{registro_id}/comprobante/", response={200: HitoPagoSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+def reemplazar_comprobante(request, registro_id: int, data: ComprobanteInSchema):
+    """Cambia el comprobante de un abono ya registrado (por ejemplo, si se adjuntó el equivocado)."""
+    reg = DetalleRegistro.objects.select_related("hito").defer("comprobante").filter(id=registro_id).first()
+    if not reg:
+        return 404, {"message": "Registro de pago no encontrado"}
+    try:
+        mime, contenido = _leer_comprobante(data.comprobante)
+    except ValueError as e:
+        return 400, {"message": _msj(e)}
+    reg.comprobante, reg.comprobante_mime, reg.comprobante_nombre = contenido, mime, data.comprobante_nombre
+    reg.save(update_fields=["comprobante", "comprobante_mime", "comprobante_nombre"])
+    return 200, HitoPago.objects.get(id=reg.hito_id)
 
 
 @router.get("/registros-pago/{registro_id}/comprobante/", auth=AuthBearer())
@@ -1115,9 +1137,9 @@ def eliminar_bitacora(request, bitacora_id: int):
     with transaction.atomic():
         b.delete()
         restantes = max((x.porcentaje for x in cot.bitacoras.all()), default=Decimal(0))
-        minimo, _ = _limites_avance(list(cot.hitos_pago.all()))
+        minimo, maximo = _limites_avance(list(cot.hitos_pago.all()))
         obra = _obra_de(cot)
-        obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = max(restantes, Decimal(minimo)), date.today()
+        obra.porcentaje_avance_real, obra.fecha_ultima_actualizacion = min(max(restantes, Decimal(minimo)), Decimal(maximo)), date.today()
         obra.save(update_fields=["porcentaje_avance_real", "fecha_ultima_actualizacion"])
     return 200, {"message": "Registro eliminado"}
 

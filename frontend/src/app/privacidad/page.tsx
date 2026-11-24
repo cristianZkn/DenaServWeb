@@ -19,7 +19,7 @@ const SECCIONES = [
     lista: [
       "Datos de contacto que usted nos entrega al pedir una cotización o escribirnos por WhatsApp o correo: nombre, teléfono, dirección del terreno y, cuando se formaliza un proyecto, RUT.",
       "Datos del proyecto: metros cuadrados, materiales, valores, pagos y comprobantes de pago, fotografías del avance de la obra y contrato.",
-      "Navegar por la página pública no requiere entregar datos. No usamos cookies de publicidad. Solo si usted acepta el aviso de cookies, usamos Google Analytics para medir las visitas del sitio (páginas vistas, tipo de dispositivo y origen) de forma agregada; si no acepta, no se carga. Puede cambiar su decisión en «Preferencias de cookies», en el pie de página.",
+      "Navegar por la página pública no requiere entregar datos. No usamos cookies de publicidad. Solo si usted acepta el aviso de cookies, usamos cookies de medición para conocer las visitas del sitio (páginas vistas, tipo de dispositivo y origen) de forma agregada; si no acepta, no se activan. Puede cambiar su decisión en «Preferencias de cookies», en el pie de página.",
       "El personal autorizado de la empresa inicia sesión con su cuenta de Google; se usa una cookie de sesión técnica, necesaria para mantener la sesión y que no se utiliza para otros fines.",
     ],
   },

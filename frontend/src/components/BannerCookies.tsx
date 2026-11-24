@@ -37,7 +37,7 @@ function activarAnalytics() {
   document.head.appendChild(s);
 }
 
-/** Aviso de cookies: Google Analytics solo se activa si la persona acepta. Se puede cambiar la decisión desde el pie de página. */
+/** Aviso de cookies: la medición de visitas solo se activa si la persona acepta. Se puede cambiar la decisión desde el pie de página. */
 export default function BannerCookies() {
   const pathname = usePathname();
   const publica = RUTAS_PUBLICAS.includes(pathname);
@@ -74,8 +74,8 @@ export default function BannerCookies() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <span aria-hidden className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-amber-300"><Icono nombre="cookie" className="h-6 w-6" /></span>
         <p className="text-sm text-blue-100 sm:mr-auto">
-          Usamos cookies técnicas para que el sitio funcione y, <strong className="text-white">solo si usted lo acepta</strong>, Google Analytics para medir las visitas
-          de forma agregada. Más detalles en la <Link href="/privacidad" className="underline hover:text-white">política de privacidad</Link> y los{" "}
+          Usamos cookies técnicas para que el sitio funcione y, <strong className="text-white">solo si usted lo acepta</strong>, cookies de medición para saber cómo se usa
+          y mejorarlo. Más detalles en la <Link href="/privacidad" className="underline hover:text-white">política de privacidad</Link> y los{" "}
           <Link href="/terminos" className="underline hover:text-white">términos y condiciones</Link>.
         </p>
         <div className="flex shrink-0 gap-2">

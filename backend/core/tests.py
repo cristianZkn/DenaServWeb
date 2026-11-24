@@ -1947,3 +1947,52 @@ class UnidadSugeridaTests(TestCase):
                                ("Rollo polietileno 10x1 m", "ROLLO"), ("Esmalte 1 gal" + chr(243) + "n", "GL"), ("Tablero OSB 9 mm", "PLANCHA"),
                                ("Esquinero exterior siding PVC 3 m", "UN"), ("Pino impregnado 2x4 3,2 m", "UN")):
             self.assertEqual(unidad_sugerida(nombre), unidad, nombre)
+
+
+class AnularPagoConAvanceTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        u = Usuario.objects.create(rut="12345678-9", nombre_completo="A", email="a@d.cl", google_id="g1", activo=True)
+        self.h = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(u)}"}
+        self.cot = self.client.post("/api/cotizaciones/", {"cliente_nombre": "Ana", "direccion_terreno": "Calle 1234", "superficie_m2": 40},
+                                    content_type="application/json", **self.h).json()
+        self.hitos = list(HitoPago.objects.filter(cotizacion_id=self.cot["id"]).order_by("id"))
+
+    def pagar(self, hito, comprobante=None):
+        cuerpo = {"monto": int(hito.monto_pago), "metodo": "TRANSFERENCIA"}
+        if comprobante:
+            cuerpo.update(comprobante=comprobante, comprobante_nombre="falso.png")
+        return self.client.post(f"/api/hitos-pago/{hito.id}/registros/", cuerpo, content_type="application/json", **self.h).json()
+
+    def avance(self):
+        return float(self.client.get(f"/api/cotizaciones/{self.cot['id']}/obra/", **self.h).json()["porcentaje_avance_real"])
+
+    def test_anular_un_pago_que_respalda_el_avance_pide_confirmar_y_con_confirmacion_lo_deshace(self):
+        self.pagar(self.hitos[0])
+        segundo = self.pagar(self.hitos[1])
+        self.assertEqual(self.client.post(f"/api/cotizaciones/{self.cot['id']}/bitacora/", {"porcentaje": 50, "comentario": "Mitad de la obra"},
+                                          content_type="application/json", **self.h).status_code, 200)
+        registro = segundo["registros"][0]["id"]
+        r = self.client.delete(f"/api/registros-pago/{registro}/", **self.h)
+        self.assertEqual((r.status_code, r.json()["confirmar"]), (409, True))
+        self.assertIn("bajará a 49 %", r.json()["message"])
+        self.hitos[1].refresh_from_db()
+        self.assertEqual((self.hitos[1].estado, self.avance()), ("PAGADO", 50))            # sin confirmar no cambia nada
+        ok = self.client.delete(f"/api/registros-pago/{registro}/?forzar=true", **self.h)
+        self.assertEqual((ok.status_code, ok.json()["estado"]), (200, "PENDIENTE"))
+        self.assertEqual(self.avance(), 49)                                                 # el avance baja a lo que permiten los pagos
+        self.assertEqual(len(self.client.get(f"/api/cotizaciones/{self.cot['id']}/bitacora/", **self.h).json()), 1)   # el historial se conserva
+
+    def test_se_reemplaza_el_comprobante_de_un_pago(self):
+        import base64
+        png = lambda x: "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n" + x * 20).decode()
+        reg = self.pagar(self.hitos[0], png(b"1"))["registros"][0]
+        r = self.client.put(f"/api/registros-pago/{reg['id']}/comprobante/", {"comprobante": png(b"2"), "comprobante_nombre": "bueno.png"},
+                            content_type="application/json", **self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["registros"][0]["comprobante_nombre"], "bueno.png")
+        self.assertTrue(self.client.get(f"/api/registros-pago/{reg['id']}/comprobante/", **self.h).content.endswith(b"2" * 20))
+        self.assertEqual(self.client.put(f"/api/registros-pago/{reg['id']}/comprobante/", {"comprobante": "data:text/plain;base64,AAAA"},
+                                         content_type="application/json", **self.h).status_code, 400)
+        self.assertEqual(self.client.put("/api/registros-pago/999999/comprobante/", {"comprobante": png(b"3")}, content_type="application/json", **self.h).status_code, 404)

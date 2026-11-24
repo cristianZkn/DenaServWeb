@@ -309,6 +309,17 @@ class HitoPagoUpdateSchema(Schema):
     metodo: Optional[str] = None
 
 
+class ConfirmarSchema(Schema):
+    """409 que pide confirmación: el cliente muestra `message`, pregunta y repite la petición con `forzar`."""
+    message: str
+    confirmar: bool = True
+
+
+class ComprobanteInSchema(Schema):
+    comprobante: str  # data URL (imagen o PDF)
+    comprobante_nombre: str = Field("", max_length=150)
+
+
 class RegistroPagoInSchema(Schema):
     monto: float = Field(gt=0, le=10_000_000_000)  # lo pagado en este abono (no el total ni lo que falta)
     metodo: str

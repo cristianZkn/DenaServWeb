@@ -129,10 +129,30 @@ export default function PagoModal({
   };
 
   const anular = async (r: RegistroPago) => {
-    if (!(await preguntar({ titulo: "¿Anular este pago?", mensaje: `Se quitará el pago de ${clp(r.monto)} (${r.metodo_etiqueta}) y el saldo del hito se recalculará.`, peligro: true, textoConfirmar: "Anular" }))) return;
-    const res = await fetch(`/api/registros-pago/${r.id}/`, { method: "DELETE" });
-    const data = await res.json().catch(() => ({}));
+    if (!(await preguntar({ titulo: "¿Seguro que desea anular este pago?", mensaje: `Se quitará el pago de ${clp(r.monto)} (${r.metodo_etiqueta}) y el saldo del hito se recalculará.`, peligro: true, textoConfirmar: "Anular" }))) return;
+    let res = await fetch(`/api/registros-pago/${r.id}/`, { method: "DELETE" });
+    let data = await res.json().catch(() => ({}));
+    // El pago respalda un avance ya registrado: se explica qué pasará y, si la persona confirma, se anula igual y el avance baja.
+    if (res.status === 409 && data.confirmar) {
+      const ok = await preguntar({ titulo: "¿Seguro que desea anular este hito?", mensaje: `${data.message} Los registros de la bitácora se conservan como historial.`, peligro: true, textoConfirmar: "Anular hito" });
+      if (!ok) return;
+      res = await fetch(`/api/registros-pago/${r.id}/?forzar=true`, { method: "DELETE" });
+      data = await res.json().catch(() => ({}));
+    }
     if (!res.ok) return setError(data.message || "No se pudo anular el pago.");
+    setError("");
+    setActual(data);
+    onSaved(data);
+  };
+
+  // Cambia el comprobante de un abono ya registrado (por ejemplo, si se adjuntó el equivocado).
+  const reemplazarComprobante = async (r: RegistroPago, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_COMPROBANTE) return setError("El comprobante puede pesar hasta 2,5 MB.");
+    const comprobante = await new Promise<string>((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(file); });
+    const res = await fetch(`/api/registros-pago/${r.id}/comprobante/`, { method: "PUT", headers: JSON_HDR, body: JSON.stringify({ comprobante, comprobante_nombre: file.name }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setError(data.message || "No se pudo cambiar el comprobante.");
     setError("");
     setActual(data);
     onSaved(data);
@@ -186,6 +206,10 @@ export default function PagoModal({
                     ) : (
                       <span className="text-slate-400 font-normal">Sin comprobante</span>
                     )}
+                    <label className="!min-h-0 text-blue-800 hover:underline cursor-pointer">
+                      {r.tiene_comprobante ? "Reemplazar comprobante" : "Adjuntar comprobante"}
+                      <input type="file" accept="image/*,application/pdf" className="sr-only" onChange={(e) => { reemplazarComprobante(r, e.target.files?.[0]); e.target.value = ""; }} />
+                    </label>
                     <button type="button" onClick={() => anular(r)} className="!min-h-0 text-red-700 hover:underline cursor-pointer">Anular</button>
                   </div>
                 </li>

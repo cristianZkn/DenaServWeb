@@ -58,7 +58,7 @@ const SECCIONES = [
   {
     titulo: "8. Datos personales y cookies",
     texto: [
-      "El tratamiento de sus datos se rige por nuestra política de privacidad. El sitio usa cookies técnicas y, solo con su consentimiento, Google Analytics para medir visitas. Puede cambiar su decisión en cualquier momento desde «Preferencias de cookies» en el pie de página.",
+      "El tratamiento de sus datos se rige por nuestra política de privacidad. El sitio usa cookies técnicas y, solo con su consentimiento, cookies de medición de visitas. Puede cambiar su decisión en cualquier momento desde «Preferencias de cookies» en el pie de página.",
     ],
   },
   {
