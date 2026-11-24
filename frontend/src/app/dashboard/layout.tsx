@@ -4,6 +4,7 @@ import Icono from "@/components/Icono";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { RolContext, type Rol } from "@/lib/rol";
 
 const ico = (d: string) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -18,7 +19,8 @@ const NAV = [
   { href: "/dashboard/proveedores", label: "Proveedores", icono: ico("M3 21V8l6-4 6 4v13M15 21V12h6v9M7 12h2M7 16h2") },
   { href: "/dashboard/portafolio", label: "Portafolio", icono: ico("M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 16l5-5 4 4 3-3 6 6M9 9.5h.01") },
   { href: "/dashboard/tarifas", label: "Tarifas", icono: ico("M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6") },
-  { href: "/dashboard/usuarios", label: "Usuarios", icono: ico("M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8") },
+  { href: "/dashboard/usuarios", label: "Usuarios", soloAdmin: true, icono: ico("M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8") },
+  { href: "/dashboard/auditoria", label: "Auditoría", soloAdmin: true, icono: ico("M7 3h8l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 12h6M9 16h6") },
 ];
 
 export default function DashboardLayout({
@@ -30,6 +32,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string>("");
   const [autorizado, setAutorizado] = useState(false);
+  const [rol, setRol] = useState<Rol>("OPERADOR");
   const [abierto, setAbierto] = useState(false); // menú lateral en pantallas angostas
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export default function DashboardLayout({
       .then((u) => {
         if (!activo) return;
         setUserEmail(u.email || u.nombre_completo || "");
+        setRol(u.rol === "ADMIN" ? "ADMIN" : "OPERADOR");
         setAutorizado(true);
       })
       .catch(() => router.replace("/login"));
@@ -69,10 +73,13 @@ export default function DashboardLayout({
     router.push("/"); // al cerrar sesión se vuelve al portafolio público
   };
 
+  const menu = NAV.filter((n) => !n.soloAdmin || rol === "ADMIN");
+  const sinPermiso = rol !== "ADMIN" && NAV.some((n) => n.soloAdmin && pathname.startsWith(n.href));
   if (!autorizado) return null;
+  if (sinPermiso) { router.replace("/dashboard"); return null; }
 
   const colapsado = manual ?? pathname.startsWith("/dashboard/cotizador");
-  const seccion = NAV.find((n) => (n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href)));
+  const seccion = menu.find((n) => (n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href)));
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
@@ -97,7 +104,7 @@ export default function DashboardLayout({
         </div>
 
         <nav aria-label="Secciones del panel" className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {NAV.map((n) => {
+          {menu.map((n) => {
             const activo = n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href);
             return (
               <Link
@@ -120,7 +127,8 @@ export default function DashboardLayout({
         <div className={`p-4 border-t border-white/10 space-y-3 ${colapsado ? "lg:px-2" : ""}`}>
           <div className={colapsado ? "lg:hidden space-y-3" : "space-y-3"}>
             <Link href="/" target="_blank" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Ver sitio público<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></Link>
-            {userEmail && <p className="text-xs text-blue-200/70 truncate" title={userEmail}>{userEmail}</p>}
+            {rol === "ADMIN" && <a href="/api/docs" target="_blank" rel="noreferrer" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Documentación de la API<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></a>}
+            {userEmail && <p className="text-xs text-blue-200/70 truncate" title={userEmail}>{userEmail} · {rol === "ADMIN" ? "Admin" : "Operador"}</p>}
           </div>
           <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
             className="w-full !min-h-0 border border-white/25 hover:bg-white/10 text-white text-sm py-2 rounded-lg font-semibold transition cursor-pointer flex items-center justify-center gap-2">
@@ -136,7 +144,7 @@ export default function DashboardLayout({
       {/* Contenido: los bloques de cada sección aparecen con un breve escalonado (ver .panel-anim en globals.css) */}
       <main className={`${colapsado ? "lg:pl-[4.5rem]" : "lg:pl-64"} transition-[padding] duration-300`}>
         <div key={pathname} className="panel-anim w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {children}
+          <RolContext.Provider value={rol}>{children}</RolContext.Provider>
         </div>
       </main>
     </div>

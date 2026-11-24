@@ -15,10 +15,11 @@ interface Usuario {
   nombre_completo: string;
   email: string;
   activo: boolean;
+  rol: "ADMIN" | "OPERADOR";
 }
 
 const JSON_HDR = { "Content-Type": "application/json" };
-const VACIO = { id: 0, rut: "", nombre_completo: "", email: "", activo: true };
+const VACIO = { id: 0, rut: "", nombre_completo: "", email: "", activo: true, rol: "OPERADOR" as Usuario["rol"] };
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -70,7 +71,7 @@ export default function UsuariosPage() {
       const res = await fetch(editando ? `/api/usuarios/${form.id}` : "/api/usuarios/", {
         method: editando ? "PUT" : "POST",
         headers: JSON_HDR,
-        body: JSON.stringify({ rut: form.rut, nombre_completo: form.nombre_completo.trim(), email: form.email.trim(), activo: form.activo }),
+        body: JSON.stringify({ rut: form.rut, nombre_completo: form.nombre_completo.trim(), email: form.email.trim(), activo: form.activo, rol: form.rol }),
       });
       if (res.ok) {
         exito.mostrar(editando ? "Usuario actualizado correctamente." : "Usuario registrado correctamente.");
@@ -128,6 +129,13 @@ export default function UsuariosPage() {
                 onChange={(e) => set("email", "us-email", e.target.value)} />
               <ErrorCampo id="us-email" texto={errores["us-email"]} />
             </div>
+            <div>
+              <label className={lbl} htmlFor="us-rol">Rol</label>
+              <select id="us-rol" value={form.rol} onChange={(e) => set("rol", "us-rol", e.target.value)}>
+                <option value="OPERADOR">Operador: cotiza y registra pagos; no gestiona usuarios ni proveedores</option>
+                <option value="ADMIN">Admin: acceso completo</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
               <input type="checkbox" className="!w-4 !min-h-0" checked={form.activo} onChange={(e) => set("activo", "us-activo", e.target.checked)} />
               Acceso activo
@@ -148,13 +156,14 @@ export default function UsuariosPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-sm font-semibold text-slate-600">
                 <th className="px-4 py-3">Usuario</th>
+                <th className="px-4 py-3">Rol</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={3} className="p-8 text-center text-slate-500">Cargando usuarios...</td></tr>
+                <tr><td colSpan={4} className="p-8 text-center text-slate-500">Cargando usuarios...</td></tr>
               ) : usuarios.map((u) => (
                 <tr key={u.id} className={`hover:bg-slate-50 ${u.activo ? "" : "opacity-70"}`}>
                   <td className="px-4 py-3">
@@ -162,6 +171,7 @@ export default function UsuariosPage() {
                     <div className="text-sm text-slate-500 break-all">{u.email}</div>
                     <div className="text-sm font-mono text-slate-400">{u.rut}</div>
                   </td>
+                  <td className="px-4 py-3"><Insignia tono={u.rol === "ADMIN" ? "azul" : "gris"}>{u.rol === "ADMIN" ? "Admin" : "Operador"}</Insignia></td>
                   <td className="px-4 py-3"><Insignia tono={u.activo ? "verde" : "gris"}>{u.activo ? "Con acceso" : "Sin acceso"}</Insignia></td>
                   <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
                     <button onClick={() => { setForm(u); setEditando(true); fallar({}); window.scrollTo({ top: 0, behavior: "smooth" }); }}

@@ -64,6 +64,18 @@ class UsuarioSchema(Schema):
     email: str
     google_id: Optional[str] = None
     activo: bool
+    rol: str = "ADMIN"
+
+
+class AuditoriaSchema(Schema):
+    id: int
+    usuario_nombre: str
+    accion: str
+    entidad: str
+    entidad_id: int
+    detalle: str
+    fecha: datetime
+
 
 # --- 1b. Usuarios autorizados (administración) ---
 class UsuarioInSchema(Schema):
@@ -71,6 +83,14 @@ class UsuarioInSchema(Schema):
     nombre_completo: str
     email: str
     activo: bool = True
+    rol: str = "OPERADOR"
+
+    @field_validator("rol")
+    @classmethod
+    def _rol(cls, x):
+        if x not in ("ADMIN", "OPERADOR"):
+            raise ValueError("El rol debe ser Admin u Operador.")
+        return x
 
     @field_validator("rut")
     @classmethod

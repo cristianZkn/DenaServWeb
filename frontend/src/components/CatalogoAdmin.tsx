@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useDialogo } from "@/components/ConfirmDialog";
 import SelectorFotos from "@/components/SelectorFotos";
 import { MODELOS } from "@/lib/catalogo";
+import { useEsAdmin } from "@/lib/rol";
 
 const JSON_HDR = { "Content-Type": "application/json" };
 const MAX_FOTOS = 10;
@@ -27,6 +28,7 @@ export interface CasaAdmin {
 
 /** Catálogo de casas prediseñadas de la página pública: lista, alta, edición, ocultar y eliminar. */
 export default function CatalogoAdmin({ onCantidad, onAviso, onError }: { onCantidad: (n: number) => void; onAviso: (m: string) => void; onError: (m: string) => void }) {
+  const admin = useEsAdmin();
   const [casas, setCasas] = useState<CasaAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState<CasaAdmin | "nueva" | null>(null);
@@ -72,9 +74,9 @@ export default function CatalogoAdmin({ onCantidad, onAviso, onError }: { onCant
             ? "Mientras no agregue casas aquí, la página pública muestra modelos de ejemplo. Agregue las casas prediseñadas reales de la empresa para reemplazarlos."
             : "Estas casas son las que se muestran en la sección «Catálogo» de la página pública, en el orden indicado."}
         </p>
-        <button onClick={() => setEditando("nueva")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer whitespace-nowrap">
+        {admin && <button onClick={() => setEditando("nueva")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer whitespace-nowrap">
           + Agregar casa al catálogo
-        </button>
+        </button>}
       </div>
 
       {cargando ? (
@@ -112,9 +114,9 @@ export default function CatalogoAdmin({ onCantidad, onAviso, onError }: { onCant
                   {c.publicado ? "Visible en la web" : "Oculta"}
                 </span>
                 <div className="mt-auto pt-3 flex flex-wrap gap-2">
-                  <button onClick={() => setEditando(c)} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>
+                  {admin && <button onClick={() => setEditando(c)} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>}
                   <button onClick={() => alternar(c)} className="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold hover:bg-slate-50 cursor-pointer">{c.publicado ? "Ocultar" : "Publicar"}</button>
-                  <button onClick={() => eliminar(c)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>
+                  {admin && <button onClick={() => eliminar(c)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>}
                 </div>
               </div>
             </article>

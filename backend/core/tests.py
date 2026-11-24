@@ -1,7 +1,7 @@
 from django.test import TestCase, Client, override_settings
 from decimal import Decimal
 from .api import create_jwt_token
-from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion
+from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion, PortafolioProyecto, RegistroAuditoria
 
 
 class DenaServMigrationTests(TestCase):
@@ -1425,10 +1425,8 @@ class SeguridadTests(TestCase):
             self.assertEqual(self.client.get("/api/auth/me", HTTP_AUTHORIZATION=f"Bearer {token}").status_code, 401)
         self.assertEqual(self.client.get("/api/auth/me", **self.h).status_code, 200)
 
-    def test_la_documentacion_de_la_api_no_se_publica_en_produccion(self):
-        from django.conf import settings
-        if not settings.DEBUG:
-            self.assertEqual(self.client.get("/api/openapi.json").status_code, 404)
+    def test_la_documentacion_de_la_api_exige_sesion(self):
+        self.assertEqual(self.client.get("/api/openapi.json").status_code, 401)
 
     def test_los_datos_se_pasan_como_parametros_no_como_sql(self):
         r = self.client.get("/api/catalogo-tipos/?categoria=' OR '1'='1&activo=true", **self.h)
@@ -2008,3 +2006,66 @@ class AnularPagoConAvanceTests(TestCase):
         self.assertEqual(self.client.put(f"/api/registros-pago/{reg['id']}/comprobante/", {"comprobante": "data:text/plain;base64,AAAA"},
                                          content_type="application/json", **self.h).status_code, 400)
         self.assertEqual(self.client.put("/api/registros-pago/999999/comprobante/", {"comprobante": png(b"3")}, content_type="application/json", **self.h).status_code, 404)
+
+
+class RolesYAuditoriaTests(TestCase):
+    def setUp(self):
+        self.admin = Usuario.objects.create(rut="11111111-1", nombre_completo="Ana Admin", email="admin@d.cl", rol="ADMIN")
+        self.oper = Usuario.objects.create(rut="22222222-2", nombre_completo="Omar Operador", email="oper@d.cl", rol="OPERADOR")
+        self.ha = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.admin)}"}
+        self.ho = {"HTTP_AUTHORIZATION": f"Bearer {create_jwt_token(self.oper)}"}
+        self.c = Client()
+
+    def enviar(self, metodo, ruta, cuerpo=None, h=None):
+        return getattr(self.c, metodo)(ruta, cuerpo, content_type="application/json", **(h or self.ho)) if cuerpo is not None \
+            else getattr(self.c, metodo)(ruta, **(h or self.ho))
+
+    def test_operador_no_gestiona_usuarios_ni_proveedores(self):
+        datos = {"rut": "12345678-5", "nombre_completo": "Nuevo Usuario", "email": "n@d.cl"}
+        for metodo, ruta, cuerpo in [("get", "/api/usuarios/", None), ("post", "/api/usuarios/", datos),
+                                     ("delete", f"/api/usuarios/{self.admin.id}", None),
+                                     ("post", "/api/proveedores/", {"rut_empresa": "76.086.428-5", "razon_social": "Prov"}),
+                                     ("delete", "/api/proveedores/1", None), ("post", "/api/catalogo-tipos/", {"nombre": "x"}),
+                                     ("put", "/api/catalogo-tipos/1", {"nombre": "x"}), ("delete", "/api/portafolio/1/", None)]:
+            r = self.enviar(metodo, ruta, cuerpo)
+            self.assertEqual(r.status_code, 403, ruta)
+            self.assertIn("Operador", r.json()["message"])
+
+    def test_operador_ve_proveedores_y_materiales_y_actualiza_precios(self):
+        self.assertEqual(self.enviar("get", "/api/proveedores/").status_code, 200)
+        self.assertEqual(self.enviar("get", "/api/insumos/").status_code, 200)
+
+    def test_admin_si_gestiona_usuarios(self):
+        r = self.enviar("post", "/api/usuarios/", {"rut": "12345678-5", "nombre_completo": "Nuevo Usuario", "email": "n@d.cl"}, self.ha)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["rol"], "OPERADOR")  # sin indicar rol, el nuevo usuario es Operador
+
+    def test_rol_invalido_y_no_quitarse_admin(self):
+        base = {"rut": "11111111-1", "nombre_completo": "Ana Admin", "email": "admin@d.cl"}
+        self.assertEqual(self.enviar("put", f"/api/usuarios/{self.admin.id}", {**base, "rol": "JEFE"}, self.ha).status_code, 422)
+        r = self.enviar("put", f"/api/usuarios/{self.admin.id}", {**base, "rol": "OPERADOR"}, self.ha)
+        self.assertEqual(r.status_code, 400)
+
+    def test_operador_solo_oculta_proyectos_del_portafolio(self):
+        p = PortafolioProyecto.objects.create(titulo="Casa Uno", descripcion="d", ubicacion_comuna="Los Ángeles", publicado=True)
+        r = self.enviar("patch", f"/api/portafolio/{p.id}/", {"titulo": "Otro título"})
+        self.assertEqual(r.status_code, 403)
+        r = self.enviar("patch", f"/api/portafolio/{p.id}/", {"publicado": False})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(PortafolioProyecto.objects.get(id=p.id).publicado)
+
+    def test_auditoria_registra_quien_hizo_cada_cambio(self):
+        self.enviar("post", "/api/proveedores/", {"rut_empresa": "76.086.428-5", "razon_social": "Proveedor Uno"}, self.ha)
+        reg = RegistroAuditoria.objects.get(entidad="Proveedor", accion="CREAR")
+        self.assertEqual((reg.usuario_id, reg.usuario_nombre), (self.admin.id, "Ana Admin"))
+        Proveedor.objects.get().delete()                                        # fuera de una petición: no se registra
+        self.assertFalse(RegistroAuditoria.objects.filter(accion="ELIMINAR").exists())
+
+    def test_auditoria_solo_para_admin(self):
+        self.assertEqual(self.enviar("get", "/api/auditoria/").status_code, 403)
+        self.assertEqual(self.enviar("get", "/api/auditoria/?entidad=Proveedor", h=self.ha).status_code, 200)
+
+    def test_swagger_solo_para_admin(self):
+        self.assertEqual(self.c.get("/api/docs").status_code, 401)
+        self.assertEqual(self.c.get("/api/openapi.json", **self.ho).status_code, 403)
+        self.assertEqual(self.c.get("/api/openapi.json", **self.ha).status_code, 200)

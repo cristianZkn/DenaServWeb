@@ -6,17 +6,40 @@ from django.contrib import admin
 from django.urls import path
 # pyrefly: ignore [missing-import]
 from django.conf import settings
+from functools import wraps
+
+from django.http import HttpResponse
 from ninja import NinjaAPI
 from ninja.errors import ValidationError
 from ninja.throttling import AuthRateThrottle
 
+from core.api import AuthBearer, PermisoDenegado
 from core.limites import IpRateThrottle
 
 ######### entrada de la API #########
 
 # En producción no se publica la documentación de la API (ni openapi.json): solo en desarrollo.
 # Límites por minuto: por IP del visitante y por usuario autenticado (el inicio de sesión tiene uno más estricto).
-api = NinjaAPI(title="DenaServ API", throttle=[IpRateThrottle("600/m"), AuthRateThrottle("600/m")], docs_url="/docs" if settings.DEBUG else None, openapi_url="/openapi.json" if settings.DEBUG else None)
+def _solo_admin(vista):
+    """La documentación (Swagger) solo la ve un Admin con sesión iniciada: se entra desde el sitio, que pone el token de la cookie."""
+    @wraps(vista)
+    def protegida(request, *args, **kwargs):
+        usuario = AuthBearer()(request)
+        if usuario is None:
+            return HttpResponse("Inicie sesión como Admin para ver la documentación.", status=401)
+        if usuario.rol != "ADMIN":
+            return HttpResponse("La documentación es solo para el rol Admin.", status=403)
+        return vista(request, *args, **kwargs)
+    return protegida
+
+
+api = NinjaAPI(title="DenaServ API", throttle=[IpRateThrottle("600/m"), AuthRateThrottle("600/m")],
+               docs_url="/docs", openapi_url="/openapi.json", docs_decorator=_solo_admin)
+
+
+@api.exception_handler(PermisoDenegado)
+def permiso_denegado(request, exc):
+    return api.create_response(request, {"message": str(exc)}, status=403)
 
 
 @api.exception_handler(ValidationError)

@@ -2,6 +2,7 @@
 
 import { useDialogo } from "@/components/ConfirmDialog";
 import { urlSegura } from "@/lib/url";
+import { useEsAdmin } from "@/lib/rol";
 import { CATEGORIAS } from "@/lib/categorias";
 import Paginador from "@/components/Paginador";
 import EncabezadoPagina from "@/components/EncabezadoPagina";
@@ -72,6 +73,7 @@ function antiguedad(iso: string | null) {
 }
 
 export default function CatalogosPage() {
+  const admin = useEsAdmin(); // el Operador consulta y sincroniza precios, pero no edita materiales
   const [items, setItems] = useState<Insumo[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -169,9 +171,9 @@ export default function CatalogosPage() {
             className="border-2 border-blue-900 text-blue-900 hover:bg-blue-50 font-semibold px-4 h-11 rounded-lg transition disabled:opacity-60 cursor-pointer">
             {sincronizando ? "Leyendo precios…" : "Sincronizar precios ahora"}
           </button>
-          <button onClick={() => setModal("nuevo")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 h-11 rounded-lg shadow-sm transition cursor-pointer">
+          {admin && <button onClick={() => setModal("nuevo")} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-4 h-11 rounded-lg shadow-sm transition cursor-pointer">
             + Agregar material
-          </button>
+          </button>}
         </>} />
 
       {error && <div role="alert" className="bg-red-50 border-l-4 border-red-500 text-red-800 p-3 rounded-r-md">{error}</div>}
@@ -247,7 +249,7 @@ export default function CatalogosPage() {
                 <th className="px-4 py-3 text-right">Desc.</th>
                 <th className="px-4 py-3 text-right">Costo neto</th>
                 <th className="px-4 py-3">Actualizado</th>
-                <th className="px-4 py-3" />
+                {admin && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
@@ -296,11 +298,11 @@ export default function CatalogosPage() {
                             {i.url ? a.texto : "Manual"}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        {admin && <td className="px-4 py-2.5 text-right">
                           <button onClick={() => setModal(i)} className="!min-h-0 text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
                             Editar
                           </button>
-                        </td>
+                        </td>}
                       </tr>
                     </Fragment>
                   );

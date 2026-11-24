@@ -3,6 +3,7 @@
 import Icono from "@/components/Icono";
 import { useDialogo } from "@/components/ConfirmDialog";
 import CatalogoAdmin from "@/components/CatalogoAdmin";
+import { useEsAdmin } from "@/lib/rol";
 import SelectorFotos from "@/components/SelectorFotos";
 import { ETIQUETAS } from "@/lib/empresa";
 
@@ -25,6 +26,7 @@ type Pestana = "obras" | "catalogo";
 
 export default function PortafolioAdminPage() {
   const [pestana, setPestana] = useState<Pestana>("obras");
+  const admin = useEsAdmin(); // el Operador solo oculta o publica
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [nCasas, setNCasas] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -121,9 +123,9 @@ export default function PortafolioAdminPage() {
         <div className="space-y-4 animate-entrar">
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 p-4">
             <p className="mr-auto text-blue-900">Obras finalizadas que se exhiben en la sección «Obras» de la página pública.</p>
-            <button onClick={() => { setAviso(""); setError(""); setEditando("nuevo"); }} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer whitespace-nowrap">
+            {admin && <button onClick={() => { setAviso(""); setError(""); setEditando("nuevo"); }} className="bg-blue-900 hover:bg-blue-800 text-white font-semibold px-5 h-11 rounded-lg shadow-sm cursor-pointer whitespace-nowrap">
               + Agregar obra terminada
-            </button>
+            </button>}
           </div>
 
           {cargando ? (
@@ -155,11 +157,11 @@ export default function PortafolioAdminPage() {
                       {p.publicado ? "Visible en la web" : "Oculto"}
                     </span>
                     <div className="mt-auto pt-3 flex flex-wrap gap-2">
-                      <button onClick={() => { setAviso(""); setError(""); setEditando(p); }} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>
+                      {admin && <button onClick={() => { setAviso(""); setError(""); setEditando(p); }} className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-800 font-semibold hover:bg-blue-50 cursor-pointer">Editar</button>}
                       <button onClick={() => alternarPublicado(p)} className="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold hover:bg-slate-50 cursor-pointer">
                         {p.publicado ? "Ocultar de la web" : "Publicar en la web"}
                       </button>
-                      <button onClick={() => eliminar(p)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>
+                      {admin && <button onClick={() => eliminar(p)} className="px-3 py-1.5 rounded-lg text-red-700 font-semibold hover:bg-red-50 cursor-pointer">Eliminar</button>}
                     </div>
                   </div>
                 </article>

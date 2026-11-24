@@ -21,7 +21,7 @@ from ninja.security import APIKeyHeader, HttpBearer
 from .models import (
     Usuario, Proveedor, CatalogoTipo, Cotizacion,
     DetalleCotizacionInsumo, HitoPago, ObraEjecucion, PortafolioProyecto, PortafolioImagen, CasaCatalogo, CasaCatalogoImagen, CambioCotizacion, ManoObraLinea,
-    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO, TrasladoCotizacion
+    BitacoraAvance, BitacoraFoto, ContratoNotarial, Tarifa, DetalleRegistro, METODOS_PAGO, TrasladoCotizacion, RegistroAuditoria
 )
 from .schemas import (
     GoogleAuthInSchema, TokenSchema, MessageSchema, UsuarioSchema, UsuarioInSchema, ContratoInSchema, TarifaSchema, TarifaInSchema,
@@ -31,11 +31,11 @@ from .schemas import (
     DetalleCotizacionInsumoSchema, DetalleCotizacionInsumoInSchema,
     HitoPagoSchema, HitoPagoUpdateSchema, RegistroPagoInSchema, ConfirmarSchema, ComprobanteInSchema,
     ObraEjecucionSchema, ObraEjecucionInSchema,
-    MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, CasaCatalogoSchema, CasaCatalogoInSchema, CasaCatalogoUpdateSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
+    MaterialAdicionalInSchema, ManoObraInSchema, PortafolioProyectoSchema, PortafolioProyectoInSchema, PortafolioProyectoUpdateSchema, ProgresoObraSchema, AuditoriaSchema, CasaCatalogoSchema, CasaCatalogoInSchema, CasaCatalogoUpdateSchema, CalculoInSchema, GananciasSchema, NivelacionInSchema,
     CotizacionPublicaSchema, CotizacionEditSchema, TrasladoInSchema, CambioCotizacionSchema,
     BitacoraInSchema, BitacoraFotosInSchema, BitacoraSchema, EstadisticasSchema
 )
-from . import calculo, combustibles, precios, resumen, scraper
+from . import auditoria, calculo, combustibles, precios, resumen, scraper
 from .limites import AuthRutaThrottle, IpRateThrottle
 
 
@@ -193,10 +193,24 @@ class AuthBearer(HttpBearer):
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"require": ["exp", "user_id"]})
             user = Usuario.objects.filter(id=payload.get("user_id"), activo=True).first()
-            return user
         except Exception as e:  # token vencido/inválido o fallo de BD: se rechaza, pero queda el motivo en el log
             logger.warning("Auth rechazada (%s): %s", type(e).__name__, e)
             return None
+        auditoria.fijar_usuario(user)  # los cambios de esta petición quedan a nombre de este usuario
+        return user
+
+
+class PermisoDenegado(Exception):
+    """El usuario está autenticado pero su rol no permite la acción (se responde 403)."""
+
+
+class AuthAdmin(AuthBearer):
+    """Igual que AuthBearer, pero solo deja pasar al rol Admin."""
+    def authenticate(self, request, token):
+        user = super().authenticate(request, token)
+        if user and user.rol != "ADMIN":
+            raise PermisoDenegado("Su rol (Operador) no permite esta acción.")
+        return user
 
 
 class CronToken(APIKeyHeader):
@@ -268,7 +282,7 @@ def current_user(request):
 # ==============================================================================
 # 1b. USUARIOS AUTORIZADOS (correos que pueden ingresar al panel)
 # ==============================================================================
-@router.get("/usuarios/", response=List[UsuarioSchema], auth=AuthBearer())
+@router.get("/usuarios/", response=List[UsuarioSchema], auth=AuthAdmin())
 def listar_usuarios(request):
     return Usuario.objects.all().order_by("nombre_completo")
 
@@ -282,7 +296,7 @@ def _usuario_duplicado(data, excluir_id=None):
     return None
 
 
-@router.post("/usuarios/", response={200: UsuarioSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/usuarios/", response={200: UsuarioSchema, 400: MessageSchema}, auth=AuthAdmin())
 def crear_usuario(request, data: UsuarioInSchema):
     error = _usuario_duplicado(data)
     if error:
@@ -290,7 +304,7 @@ def crear_usuario(request, data: UsuarioInSchema):
     return 200, Usuario.objects.create(**data.dict())
 
 
-@router.put("/usuarios/{usuario_id}", response={200: UsuarioSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+@router.put("/usuarios/{usuario_id}", response={200: UsuarioSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthAdmin())
 def actualizar_usuario(request, usuario_id: int, data: UsuarioInSchema):
     usuario = Usuario.objects.filter(id=usuario_id).first()
     if not usuario:
@@ -300,13 +314,15 @@ def actualizar_usuario(request, usuario_id: int, data: UsuarioInSchema):
         return 400, {"message": error}
     if usuario.id == request.auth.id and not data.activo:
         return 400, {"message": "No puedes desactivar tu propio acceso."}
+    if usuario.id == request.auth.id and data.rol != "ADMIN":
+        return 400, {"message": "No puedes quitarte tu propio rol de Admin."}
     for attr, value in data.dict().items():
         setattr(usuario, attr, value)
     usuario.save()
     return 200, usuario
 
 
-@router.delete("/usuarios/{usuario_id}", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+@router.delete("/usuarios/{usuario_id}", response={200: MessageSchema, 400: MessageSchema, 404: MessageSchema}, auth=AuthAdmin())
 def eliminar_usuario(request, usuario_id: int):
     usuario = Usuario.objects.filter(id=usuario_id).first()
     if not usuario:
@@ -318,6 +334,20 @@ def eliminar_usuario(request, usuario_id: int):
     except Exception:  # tiene cotizaciones u otros registros asociados (FK protegida)
         return 400, {"message": "Tiene registros asociados: desactívalo en lugar de eliminarlo."}
     return 200, {"message": "Usuario eliminado"}
+
+
+@router.get("/auditoria/", response=List[AuditoriaSchema], auth=AuthAdmin())
+def listar_auditoria(request, entidad: Optional[str] = None, usuario_id: Optional[int] = None, accion: Optional[str] = None,
+                     limite: int = 100, desde: int = 0):
+    """Historial de cambios (quién, qué y cuándo), del más reciente al más antiguo, con filtros y paginación simple."""
+    qs = RegistroAuditoria.objects.all()
+    if entidad:
+        qs = qs.filter(entidad=entidad)
+    if usuario_id:
+        qs = qs.filter(usuario_id=usuario_id)
+    if accion:
+        qs = qs.filter(accion=accion)
+    return qs[max(0, desde):max(0, desde) + min(max(1, limite), 500)]
 
 
 # ==============================================================================
@@ -410,7 +440,7 @@ def listar_proveedores(request):
     return Proveedor.objects.all().order_by("razon_social")
 
 
-@router.post("/proveedores/", response={200: ProveedorSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/proveedores/", response={200: ProveedorSchema, 400: MessageSchema}, auth=AuthAdmin())
 def crear_proveedor(request, data: ProveedorInSchema):
     if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exists():
         return 400, {"message": "Ya existe un proveedor con ese RUT."}
@@ -421,7 +451,7 @@ def crear_proveedor(request, data: ProveedorInSchema):
         return 400, {"message": _msj(e)}
 
 
-@router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.put("/proveedores/{proveedor_id}", response={200: ProveedorSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthAdmin())
 def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
     if Proveedor.objects.filter(rut_empresa=data.rut_empresa).exclude(id=proveedor_id).exists():
         return 400, {"message": "Ya existe otro proveedor con ese RUT."}
@@ -437,7 +467,7 @@ def actualizar_proveedor(request, proveedor_id: int, data: ProveedorInSchema):
         return 400, {"message": _msj(e)}
 
 
-@router.delete("/proveedores/{proveedor_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.delete("/proveedores/{proveedor_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthAdmin())
 def eliminar_proveedor(request, proveedor_id: int):
     try:
         proveedor = Proveedor.objects.get(id=proveedor_id)
@@ -511,7 +541,7 @@ def listar_categorias_disponibles(request):
     return list(categorias)
 
 
-@router.post("/catalogo-tipos/", response={200: CatalogoTipoSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/catalogo-tipos/", response={200: CatalogoTipoSchema, 400: MessageSchema}, auth=AuthAdmin())
 def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
     try:
         item = CatalogoTipo(**data.dict())
@@ -525,7 +555,7 @@ def crear_catalogo_tipo(request, data: CatalogoTipoInSchema):
         return 400, {"message": _msj(e)}
 
 
-@router.put("/catalogo-tipos/{catalogo_id}", response={200: CatalogoTipoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.put("/catalogo-tipos/{catalogo_id}", response={200: CatalogoTipoSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthAdmin())
 def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSchema):
     try:
         item = CatalogoTipo.objects.get(id=catalogo_id)
@@ -546,7 +576,7 @@ def actualizar_catalogo_tipo(request, catalogo_id: int, data: CatalogoTipoInSche
         return 400, {"message": _msj(e)}
 
 
-@router.delete("/catalogo-tipos/{catalogo_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.delete("/catalogo-tipos/{catalogo_id}", response={200: MessageSchema, 404: MessageSchema, 400: MessageSchema}, auth=AuthAdmin())
 def eliminar_catalogo_tipo(request, catalogo_id: int):
     try:
         catalogo = CatalogoTipo.objects.get(id=catalogo_id)
@@ -1311,7 +1341,7 @@ def servir_imagen_portafolio(request, imagen_id: int):
     return r
 
 
-@router.post("/portafolio/", response={200: PortafolioProyectoSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/portafolio/", response={200: PortafolioProyectoSchema, 400: MessageSchema}, auth=AuthAdmin())
 def crear_proyecto_portafolio(request, data: PortafolioProyectoInSchema):
     try:
         with transaction.atomic():
@@ -1329,6 +1359,8 @@ def editar_proyecto_portafolio(request, proyecto_id: int, data: PortafolioProyec
     proyecto = PortafolioProyecto.objects.filter(id=proyecto_id).first()
     if not proyecto:
         return 404, {"message": "Proyecto no encontrado"}
+    if request.auth.rol != "ADMIN" and (set(data.dict(exclude_unset=True)) != {"publicado"}):
+        raise PermisoDenegado("Su rol (Operador) solo puede ocultar o publicar proyectos del portafolio.")
     try:
         with transaction.atomic():
             for k, v in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes", "quitar_portada"}).items():
@@ -1379,7 +1411,7 @@ def servir_imagen_casa(request, imagen_id: int):
     return r
 
 
-@router.post("/catalogo-casas/", response={200: CasaCatalogoSchema, 400: MessageSchema}, auth=AuthBearer())
+@router.post("/catalogo-casas/", response={200: CasaCatalogoSchema, 400: MessageSchema}, auth=AuthAdmin())
 def crear_casa_catalogo(request, data: CasaCatalogoInSchema):
     try:
         with transaction.atomic():
@@ -1396,6 +1428,8 @@ def editar_casa_catalogo(request, casa_id: int, data: CasaCatalogoUpdateSchema):
     casa = CasaCatalogo.objects.filter(id=casa_id).first()
     if not casa:
         return 404, {"message": "Casa no encontrada"}
+    if request.auth.rol != "ADMIN" and set(data.dict(exclude_unset=True)) != {"publicado"}:
+        raise PermisoDenegado("Su rol (Operador) solo puede ocultar o publicar casas del catálogo.")
     try:
         with transaction.atomic():
             for k, val in data.dict(exclude_unset=True, exclude={"agregar_imagenes", "quitar_imagenes", "incluye"}).items():
@@ -1411,13 +1445,13 @@ def editar_casa_catalogo(request, casa_id: int, data: CasaCatalogoUpdateSchema):
         return 400, {"message": _msj(e)}
 
 
-@router.delete("/catalogo-casas/{casa_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+@router.delete("/catalogo-casas/{casa_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthAdmin())
 def eliminar_casa_catalogo(request, casa_id: int):
     n, _ = CasaCatalogo.objects.filter(id=casa_id).delete()
     return (200, {"message": "Casa eliminada"}) if n else (404, {"message": "Casa no encontrada"})
 
 
-@router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthBearer())
+@router.delete("/portafolio/{proyecto_id}/", response={200: MessageSchema, 404: MessageSchema}, auth=AuthAdmin())
 def eliminar_proyecto_portafolio(request, proyecto_id: int):
     n, _ = PortafolioProyecto.objects.filter(id=proyecto_id).delete()
     return (200, {"message": "Proyecto eliminado"}) if n else (404, {"message": "Proyecto no encontrado"})

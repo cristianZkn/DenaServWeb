@@ -7,6 +7,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import EncabezadoPagina from "@/components/EncabezadoPagina";
 import ErrorCampo, { useErrores } from "@/components/ErrorCampo";
 import Insignia from "@/components/Insignia";
+import { useEsAdmin } from "@/lib/rol";
 import { errorCorreo, errorRut, errorTelefono, formatearRut, formatearTelefono } from "@/lib/validar";
 
 interface Proveedor {
@@ -22,6 +23,7 @@ interface Proveedor {
 const VACIO = { id: 0, rut_empresa: "", razon_social: "", contacto_nombre: "", telefono: "", email: "", activo: true };
 
 export default function ProveedoresPage() {
+  const admin = useEsAdmin(); // el Operador solo consulta
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState(VACIO);
@@ -140,9 +142,9 @@ export default function ProveedoresPage() {
         resumen={[{ texto: "Total", valor: proveedores.length }, { texto: "Activos", valor: proveedores.filter((p) => p.activo).length }]} />
       <Aviso texto={exito.texto} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] gap-6 items-start">
+      <div className={`grid grid-cols-1 ${admin ? "lg:grid-cols-[22rem_minmax(0,1fr)]" : ""} gap-6 items-start`}>
         {/* Formulario */}
-        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm lg:sticky lg:top-6">
+        {admin && <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm lg:sticky lg:top-6">
           <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
             <Icono nombre={isEditing ? "lapiz" : "mas"} className="h-5 w-5 text-amber-500" />
             {isEditing ? "Editar proveedor" : "Registrar proveedor"}
@@ -190,7 +192,7 @@ export default function ProveedoresPage() {
               )}
             </div>
           </form>
-        </section>
+        </section>}
 
         {/* Listado */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -211,7 +213,7 @@ export default function ProveedoresPage() {
                   <th className="px-4 py-3">Razón social</th>
                   <th className="px-4 py-3">Contacto</th>
                   <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3 text-right">Acciones</th>
+                  {admin && <th className="px-4 py-3 text-right">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -232,10 +234,10 @@ export default function ProveedoresPage() {
                         {p.email && <div className="text-slate-500 break-all">{p.email}</div>}
                       </td>
                       <td className="px-4 py-3"><Insignia tono={p.activo ? "verde" : "gris"}>{p.activo ? "Activo" : "Inactivo"}</Insignia></td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
+                      {admin && <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
                         <button onClick={() => handleEdit(p)} className="!min-h-0 text-sm font-semibold text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 cursor-pointer">Editar</button>
                         <button onClick={() => handleDelete(p)} className="!min-h-0 text-sm font-semibold text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 cursor-pointer">Eliminar</button>
-                      </td>
+                      </td>}
                     </tr>
                   ))
                 )}

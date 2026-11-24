@@ -12,6 +12,9 @@ class Usuario(models.Model):
     email = models.EmailField(max_length=150, unique=True)
     google_id = models.CharField(max_length=255, null=True, blank=True)
     activo = models.BooleanField(default=True)
+    # Admin: todo. Operador: no gestiona usuarios ni proveedores, no edita materiales ni portafolio (solo lo oculta).
+    # Los usuarios que ya existían quedan como Admin para no perder acceso.
+    rol = models.CharField(max_length=10, choices=[('ADMIN', 'Admin'), ('OPERADOR', 'Operador')], default='ADMIN')
 
     class Meta:
         db_table = 'usuario'
@@ -431,3 +434,19 @@ class CambioCotizacion(models.Model):
     class Meta:
         db_table = 'cambio_cotizacion'
         ordering = ['-fecha']
+
+
+# 10. registro_auditoria: quién creó, modificó o eliminó qué y cuándo (se llena solo, ver core/auditoria.py)
+class RegistroAuditoria(models.Model):
+    usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, related_name='auditoria')
+    usuario_nombre = models.CharField(max_length=150)  # copia: el registro se entiende aunque el usuario se elimine
+    accion = models.CharField(max_length=10, choices=[('CREAR', 'Crear'), ('MODIFICAR', 'Modificar'), ('ELIMINAR', 'Eliminar')])
+    entidad = models.CharField(max_length=60)
+    entidad_id = models.PositiveIntegerField()
+    detalle = models.CharField(max_length=255, blank=True, default='')
+    fecha = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = 'registro_auditoria'
+        ordering = ['-fecha', '-id']
+        indexes = [models.Index(fields=['entidad', 'entidad_id'])]
