@@ -467,7 +467,7 @@ class CambioCotizacion(models.Model):
 class RegistroAuditoria(models.Model):
     usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, related_name='auditoria')
     usuario_nombre = models.CharField(max_length=150)  # copia: el registro se entiende aunque el usuario se elimine
-    accion = models.CharField(max_length=10, choices=[('CREAR', 'Crear'), ('MODIFICAR', 'Modificar'), ('ELIMINAR', 'Eliminar')])
+    accion = models.CharField(max_length=10, choices=[('CREAR', 'Crear'), ('MODIFICAR', 'Modificar'), ('ELIMINAR', 'Eliminar'), ('EXPORTAR', 'Exportar')])
     entidad = models.CharField(max_length=60)
     entidad_id = models.PositiveIntegerField()
     detalle = models.CharField(max_length=255, blank=True, default='')

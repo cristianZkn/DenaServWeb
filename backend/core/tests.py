@@ -2122,3 +2122,26 @@ class RestriccionesYVistasTests(TestCase):
             pagos = c.fetchone()[0]
         self.assertEqual((neto, ganancia, cobrado, autor), (1000000, 369748, 476000, "Ana"))   # (1.190.000 - 750.000) / 1,19
         self.assertEqual((total_ganancia, pagos), (369748, 476000))
+
+
+class SembrarDatosTests(TestCase):
+    def test_siembra_con_historia_de_12_meses_y_se_limpia(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        import os
+        from . import dominio
+        with self.assertRaises(CommandError):                                   # sin el indicador no corre (el .env puede ser producción)
+            call_command("sembrar_datos")
+        sal = open(os.devnull, "w")
+        call_command("sembrar_datos", base_de_pruebas=True, cantidad=520, stdout=sal)
+        self.assertEqual(Cotizacion.objects.filter(codigo_cotizacion__startswith="SIM-").count(), 520)
+        fechas = Cotizacion.objects.values_list("fecha_creacion", flat=True)
+        self.assertGreaterEqual((max(fechas) - min(fechas)).days, 330)
+        self.assertEqual(set(Cotizacion.objects.values_list("estado", flat=True)), {"BORRADOR", "ACEPTADA", "FINALIZADA"})
+        for cot in Cotizacion.objects.prefetch_related("hitos_pago")[:60]:      # el estado siempre sale de los pagos
+            self.assertEqual(cot.estado, dominio.estado_segun_pagos(list(cot.hitos_pago.all())))
+            self.assertEqual(sum(h.monto_pago for h in cot.hitos_pago.all()), cot.costo_total)
+        with self.assertRaises(CommandError):                                   # no siembra dos veces
+            call_command("sembrar_datos", base_de_pruebas=True, stdout=sal)
+        call_command("sembrar_datos", base_de_pruebas=True, limpiar=True, stdout=sal)
+        self.assertFalse(Cotizacion.objects.exists())

@@ -18,6 +18,7 @@ const NAV = [
   { href: "/dashboard/catalogos", label: "Materiales y precios", icono: ico("M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8") },
   { href: "/dashboard/proveedores", label: "Proveedores", icono: ico("M3 21V8l6-4 6 4v13M15 21V12h6v9M7 12h2M7 16h2") },
   { href: "/dashboard/portafolio", label: "Portafolio", icono: ico("M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 16l5-5 4 4 3-3 6 6M9 9.5h.01") },
+  { href: "/dashboard/reportes", label: "Reportes", icono: ico("M7 3h8l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 12h6M9 16h6M9 8h3") },
   { href: "/dashboard/tarifas", label: "Tarifas", icono: ico("M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6") },
   { href: "/dashboard/usuarios", label: "Usuarios", soloAdmin: true, icono: ico("M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM21 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8") },
   { href: "/dashboard/auditoria", label: "Auditoría", soloAdmin: true, icono: ico("M7 3h8l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 12h6M9 16h6") },
@@ -75,6 +76,10 @@ export default function DashboardLayout({
     router.push("/"); // al cerrar sesión se vuelve al portafolio público
   };
 
+  const tituloSeccion = NAV.find((n) => (n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href)))?.label;
+  useEffect(() => {
+    document.title = `${tituloSeccion ?? "Panel"} | DenaServ`;   // cada pantalla anuncia su nombre al lector de pantalla
+  }, [tituloSeccion]);
   const menu = NAV.filter((n) => !n.soloAdmin || rol === "ADMIN");
   const sinPermiso = rol !== "ADMIN" && NAV.some((n) => n.soloAdmin && pathname.startsWith(n.href));
   if (!autorizado) return null;
@@ -86,7 +91,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
       {/* Barra superior en pantallas angostas */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center gap-3 h-14 px-4 bg-blue-950 text-white shadow">
+      <header data-barra-superior className="lg:hidden sticky top-0 z-40 flex items-center gap-3 h-14 px-4 bg-blue-950 text-white shadow">
         <button type="button" onClick={() => setAbierto(true)} aria-label="Abrir menú" className="!min-h-0 h-10 w-10 rounded-lg border border-white/25 flex items-center justify-center cursor-pointer">
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
@@ -149,7 +154,7 @@ export default function DashboardLayout({
       </aside>
 
       {/* Contenido: los bloques de cada sección aparecen con un breve escalonado (ver .panel-anim en globals.css) */}
-      <main className={`${colapsado ? "lg:pl-[4.5rem]" : "lg:pl-64"} transition-[padding] duration-300`}>
+      <main id="contenido" tabIndex={-1} className={`outline-none ${colapsado ? "lg:pl-[4.5rem]" : "lg:pl-64"} transition-[padding] duration-300`}>
         <div key={pathname} className="panel-anim w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <RolContext.Provider value={rol}>{children}</RolContext.Provider>
         </div>

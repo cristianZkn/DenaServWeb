@@ -181,3 +181,19 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px rgb(31 97 89 /
   @keyframes entrar { from { opacity: 0; } to { opacity: 1; } }
   html { scroll-behavior: auto; }
 }
+
+/* Impresión limpia de los reportes: sin menú, barra superior, filtros ni botones; la tabla ocupa toda la hoja. */
+.solo-imprimir { display: none; }
+@media print {
+  .no-imprimir, aside, [data-barra-superior], .banner-cookies { display: none !important; }
+  .solo-imprimir { display: block; }
+  main { padding-left: 0 !important; }
+  body, .min-h-screen { background: #fff !important; }
+  .panel-anim, .panel-anim * { animation: none !important; }
+  section { box-shadow: none !important; border: 0 !important; }
+  .overflow-x-auto { overflow: visible !important; }
+  table { min-width: 0 !important; font-size: 10pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  @page { size: A4 landscape; margin: 1.2cm; }
+}

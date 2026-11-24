@@ -193,6 +193,8 @@ export default function PortafolioPage() {
         </div>
       </header>
 
+      <main id="contenido" tabIndex={-1} className="flex-1 outline-none">
+
       {/* Ventajas: panel de vidrio con borde animado, montado sobre el borde de la cabecera */}
       <section aria-label="Por qué elegirnos" className="relative z-10 -mt-20 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
         <div className="rounded-3xl bg-gradient-to-r from-amber-400 via-blue-400 to-amber-400 p-[1.5px] shadow-2xl shadow-blue-950/30">
@@ -472,6 +474,8 @@ export default function PortafolioPage() {
           </div>
         </div>
       </section>
+
+      </main>
 
       <footer className="bg-blue-950 text-blue-200 py-8 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">

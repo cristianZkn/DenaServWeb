@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Contador, useMontado } from "@/components/Animaciones";
 import { useVisible } from "@/components/Reveal";
+import AnalisisPanel from "@/components/AnalisisPanel";
 
 interface ProgresoObra {
   id: number;
@@ -267,6 +268,8 @@ export default function DashboardPage() {
           <GraficoGanancias datos={stats.trimestres} />
         </>
       )}
+
+      <AnalisisPanel />
     </div>
   );
 }
