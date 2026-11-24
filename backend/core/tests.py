@@ -1,7 +1,7 @@
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, TransactionTestCase, Client, override_settings
 from decimal import Decimal
 from .api import create_jwt_token
-from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion, PortafolioProyecto, RegistroAuditoria
+from .models import Usuario, Proveedor, CatalogoTipo, Cotizacion, HitoPago, ObraEjecucion, PortafolioProyecto, RegistroAuditoria, DetalleRegistro
 
 
 class DenaServMigrationTests(TestCase):
@@ -2069,3 +2069,56 @@ class RolesYAuditoriaTests(TestCase):
         self.assertEqual(self.c.get("/api/docs").status_code, 401)
         self.assertEqual(self.c.get("/api/openapi.json", **self.ho).status_code, 403)
         self.assertEqual(self.c.get("/api/openapi.json", **self.ha).status_code, 200)
+
+
+class RespaldoTests(TransactionTestCase):  # vaciar la base (flush) no puede correr dentro de la transacción de TestCase
+    def test_respaldo_y_restauracion_conservan_los_datos(self):
+        import os, tempfile
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        admin = Usuario.objects.create(rut="11111111-1", nombre_completo="Ana", email="a@d.cl")
+        Proveedor.objects.create(rut_empresa="76.086.428-5", razon_social="Proveedor Uno")
+        cot = Cotizacion.objects.create(codigo_cotizacion="COT-1", cliente_nombre="Cliente", direccion_terreno="Calle 1", superficie_m2=50,
+                                        costo_total=1000000, usuario=admin)
+        hito = HitoPago.objects.create(cotizacion=cot, fase="ANTICIPO_40", porcentaje=40, monto_pago=400000)
+        DetalleRegistro.objects.create(hito=hito, monto=100000, comprobante=b"\x89PNG-prueba", comprobante_mime="image/png")
+        with tempfile.TemporaryDirectory() as d:
+            archivo = os.path.join(d, "respaldo.json.gz")
+            call_command("respaldar_bd", salida=archivo, stdout=open(os.devnull, "w"))
+            with self.assertRaises(CommandError):                               # no pisa una base con datos sin permiso
+                call_command("restaurar_bd", archivo)
+            call_command("restaurar_bd", archivo, reemplazar=True, stdout=open(os.devnull, "w"))
+        self.assertEqual(Cotizacion.objects.get().codigo_cotizacion, "COT-1")
+        self.assertEqual(Proveedor.objects.count(), 1)
+        self.assertEqual(bytes(DetalleRegistro.objects.get().comprobante), b"\x89PNG-prueba")
+
+
+class RestriccionesYVistasTests(TestCase):
+    def test_la_base_rechaza_datos_invalidos(self):
+        from django.db import IntegrityError, transaction
+        u = Usuario.objects.create(rut="11111111-1", nombre_completo="Ana", email="a@d.cl")
+        for campos in ({"superficie_m2": 0}, {"estado": "INVENTADO"}, {"costo_total": -1}):
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                Cotizacion.objects.create(**{"codigo_cotizacion": "X", "cliente_nombre": "C", "direccion_terreno": "D", "superficie_m2": 10, "usuario": u, **campos})
+        cot = Cotizacion.objects.create(codigo_cotizacion="OK", cliente_nombre="C", direccion_terreno="D", superficie_m2=10, usuario=u)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HitoPago.objects.create(cotizacion=cot, fase="X", porcentaje=150, monto_pago=1)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ObraEjecucion.objects.create(cotizacion=cot, porcentaje_avance_real=101)
+
+    def test_vistas_de_reportes(self):
+        from django.db import connection
+        u = Usuario.objects.create(rut="11111111-1", nombre_completo="Ana", email="a@d.cl")
+        cot = Cotizacion.objects.create(codigo_cotizacion="V-1", cliente_nombre="C", direccion_terreno="D", superficie_m2=10, usuario=u,
+                                        costo_materiales=500000, costo_mano_obra=200000, costo_flete=50000, costo_total=1190000)
+        hito = HitoPago.objects.create(cotizacion=cot, fase="ANTICIPO_40", porcentaje=40, monto_pago=476000, monto_abonado=476000)
+        DetalleRegistro.objects.create(hito=hito, monto=476000, metodo="TRANSFERENCIA")
+        with connection.cursor() as c:
+            c.execute("SELECT neto, ganancia_neta, monto_cobrado, creado_por FROM vista_cotizacion_resumen WHERE codigo_cotizacion='V-1'")
+            neto, ganancia, cobrado, autor = c.fetchone()
+            c.execute("SELECT SUM(ganancia_neta) FROM vista_ganancia_trimestral")
+            total_ganancia = c.fetchone()[0]
+            c.execute("SELECT monto FROM vista_pagos_mensuales WHERE metodo='TRANSFERENCIA'")
+            pagos = c.fetchone()[0]
+        self.assertEqual((neto, ganancia, cobrado, autor), (1000000, 369748, 476000, "Ana"))   # (1.190.000 - 750.000) / 1,19
+        self.assertEqual((total_ganancia, pagos), (369748, 476000))

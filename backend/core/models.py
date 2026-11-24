@@ -18,6 +18,7 @@ class Usuario(models.Model):
 
     class Meta:
         db_table = 'usuario'
+        constraints = [models.CheckConstraint(condition=models.Q(rol__in=['ADMIN', 'OPERADOR']), name='ck_usuario_rol')]
         verbose_name = 'Usuario'
         verbose_name_plural = 'Usuarios'
 
@@ -83,6 +84,11 @@ class CatalogoTipo(models.Model):
 
     class Meta:
         db_table = 'catalogo_tipo'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(precio_base_unitario__gte=0), name='ck_catalogo_precio_no_negativo'),
+            models.CheckConstraint(condition=models.Q(descuento_pct__gte=0, descuento_pct__lte=100), name='ck_catalogo_descuento_0_100'),
+        ]
+        indexes = [models.Index(fields=['categoria', 'activo'], name='ix_catalogo_categoria_activo')]
         verbose_name = 'Catálogo Tipo'
         verbose_name_plural = 'Catálogos Tipos'
 
@@ -155,6 +161,16 @@ class Cotizacion(models.Model):
 
     class Meta:
         db_table = 'cotizacion'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(superficie_m2__gt=0), name='ck_cotizacion_superficie_positiva'),
+            models.CheckConstraint(condition=models.Q(distancia_flete_km__gte=0), name='ck_cotizacion_distancia_no_negativa'),
+            models.CheckConstraint(condition=models.Q(costo_total__gte=0, costo_materiales__gte=0, costo_mano_obra__gte=0, costo_flete__gte=0, costo_nivelacion__gte=0),
+                                   name='ck_cotizacion_costos_no_negativos'),
+            models.CheckConstraint(condition=models.Q(estado__in=['BORRADOR', 'ACEPTADA', 'FINALIZADA']), name='ck_cotizacion_estado'),
+            models.CheckConstraint(condition=models.Q(tipo_proyecto__in=['CASA', 'SOLO_RADIER']), name='ck_cotizacion_tipo'),
+        ]
+        # Los listados y el dashboard filtran por estado y por fecha de creación.
+        indexes = [models.Index(fields=['estado', 'fecha_creacion'], name='ix_cotizacion_estado_fecha')]
         verbose_name = 'Cotización'
         verbose_name_plural = 'Cotizaciones'
 
@@ -185,6 +201,7 @@ class DetalleCotizacionInsumo(models.Model):
 
     class Meta:
         db_table = 'detalle_cotizacion_insumo'
+        constraints = [models.CheckConstraint(condition=models.Q(cantidad_calculada__gte=0), name='ck_detalle_cantidad_no_negativa')]
         verbose_name = 'Detalle Cotización Insumo'
         verbose_name_plural = 'Detalles Cotización Insumo'
 
@@ -220,6 +237,11 @@ class HitoPago(models.Model):
 
     class Meta:
         db_table = 'hito_pago'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(porcentaje__gte=0, porcentaje__lte=100), name='ck_hito_porcentaje_0_100'),
+            models.CheckConstraint(condition=models.Q(monto_pago__gte=0, monto_abonado__gte=0), name='ck_hito_montos_no_negativos'),
+            models.CheckConstraint(condition=models.Q(estado__in=['PENDIENTE', 'ABONADO', 'PAGADO']), name='ck_hito_estado'),
+        ]
         ordering = ['id']  # orden fijo del cronograma: anticipo, avance, entrega (sin esto, la base los devuelve en cualquier orden)
         verbose_name = 'Hito de Pago'
         verbose_name_plural = 'Hitos de Pago'
@@ -246,6 +268,7 @@ class ObraEjecucion(models.Model):
 
     class Meta:
         db_table = 'obra_ejecucion'
+        constraints = [models.CheckConstraint(condition=models.Q(porcentaje_avance_real__gte=0, porcentaje_avance_real__lte=100), name='ck_obra_avance_0_100')]
         verbose_name = 'Obra en Ejecución'
         verbose_name_plural = 'Obras en Ejecución'
 
@@ -334,6 +357,7 @@ class BitacoraAvance(models.Model):
 
     class Meta:
         db_table = 'bitacora_avance'
+        constraints = [models.CheckConstraint(condition=models.Q(porcentaje__gte=0, porcentaje__lte=100), name='ck_bitacora_porcentaje_0_100')]
         ordering = ['-fecha', '-id']
 
 
@@ -369,6 +393,8 @@ class DetalleRegistro(models.Model):
 
     class Meta:
         db_table = 'detalle_registros'
+        constraints = [models.CheckConstraint(condition=models.Q(monto__gt=0), name='ck_registro_monto_positivo')]
+        indexes = [models.Index(fields=['fecha'], name='ix_registro_fecha')]
         ordering = ['fecha', 'id']
 
 
@@ -409,6 +435,7 @@ class Tarifa(models.Model):
 
     class Meta:
         db_table = 'tarifa'
+        constraints = [models.CheckConstraint(condition=models.Q(valor__gte=0), name='ck_tarifa_valor_no_negativo')]
 
 
 # Contrato notarial oficial (PDF opcional) del proyecto

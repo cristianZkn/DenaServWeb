@@ -842,6 +842,8 @@ def editar_cotizacion(request, cotizacion_id: int, data: CotizacionEditSchema):
         cot.costo_materiales, cot.costo_mano_obra, cot.costo_flete = (
             r["costo_materiales_total"], r["costo_mano_obra"], r["costo_flete"])
         nuevo_total = r["total"] + cot.costo_nivelacion + cot.ajuste_monto
+    if nuevo_total < 0:
+        return 400, {"message": "El descuento es mayor que el valor del proyecto: el total no puede quedar bajo $0."}
     delta = nuevo_total - total_anterior
     resultado = {"total_anterior": total_anterior, "total_nuevo": nuevo_total, "diferencia": delta}
     if not aplicar:

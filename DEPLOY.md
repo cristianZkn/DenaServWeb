@@ -64,6 +64,19 @@ lista, aplica el descuento del proveedor y guarda `costo neto = precio de lista 
 - Para dejar el catálogo con las fichas mapeadas y las cuatro categorías obligatorias (Techumbre, Revestimiento,
   Tabiquería, Base/Radier) en una base nueva: `python manage.py mapear_catalogo` y luego el comando anterior.
 
+## Respaldo y restauración de la base
+
+La base de Supabase gratuita no incluye respaldos descargables, así que la aplicación trae los suyos (no necesitan `pg_dump`):
+
+```powershell
+python manage.py respaldar_bd --salida respaldo.json.gz      # guarda todas las tablas, con fotos y comprobantes
+python manage.py restaurar_bd respaldo.json.gz --reemplazar  # vacía la base y la deja como el respaldo
+```
+
+- Sin `--reemplazar`, `restaurar_bd` se niega si la base ya tiene datos. Para probar sin riesgo, restaure contra una base vacía (otro proyecto de Supabase o una local).
+- El archivo contiene datos de clientes: guárdelo fuera del repositorio. Recomendado: uno por semana y antes de cada despliegue con migraciones.
+- La prueba automática `RespaldoTests` respalda, vacía y restaura una base de prueba, y comprueba que no se pierde nada (ni los comprobantes).
+
 ## Mantener activo el backend (anti-sueño)
 
 Render gratuito duerme el backend tras 15 min sin visitas y la primera carga tarda cerca de 1 minuto (la portada pide las obras a la API).
