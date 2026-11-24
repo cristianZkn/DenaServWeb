@@ -1,5 +1,6 @@
 "use client";
 
+import { useCierreConEsc } from "@/lib/useCierreConEsc";
 import { marcarInvalido } from "@/lib/validar";
 import { useDialogo } from "./ConfirmDialog";
 
@@ -79,6 +80,7 @@ export default function PagoModal({
   onClose: () => void;
   onSaved: (h: HitoPago) => void;
 }) {
+  useCierreConEsc(onClose);
   const [actual, setActual] = useState<HitoPago>(hito);
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState("");

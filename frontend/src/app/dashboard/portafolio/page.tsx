@@ -4,6 +4,7 @@ import Icono from "@/components/Icono";
 import { useDialogo } from "@/components/ConfirmDialog";
 import CatalogoAdmin from "@/components/CatalogoAdmin";
 import { useEsAdmin } from "@/lib/rol";
+import { useCierreConEsc } from "@/lib/useCierreConEsc";
 import SelectorFotos from "@/components/SelectorFotos";
 import { ETIQUETAS } from "@/lib/empresa";
 
@@ -185,6 +186,7 @@ export default function PortafolioAdminPage() {
 function FormularioProyecto({ proyecto, onCerrar, onGuardado }: {
   proyecto: Proyecto | null; onCerrar: () => void; onGuardado: (msg: string) => void;
 }) {
+  useCierreConEsc(onCerrar);
   const [titulo, setTitulo] = useState(proyecto?.titulo ?? "");
   const [descripcion, setDescripcion] = useState(proyecto?.descripcion ?? "");
   const [comuna, setComuna] = useState(proyecto?.ubicacion_comuna ?? "");

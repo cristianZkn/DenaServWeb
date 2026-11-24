@@ -1588,6 +1588,22 @@ class ResumenProyectoTests(TestCase):
             with mock.patch("core.resumen.requests.post", side_effect=requests.ConnectionError()):
                 self.assertEqual(self.pedir().json()["origen"], "base")
 
+    def test_ia_con_tiempo_maximo_y_errores_del_servicio_externo_cae_al_resumen_base(self):
+        import requests
+        from unittest import mock
+        from django.test import override_settings
+        caida = mock.Mock()
+        caida.raise_for_status.side_effect = requests.HTTPError(response=mock.Mock(status_code=500, text="boom"))
+        with override_settings(GROQ_API_KEY="k"):
+            with mock.patch("core.resumen.requests.post", side_effect=requests.Timeout()) as p:
+                self.assertEqual(self.pedir().json()["origen"], "base")             # se agotó la espera
+            self.assertEqual(p.call_args.kwargs["timeout"], 20)                     # la llamada nunca queda colgada
+            with mock.patch("core.resumen.requests.post", return_value=caida):
+                self.assertEqual(self.pedir().json()["origen"], "base")             # el servicio respondió con error
+            malformada = mock.Mock(); malformada.raise_for_status.return_value = None; malformada.json.return_value = {"choices": []}
+            with mock.patch("core.resumen.requests.post", return_value=malformada):
+                self.assertEqual(self.pedir().json()["origen"], "base")             # respuesta sin el formato esperado
+
     def test_valida_el_destino_y_la_cotizacion(self):
         self.assertEqual(self.pedir("otro").status_code, 400)
         self.assertEqual(self.client.post("/api/cotizaciones/99999/resumen/", **self.h).status_code, 404)

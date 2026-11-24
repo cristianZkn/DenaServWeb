@@ -5,6 +5,7 @@ import { useDialogo } from "@/components/ConfirmDialog";
 import SelectorFotos from "@/components/SelectorFotos";
 import { MODELOS } from "@/lib/catalogo";
 import { useEsAdmin } from "@/lib/rol";
+import { useCierreConEsc } from "@/lib/useCierreConEsc";
 
 const JSON_HDR = { "Content-Type": "application/json" };
 const MAX_FOTOS = 10;
@@ -137,6 +138,7 @@ export default function CatalogoAdmin({ onCantidad, onAviso, onError }: { onCant
 }
 
 function FormularioCasa({ casa, siguienteOrden, onCerrar, onGuardado }: { casa: CasaAdmin | null; siguienteOrden: number; onCerrar: () => void; onGuardado: (m: string) => void }) {
+  useCierreConEsc(onCerrar);
   const [nombre, setNombre] = useState(casa?.nombre ?? "");
   const [etiqueta, setEtiqueta] = useState(casa?.etiqueta ?? "");
   const [personalizado, setPersonalizado] = useState(casa?.personalizado ?? false);

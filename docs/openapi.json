@@ -1,0 +1,7229 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DenaServ API",
+    "version": "1.0.0",
+    "description": ""
+  },
+  "paths": {
+    "/api/": {
+      "get": {
+        "operationId": "config_urls_health_check",
+        "summary": "Health Check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/google": {
+      "post": {
+        "operationId": "core_api_google_sso_login",
+        "summary": "Google Sso Login",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenSchema"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthInSchema"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "core_api_current_user",
+        "summary": "Current User",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioSchema"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/": {
+      "get": {
+        "operationId": "core_api_listar_usuarios",
+        "summary": "Listar Usuarios",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_crear_usuario",
+        "summary": "Crear Usuario",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/{usuario_id}": {
+      "put": {
+        "operationId": "core_api_actualizar_usuario",
+        "summary": "Actualizar Usuario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "usuario_id",
+            "schema": {
+              "title": "Usuario Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_usuario",
+        "summary": "Eliminar Usuario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "usuario_id",
+            "schema": {
+              "title": "Usuario Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/auditoria/": {
+      "get": {
+        "operationId": "core_api_listar_auditoria",
+        "summary": "Listar Auditoria",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "entidad",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entidad"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "usuario_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Usuario Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "accion",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accion"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "schema": {
+              "default": 100,
+              "title": "Limite",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "desde",
+            "schema": {
+              "default": 0,
+              "title": "Desde",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditoriaSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Historial de cambios (quién, qué y cuándo), del más reciente al más antiguo, con filtros y paginación simple.",
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/tarifas/": {
+      "get": {
+        "operationId": "core_api_listar_tarifas",
+        "summary": "Listar Tarifas",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TarifaSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/tarifas/{clave}": {
+      "put": {
+        "operationId": "core_api_cambiar_tarifa",
+        "summary": "Cambiar Tarifa",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clave",
+            "schema": {
+              "title": "Clave",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarifaSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Nuevo valor de una tarifa: rige para las cotizaciones que se calculen desde ahora (las ya guardadas no cambian).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TarifaInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_restablecer_tarifa",
+        "summary": "Restablecer Tarifa",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clave",
+            "schema": {
+              "title": "Clave",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarifaSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Vuelve al valor de fábrica.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/combustibles/": {
+      "get": {
+        "operationId": "core_api_precios_combustibles",
+        "summary": "Precios Combustibles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Precio por litro de 93, 95, 97 y diésel. Se consulta a la CNE si los guardados tienen más de 6 horas.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/combustibles/estado/": {
+      "get": {
+        "operationId": "core_api_estado_combustibles",
+        "summary": "Estado Combustibles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "description": "Los 4 combustibles para editarlos (aunque la CNE no responda) y, si falló, el motivo.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/combustibles/{tipo}": {
+      "put": {
+        "operationId": "core_api_fijar_precio_combustible",
+        "summary": "Fijar Precio Combustible",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tipo",
+            "schema": {
+              "title": "Tipo",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Fija a mano el precio por litro (por ejemplo, si la CNE no responde).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TarifaInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_volver_precio_cne",
+        "summary": "Volver Precio Cne",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tipo",
+            "schema": {
+              "title": "Tipo",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Deja de usar el precio manual y vuelve al de la CNE.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/combustibles/actualizar/": {
+      "post": {
+        "operationId": "core_api_actualizar_combustibles",
+        "summary": "Actualizar Combustibles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/proveedores/": {
+      "get": {
+        "operationId": "core_api_listar_proveedores",
+        "summary": "Listar Proveedores",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProveedorSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_crear_proveedor",
+        "summary": "Crear Proveedor",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProveedorSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProveedorInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/proveedores/{proveedor_id}": {
+      "put": {
+        "operationId": "core_api_actualizar_proveedor",
+        "summary": "Actualizar Proveedor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proveedor_id",
+            "schema": {
+              "title": "Proveedor Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProveedorSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProveedorInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_proveedor",
+        "summary": "Eliminar Proveedor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proveedor_id",
+            "schema": {
+              "title": "Proveedor Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/insumos/": {
+      "get": {
+        "operationId": "core_api_listar_insumos",
+        "summary": "Listar Insumos",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "categoria",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "activo",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activo"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InsumoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Materiales con precio de lista, descuento vigente y costo neto final, filtrables por categoría.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/insumos/actualizar-precios": {
+      "post": {
+        "operationId": "core_api_actualizar_precios_insumos",
+        "summary": "Actualizar Precios Insumos",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Fuerza la actualización de precios (también la llama el planificador semanal con X-Cron-Token).",
+        "security": [
+          {
+            "AuthBearer": []
+          },
+          {
+            "CronToken": []
+          }
+        ]
+      }
+    },
+    "/api/insumos/actualizar-precios/estado": {
+      "get": {
+        "operationId": "core_api_estado_actualizacion_precios",
+        "summary": "Estado Actualizacion Precios",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          },
+          {
+            "CronToken": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-tipos/": {
+      "get": {
+        "operationId": "core_api_listar_catalogo_tipos",
+        "summary": "Listar Catalogo Tipos",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "categoria",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoria"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "activo",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activo"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogoTipoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_crear_catalogo_tipo",
+        "summary": "Crear Catalogo Tipo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoTipoSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogoTipoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-tipos/categorias/": {
+      "get": {
+        "operationId": "core_api_listar_categorias_disponibles",
+        "summary": "Listar Categorias Disponibles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-tipos/{catalogo_id}": {
+      "put": {
+        "operationId": "core_api_actualizar_catalogo_tipo",
+        "summary": "Actualizar Catalogo Tipo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalogo_id",
+            "schema": {
+              "title": "Catalogo Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoTipoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogoTipoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_catalogo_tipo",
+        "summary": "Eliminar Catalogo Tipo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalogo_id",
+            "schema": {
+              "title": "Catalogo Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/": {
+      "get": {
+        "operationId": "core_api_listar_cotizaciones",
+        "summary": "Listar Cotizaciones",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CotizacionSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_crear_cotizacion",
+        "summary": "Crear Cotizacion",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CotizacionInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/calcular": {
+      "post": {
+        "operationId": "core_api_calcular_cotizacion",
+        "summary": "Calcular Cotizacion",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/progreso/": {
+      "get": {
+        "operationId": "core_api_progreso_obras",
+        "summary": "Progreso Obras",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProgresoObraSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Avance físico de cada obra en ejecución (cotizaciones aceptadas), para el gráfico del panel.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/estadisticas/": {
+      "get": {
+        "operationId": "core_api_estadisticas_panel",
+        "summary": "Estadisticas Panel",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstadisticasSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cifras del panel principal: proyectos por estado y, en los últimos 4 trimestres, cuántos se cotizaron, cuántos se\nterminaron y cuánta ganancia suman las cotizaciones creadas en cada uno. Un proyecto se da por terminado en la fecha de su último pago.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/reportes/{tipo}/": {
+      "get": {
+        "operationId": "core_api_reporte",
+        "summary": "Reporte",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tipo",
+            "schema": {
+              "title": "Tipo",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "formato",
+            "schema": {
+              "default": "json",
+              "title": "Formato",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "desde",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "hasta",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "estado",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "buscar",
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 60,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Buscar"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "pagina",
+            "schema": {
+              "default": 1,
+              "title": "Pagina",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "por_pagina",
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Por Pagina",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Reporte operativo, gerencial o por período, en pantalla (json, paginado) o para descargar (csv, xlsx, pdf) con los mismos\nfiltros. El gerencial muestra ganancias y es solo Admin. Cada descarga queda registrada en la auditoría con quién la pidió.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/dashboard/analisis/": {
+      "get": {
+        "operationId": "core_api_dashboard_analisis",
+        "summary": "Dashboard Analisis",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "desde",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Desde"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "hasta",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hasta"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "estado",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Indicadores (con su fórmula y la pregunta de negocio que responden) y series para los gráficos, con filtros de fecha y estado.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/": {
+      "get": {
+        "operationId": "core_api_obtener_cotizacion_detalle",
+        "summary": "Obtener Cotizacion Detalle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionDetalladaSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_cotizacion",
+        "summary": "Eliminar Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cancela la cotización u obra con todo lo asociado (pagos, avance, lista, historial). Los proyectos del portafolio se conservan.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_api_editar_cotizacion",
+        "summary": "Editar Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edita una cotización ya emitida y reajusta el monto total. La diferencia se reparte entre los hitos pendientes\ny queda registrada (con motivo) en el historial de cambios.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CotizacionEditSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/resumen/": {
+      "post": {
+        "operationId": "core_api_resumir_cotizacion",
+        "summary": "Resumir Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "para",
+            "schema": {
+              "default": "interno",
+              "title": "Para",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Resumen del proyecto para la empresa (para=interno) o para enviar al cliente (para=cliente).",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/estado": {
+      "patch": {
+        "operationId": "core_api_actualizar_estado_cotizacion",
+        "summary": "Actualizar Estado Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "El estado depende de los pagos: solo se acepta el que ya corresponde. Se mantiene para no romper clientes antiguos.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CotizacionEstadoUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/nivelacion": {
+      "post": {
+        "operationId": "core_api_definir_nivelacion",
+        "summary": "Definir Nivelacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Tras la visita al terreno: cubica el estabilizado y, si lo pone la empresa, lo suma al valor ya informado.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NivelacionInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/cambios/": {
+      "get": {
+        "operationId": "core_api_historial_cambios",
+        "summary": "Historial Cambios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CambioCotizacionSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/public/{token}": {
+      "get": {
+        "operationId": "core_api_obtener_cotizacion_publica",
+        "summary": "Obtener Cotizacion Publica",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "schema": {
+              "format": "uuid",
+              "title": "Token",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CotizacionPublicaSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/insumos/": {
+      "post": {
+        "operationId": "core_api_agregar_insumo_cotizacion",
+        "summary": "Agregar Insumo Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetalleCotizacionInsumoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetalleCotizacionInsumoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/hitos/": {
+      "get": {
+        "operationId": "core_api_listar_hitos_cotizacion",
+        "summary": "Listar Hitos Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HitoPagoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/hitos-pago/{hito_id}/registros/": {
+      "post": {
+        "operationId": "core_api_registrar_pago",
+        "summary": "Registrar Pago",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hito_id",
+            "schema": {
+              "title": "Hito Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HitoPagoSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Anota un abono en el libro de pagos. El monto es lo pagado ahora; no puede superar lo que falta del hito.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroPagoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/registros-pago/{registro_id}/": {
+      "delete": {
+        "operationId": "core_api_anular_registro_pago",
+        "summary": "Anular Registro Pago",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registro_id",
+            "schema": {
+              "title": "Registro Id",
+              "type": "integer"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "forzar",
+            "schema": {
+              "default": false,
+              "title": "Forzar",
+              "type": "boolean"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HitoPagoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmarSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Corrige un abono mal ingresado: lo elimina del libro y el hito vuelve a calcularse. Si el pago respalda un avance ya\nregistrado responde 409 con `confirmar`; repetido con `forzar=true` lo anula y baja el avance al que permiten los pagos.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/registros-pago/{registro_id}/comprobante/": {
+      "put": {
+        "operationId": "core_api_reemplazar_comprobante",
+        "summary": "Reemplazar Comprobante",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registro_id",
+            "schema": {
+              "title": "Registro Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HitoPagoSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cambia el comprobante de un abono ya registrado (por ejemplo, si se adjuntó el equivocado).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComprobanteInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "core_api_ver_comprobante",
+        "summary": "Ver Comprobante",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registro_id",
+            "schema": {
+              "title": "Registro Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/hitos-pago/{hito_id}/": {
+      "patch": {
+        "operationId": "core_api_actualizar_hito_pago",
+        "summary": "Actualizar Hito Pago",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hito_id",
+            "schema": {
+              "title": "Hito Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HitoPagoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Compatibilidad con el registro por total: `pago_completo=True` (o PAGADO) abona lo que falta; `monto_abonado` es el\ntotal recibido (anota la diferencia como un abono); PENDIENTE borra todos los abonos. No admite bajar un total: para\ncorregir se anula el abono desde el libro de pagos.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HitoPagoUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/obra/": {
+      "get": {
+        "operationId": "core_api_obtener_obra_cotizacion",
+        "summary": "Obtener Obra Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObraEjecucionSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/ganancias/": {
+      "get": {
+        "operationId": "core_api_resumen_ganancias",
+        "summary": "Resumen Ganancias",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GananciasSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "vista_resumen_ganancias: neto cobrado vs costo presupuestado.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/obras/{obra_id}/": {
+      "patch": {
+        "operationId": "core_api_actualizar_obra",
+        "summary": "Actualizar Obra",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "obra_id",
+            "schema": {
+              "title": "Obra Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObraEjecucionSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObraEjecucionInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/bitacora/": {
+      "get": {
+        "operationId": "core_api_listar_bitacora",
+        "summary": "Listar Bitacora",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BitacoraSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_registrar_avance",
+        "summary": "Registrar Avance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BitacoraSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Registra un avance (porcentaje + comentario + fotos) y actualiza el avance de la obra, que debe ser coherente con los pagos.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitacoraInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/bitacora/{bitacora_id}/": {
+      "patch": {
+        "operationId": "core_api_agregar_fotos_bitacora",
+        "summary": "Agregar Fotos Bitacora",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bitacora_id",
+            "schema": {
+              "title": "Bitacora Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BitacoraSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitacoraFotosInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_bitacora",
+        "summary": "Eliminar Bitacora",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bitacora_id",
+            "schema": {
+              "title": "Bitacora Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Elimina un registro mal ingresado; el avance de la obra vuelve al del último registro que queda.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/bitacora/fotos/{foto_id}/": {
+      "get": {
+        "operationId": "core_api_servir_foto_bitacora",
+        "summary": "Servir Foto Bitacora",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "foto_id",
+            "schema": {
+              "title": "Foto Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/contrato/": {
+      "post": {
+        "operationId": "core_api_subir_contrato",
+        "summary": "Subir Contrato",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Adjunta (o reemplaza) el PDF del contrato notarial del proyecto.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContratoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "core_api_ver_contrato",
+        "summary": "Ver Contrato",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_quitar_contrato",
+        "summary": "Quitar Contrato",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/cotizaciones/public/{token}/contrato": {
+      "get": {
+        "operationId": "core_api_ver_contrato_publico",
+        "summary": "Ver Contrato Publico",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "schema": {
+              "format": "uuid",
+              "title": "Token",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "El cliente lo descarga con el enlace privado de su ficha."
+      }
+    },
+    "/api/cotizaciones/{cotizacion_id}/desglose/": {
+      "get": {
+        "operationId": "core_api_desglose_cotizacion",
+        "summary": "Desglose Cotizacion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cotizacion_id",
+            "schema": {
+              "title": "Cotizacion Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "description": "Detalle completo para la ficha de la empresa: todos los materiales con su cantidad, la mano de obra, el traslado y la ganancia.",
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/portafolio/": {
+      "get": {
+        "operationId": "core_api_listar_portafolio",
+        "summary": "Listar Portafolio",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortafolioProyectoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "core_api_crear_proyecto_portafolio",
+        "summary": "Crear Proyecto Portafolio",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortafolioProyectoSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortafolioProyectoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/portafolio/admin/": {
+      "get": {
+        "operationId": "core_api_listar_portafolio_admin",
+        "summary": "Listar Portafolio Admin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortafolioProyectoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/portafolio/imagenes/{imagen_id}/": {
+      "get": {
+        "operationId": "core_api_servir_imagen_portafolio",
+        "summary": "Servir Imagen Portafolio",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "imagen_id",
+            "schema": {
+              "title": "Imagen Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/portafolio/{proyecto_id}/": {
+      "patch": {
+        "operationId": "core_api_editar_proyecto_portafolio",
+        "summary": "Editar Proyecto Portafolio",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proyecto_id",
+            "schema": {
+              "title": "Proyecto Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortafolioProyectoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortafolioProyectoUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_proyecto_portafolio",
+        "summary": "Eliminar Proyecto Portafolio",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proyecto_id",
+            "schema": {
+              "title": "Proyecto Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-casas/": {
+      "get": {
+        "operationId": "core_api_listar_catalogo_casas",
+        "summary": "Listar Catalogo Casas",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CasaCatalogoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "core_api_crear_casa_catalogo",
+        "summary": "Crear Casa Catalogo",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasaCatalogoSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasaCatalogoInSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-casas/admin/": {
+      "get": {
+        "operationId": "core_api_listar_catalogo_casas_admin",
+        "summary": "Listar Catalogo Casas Admin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CasaCatalogoSchema"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      }
+    },
+    "/api/catalogo-casas/imagenes/{imagen_id}/": {
+      "get": {
+        "operationId": "core_api_servir_imagen_casa",
+        "summary": "Servir Imagen Casa",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "imagen_id",
+            "schema": {
+              "title": "Imagen Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/catalogo-casas/{casa_id}/": {
+      "patch": {
+        "operationId": "core_api_editar_casa_catalogo",
+        "summary": "Editar Casa Catalogo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "casa_id",
+            "schema": {
+              "title": "Casa Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasaCatalogoSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasaCatalogoUpdateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "AuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_eliminar_casa_catalogo",
+        "summary": "Eliminar Casa Catalogo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "casa_id",
+            "schema": {
+              "title": "Casa Id",
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthAdmin": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TokenSchema": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioSchema"
+          }
+        },
+        "required": [
+          "token",
+          "usuario"
+        ],
+        "title": "TokenSchema",
+        "type": "object"
+      },
+      "UsuarioSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "rut": {
+            "title": "Rut",
+            "type": "string"
+          },
+          "nombre_completo": {
+            "title": "Nombre Completo",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "google_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Id"
+          },
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "rol": {
+            "default": "ADMIN",
+            "title": "Rol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rut",
+          "nombre_completo",
+          "email",
+          "activo"
+        ],
+        "title": "UsuarioSchema",
+        "type": "object"
+      },
+      "MessageSchema": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "MessageSchema",
+        "type": "object"
+      },
+      "GoogleAuthInSchema": {
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "nombre_completo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Completo"
+          },
+          "google_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Id"
+          }
+        },
+        "title": "GoogleAuthInSchema",
+        "type": "object"
+      },
+      "UsuarioInSchema": {
+        "properties": {
+          "rut": {
+            "title": "Rut",
+            "type": "string"
+          },
+          "nombre_completo": {
+            "title": "Nombre Completo",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "activo": {
+            "default": true,
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "rol": {
+            "default": "OPERADOR",
+            "title": "Rol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rut",
+          "nombre_completo",
+          "email"
+        ],
+        "title": "UsuarioInSchema",
+        "type": "object"
+      },
+      "AuditoriaSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "usuario_nombre": {
+            "title": "Usuario Nombre",
+            "type": "string"
+          },
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "entidad": {
+            "title": "Entidad",
+            "type": "string"
+          },
+          "entidad_id": {
+            "title": "Entidad Id",
+            "type": "integer"
+          },
+          "detalle": {
+            "title": "Detalle",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "usuario_nombre",
+          "accion",
+          "entidad",
+          "entidad_id",
+          "detalle",
+          "fecha"
+        ],
+        "title": "AuditoriaSchema",
+        "type": "object"
+      },
+      "TarifaSchema": {
+        "properties": {
+          "clave": {
+            "title": "Clave",
+            "type": "string"
+          },
+          "grupo": {
+            "title": "Grupo",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "unidad": {
+            "title": "Unidad",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "valor": {
+            "title": "Valor",
+            "type": "number"
+          },
+          "valor_de_fabrica": {
+            "title": "Valor De Fabrica",
+            "type": "number"
+          },
+          "modificada": {
+            "title": "Modificada",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clave",
+          "grupo",
+          "nombre",
+          "unidad",
+          "descripcion",
+          "valor",
+          "valor_de_fabrica",
+          "modificada"
+        ],
+        "title": "TarifaSchema",
+        "type": "object"
+      },
+      "TarifaInSchema": {
+        "properties": {
+          "valor": {
+            "maximum": 1000000000,
+            "minimum": 0,
+            "title": "Valor",
+            "type": "number"
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "TarifaInSchema",
+        "type": "object"
+      },
+      "ProveedorSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "rut_empresa": {
+            "title": "Rut Empresa",
+            "type": "string"
+          },
+          "razon_social": {
+            "title": "Razon Social",
+            "type": "string"
+          },
+          "contacto_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contacto Nombre"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "rut_empresa",
+          "razon_social",
+          "activo"
+        ],
+        "title": "ProveedorSchema",
+        "type": "object"
+      },
+      "ProveedorInSchema": {
+        "properties": {
+          "rut_empresa": {
+            "title": "Rut Empresa",
+            "type": "string"
+          },
+          "razon_social": {
+            "title": "Razon Social",
+            "type": "string"
+          },
+          "contacto_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contacto Nombre"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "activo": {
+            "default": true,
+            "title": "Activo",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rut_empresa",
+          "razon_social"
+        ],
+        "title": "ProveedorInSchema",
+        "type": "object"
+      },
+      "InsumoSchema": {
+        "description": "Fila de la tabla 'Materiales y precios': precio de lista, descuento vigente y costo neto final (CLP).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "proveedor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor Id"
+          },
+          "proveedor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor"
+          },
+          "unidad_medida": {
+            "title": "Unidad Medida",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "sku": {
+            "default": "",
+            "title": "Sku",
+            "type": "string"
+          },
+          "precio_base_unitario": {
+            "default": 0,
+            "title": "Precio Base Unitario",
+            "type": "number"
+          },
+          "precio_lista": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Lista"
+          },
+          "descuento_pct": {
+            "default": 0,
+            "title": "Descuento Pct",
+            "type": "number"
+          },
+          "costo_neto": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costo Neto"
+          },
+          "m2_por_unidad": {
+            "default": 0,
+            "title": "M2 Por Unidad",
+            "type": "number"
+          },
+          "neto_por_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neto Por M2"
+          },
+          "mano_obra_m2": {
+            "default": 0,
+            "title": "Mano Obra M2",
+            "type": "number"
+          },
+          "actualizado_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actualizado En"
+          },
+          "verificado": {
+            "default": false,
+            "title": "Verificado",
+            "type": "boolean"
+          },
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "ultimo_error": {
+            "default": "",
+            "title": "Ultimo Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "categoria",
+          "nombre",
+          "unidad_medida",
+          "activo"
+        ],
+        "title": "InsumoSchema",
+        "type": "object"
+      },
+      "CatalogoTipoSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "categoria": {
+            "title": "Categoria",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "unidad_medida": {
+            "title": "Unidad Medida",
+            "type": "string"
+          },
+          "precio_base_unitario": {
+            "title": "Precio Base Unitario",
+            "type": "number"
+          },
+          "proveedor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor Id"
+          },
+          "proveedor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProveedorSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "etapa_obra": {
+            "default": "",
+            "title": "Etapa Obra",
+            "type": "string"
+          },
+          "rendimiento_m2": {
+            "default": 0,
+            "title": "Rendimiento M2",
+            "type": "number"
+          },
+          "fuente_url": {
+            "default": "",
+            "title": "Fuente Url",
+            "type": "string"
+          },
+          "fuente_termino": {
+            "default": "",
+            "title": "Fuente Termino",
+            "type": "string"
+          },
+          "precio_actualizado_en": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Actualizado En"
+          },
+          "m2_por_unidad": {
+            "default": 0,
+            "title": "M2 Por Unidad",
+            "type": "number"
+          },
+          "mano_obra_m2": {
+            "default": 0,
+            "title": "Mano Obra M2",
+            "type": "number"
+          },
+          "precio_lista": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Lista"
+          },
+          "descuento_pct": {
+            "default": 0,
+            "title": "Descuento Pct",
+            "type": "number"
+          },
+          "costo_neto": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costo Neto"
+          },
+          "verificado": {
+            "default": false,
+            "title": "Verificado",
+            "type": "boolean"
+          },
+          "ultimo_error": {
+            "default": "",
+            "title": "Ultimo Error",
+            "type": "string"
+          },
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "precio_neto": {
+            "default": 0,
+            "title": "Precio Neto",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "categoria",
+          "nombre",
+          "unidad_medida",
+          "precio_base_unitario",
+          "activo"
+        ],
+        "title": "CatalogoTipoSchema",
+        "type": "object"
+      },
+      "CatalogoTipoInSchema": {
+        "properties": {
+          "categoria": {
+            "maxLength": 50,
+            "minLength": 2,
+            "title": "Categoria",
+            "type": "string"
+          },
+          "nombre": {
+            "default": "",
+            "maxLength": 150,
+            "title": "Nombre",
+            "type": "string"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "unidad_medida": {
+            "default": "UN",
+            "maxLength": 20,
+            "title": "Unidad Medida",
+            "type": "string"
+          },
+          "precio_base_unitario": {
+            "default": 0.0,
+            "maximum": 1000000000,
+            "minimum": 0,
+            "title": "Precio Base Unitario",
+            "type": "number"
+          },
+          "descuento_pct": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Descuento Pct",
+            "type": "number"
+          },
+          "proveedor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proveedor Id"
+          },
+          "etapa_obra": {
+            "default": "",
+            "maxLength": 50,
+            "title": "Etapa Obra",
+            "type": "string"
+          },
+          "rendimiento_m2": {
+            "default": 0,
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Rendimiento M2",
+            "type": "number"
+          },
+          "fuente_url": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Fuente Url",
+            "type": "string"
+          },
+          "m2_por_unidad": {
+            "default": 0,
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "M2 Por Unidad",
+            "type": "number"
+          },
+          "mano_obra_m2": {
+            "default": 0,
+            "maximum": 1000000,
+            "minimum": 0,
+            "title": "Mano Obra M2",
+            "type": "number"
+          },
+          "verificado": {
+            "default": false,
+            "title": "Verificado",
+            "type": "boolean"
+          },
+          "activo": {
+            "default": true,
+            "title": "Activo",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "categoria"
+        ],
+        "title": "CatalogoTipoInSchema",
+        "type": "object"
+      },
+      "CotizacionSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "codigo_cotizacion": {
+            "title": "Codigo Cotizacion",
+            "type": "string"
+          },
+          "token_publico": {
+            "format": "uuid",
+            "title": "Token Publico",
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "title": "Cliente Nombre",
+            "type": "string"
+          },
+          "cliente_telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Telefono"
+          },
+          "cliente_rut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Rut"
+          },
+          "direccion_terreno": {
+            "title": "Direccion Terreno",
+            "type": "string"
+          },
+          "superficie_m2": {
+            "title": "Superficie M2",
+            "type": "number"
+          },
+          "distancia_flete_km": {
+            "title": "Distancia Flete Km",
+            "type": "number"
+          },
+          "base_terreno_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Terreno Id"
+          },
+          "base_terreno": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogoTipoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revestimiento_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento Id"
+          },
+          "revestimiento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogoTipoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costo_materiales": {
+            "title": "Costo Materiales",
+            "type": "number"
+          },
+          "costo_mano_obra": {
+            "title": "Costo Mano Obra",
+            "type": "number"
+          },
+          "costo_flete": {
+            "title": "Costo Flete",
+            "type": "number"
+          },
+          "costo_total": {
+            "title": "Costo Total",
+            "type": "number"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "tipo_proyecto": {
+            "default": "CASA",
+            "title": "Tipo Proyecto",
+            "type": "string"
+          },
+          "nivelacion_modalidad": {
+            "default": "",
+            "title": "Nivelacion Modalidad",
+            "type": "string"
+          },
+          "nivelacion_m3": {
+            "default": 0,
+            "title": "Nivelacion M3",
+            "type": "number"
+          },
+          "costo_nivelacion": {
+            "default": 0,
+            "title": "Costo Nivelacion",
+            "type": "number"
+          },
+          "ganancia_m2": {
+            "default": 0,
+            "title": "Ganancia M2",
+            "type": "number"
+          },
+          "m2_vigas_vista": {
+            "default": 0,
+            "title": "M2 Vigas Vista",
+            "type": "number"
+          },
+          "tarifas_personalizadas": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Tarifas Personalizadas",
+            "type": "object"
+          },
+          "radier_m2": {
+            "default": 0,
+            "title": "Radier M2",
+            "type": "number"
+          },
+          "ajuste_monto": {
+            "default": 0,
+            "title": "Ajuste Monto",
+            "type": "number"
+          },
+          "modo_lista": {
+            "default": false,
+            "title": "Modo Lista",
+            "type": "boolean"
+          },
+          "modo_tarifas": {
+            "default": false,
+            "title": "Modo Tarifas",
+            "type": "boolean"
+          },
+          "n_trabajadores": {
+            "default": 0,
+            "title": "N Trabajadores",
+            "type": "integer"
+          },
+          "dias_obra": {
+            "default": 0,
+            "title": "Dias Obra",
+            "type": "integer"
+          },
+          "lleva_radier": {
+            "default": false,
+            "title": "Lleva Radier",
+            "type": "boolean"
+          },
+          "tarifa_radier_m2": {
+            "default": 35000,
+            "title": "Tarifa Radier M2",
+            "type": "number"
+          },
+          "precio_litro": {
+            "default": 1650,
+            "title": "Precio Litro",
+            "type": "number"
+          },
+          "fecha_creacion": {
+            "format": "date-time",
+            "title": "Fecha Creacion",
+            "type": "string"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "integer"
+          },
+          "usuario": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsuarioSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "codigo_cotizacion",
+          "token_publico",
+          "cliente_nombre",
+          "direccion_terreno",
+          "superficie_m2",
+          "distancia_flete_km",
+          "costo_materiales",
+          "costo_mano_obra",
+          "costo_flete",
+          "costo_total",
+          "estado",
+          "fecha_creacion",
+          "usuario_id"
+        ],
+        "title": "CotizacionSchema",
+        "type": "object"
+      },
+      "CotizacionInSchema": {
+        "properties": {
+          "cliente_nombre": {
+            "title": "Cliente Nombre",
+            "type": "string"
+          },
+          "cliente_telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Telefono"
+          },
+          "cliente_rut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Rut"
+          },
+          "direccion_terreno": {
+            "title": "Direccion Terreno",
+            "type": "string"
+          },
+          "superficie_m2": {
+            "exclusiveMinimum": 0,
+            "maximum": 10000,
+            "title": "Superficie M2",
+            "type": "number"
+          },
+          "distancia_flete_km": {
+            "default": 0.0,
+            "maximum": 3000,
+            "minimum": 0,
+            "title": "Distancia Flete Km",
+            "type": "number"
+          },
+          "base_terreno_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Terreno Id"
+          },
+          "revestimiento_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento Id"
+          },
+          "costo_materiales": {
+            "default": 0.0,
+            "title": "Costo Materiales",
+            "type": "number"
+          },
+          "costo_mano_obra": {
+            "default": 0.0,
+            "title": "Costo Mano Obra",
+            "type": "number"
+          },
+          "costo_flete": {
+            "default": 0.0,
+            "title": "Costo Flete",
+            "type": "number"
+          },
+          "costo_total": {
+            "default": 0.0,
+            "title": "Costo Total",
+            "type": "number"
+          },
+          "estado": {
+            "default": "BORRADOR",
+            "title": "Estado",
+            "type": "string"
+          },
+          "ganancia_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ganancia M2"
+          },
+          "m2_vigas_vista": {
+            "default": 0,
+            "maximum": 10000,
+            "minimum": 0,
+            "title": "M2 Vigas Vista",
+            "type": "number"
+          },
+          "tipo_proyecto": {
+            "default": "CASA",
+            "title": "Tipo Proyecto",
+            "type": "string"
+          },
+          "radier_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radier M2"
+          },
+          "materiales": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MaterialAdicionalInSchema"
+            },
+            "maxItems": 60,
+            "title": "Materiales",
+            "type": "array"
+          },
+          "maestros": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ManoObraInSchema"
+            },
+            "maxItems": 30,
+            "title": "Maestros",
+            "type": "array"
+          },
+          "modo_lista": {
+            "default": false,
+            "title": "Modo Lista",
+            "type": "boolean"
+          },
+          "modo_tarifas": {
+            "default": false,
+            "title": "Modo Tarifas",
+            "type": "boolean"
+          },
+          "n_trabajadores": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "N Trabajadores",
+            "type": "integer"
+          },
+          "dias_obra": {
+            "default": 0,
+            "maximum": 365,
+            "minimum": 0,
+            "title": "Dias Obra",
+            "type": "integer"
+          },
+          "lleva_radier": {
+            "default": false,
+            "title": "Lleva Radier",
+            "type": "boolean"
+          },
+          "tarifa_radier_m2": {
+            "anyOf": [
+              {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarifa Radier M2"
+          },
+          "precio_litro": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 100000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Litro"
+          },
+          "traslados": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TrasladoInSchema"
+            },
+            "maxItems": 4,
+            "title": "Traslados",
+            "type": "array"
+          },
+          "tarifas_personalizadas": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Tarifas Personalizadas",
+            "type": "object"
+          }
+        },
+        "required": [
+          "cliente_nombre",
+          "direccion_terreno",
+          "superficie_m2"
+        ],
+        "title": "CotizacionInSchema",
+        "type": "object"
+      },
+      "ManoObraInSchema": {
+        "description": "Trabajadores que cobran el mismo monto. Para pagos diferenciados se envían varias líneas.",
+        "properties": {
+          "cantidad": {
+            "exclusiveMinimum": 0,
+            "maximum": 100,
+            "title": "Cantidad",
+            "type": "integer"
+          },
+          "cobro": {
+            "maximum": 100000000,
+            "minimum": 0,
+            "title": "Cobro",
+            "type": "number"
+          }
+        },
+        "required": [
+          "cantidad",
+          "cobro"
+        ],
+        "title": "ManoObraInSchema",
+        "type": "object"
+      },
+      "MaterialAdicionalInSchema": {
+        "properties": {
+          "catalogo_id": {
+            "title": "Catalogo Id",
+            "type": "integer"
+          },
+          "cantidad": {
+            "exclusiveMinimum": 0,
+            "maximum": 100000,
+            "title": "Cantidad",
+            "type": "number"
+          },
+          "mano_obra_m2": {
+            "anyOf": [
+              {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mano Obra M2"
+          }
+        },
+        "required": [
+          "catalogo_id",
+          "cantidad"
+        ],
+        "title": "MaterialAdicionalInSchema",
+        "type": "object"
+      },
+      "TrasladoInSchema": {
+        "description": "Un traslado de la cotización. Si no se informa `precio_litro` se usa el precio vigente del combustible (CNE).\nEl traslado en camión no lleva combustible y, en ese caso, `precio_litro` es el costo del camión por día.",
+        "properties": {
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "combustible": {
+            "default": "",
+            "title": "Combustible",
+            "type": "string"
+          },
+          "dias": {
+            "maximum": 365,
+            "minimum": 0,
+            "title": "Dias",
+            "type": "integer"
+          },
+          "precio_litro": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 100000000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Litro"
+          }
+        },
+        "required": [
+          "tipo",
+          "dias"
+        ],
+        "title": "TrasladoInSchema",
+        "type": "object"
+      },
+      "CalculoInSchema": {
+        "properties": {
+          "superficie_m2": {
+            "title": "Superficie M2",
+            "type": "number"
+          },
+          "distancia_km": {
+            "default": 0,
+            "title": "Distancia Km",
+            "type": "number"
+          },
+          "base_terreno_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Terreno Id"
+          },
+          "revestimiento_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento Id"
+          },
+          "separacion_cm": {
+            "default": 40,
+            "title": "Separacion Cm",
+            "type": "integer"
+          },
+          "ganancia_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ganancia M2"
+          },
+          "m2_vigas_vista": {
+            "default": 0,
+            "title": "M2 Vigas Vista",
+            "type": "number"
+          },
+          "tipo_proyecto": {
+            "default": "CASA",
+            "title": "Tipo Proyecto",
+            "type": "string"
+          },
+          "radier_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radier M2"
+          },
+          "materiales": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MaterialAdicionalInSchema"
+            },
+            "maxItems": 60,
+            "title": "Materiales",
+            "type": "array"
+          },
+          "maestros": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ManoObraInSchema"
+            },
+            "maxItems": 30,
+            "title": "Maestros",
+            "type": "array"
+          },
+          "modo_lista": {
+            "default": false,
+            "title": "Modo Lista",
+            "type": "boolean"
+          },
+          "modo_tarifas": {
+            "default": false,
+            "title": "Modo Tarifas",
+            "type": "boolean"
+          },
+          "n_trabajadores": {
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "N Trabajadores",
+            "type": "integer"
+          },
+          "dias_obra": {
+            "default": 0,
+            "maximum": 365,
+            "minimum": 0,
+            "title": "Dias Obra",
+            "type": "integer"
+          },
+          "lleva_radier": {
+            "default": false,
+            "title": "Lleva Radier",
+            "type": "boolean"
+          },
+          "tarifa_radier_m2": {
+            "anyOf": [
+              {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarifa Radier M2"
+          },
+          "precio_litro": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 100000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Litro"
+          },
+          "traslados": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TrasladoInSchema"
+            },
+            "maxItems": 4,
+            "title": "Traslados",
+            "type": "array"
+          },
+          "tarifas_personalizadas": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Tarifas Personalizadas",
+            "type": "object"
+          }
+        },
+        "required": [
+          "superficie_m2"
+        ],
+        "title": "CalculoInSchema",
+        "type": "object"
+      },
+      "ProgresoObraSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "codigo_cotizacion": {
+            "title": "Codigo Cotizacion",
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "title": "Cliente Nombre",
+            "type": "string"
+          },
+          "avance": {
+            "title": "Avance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "codigo_cotizacion",
+          "cliente_nombre",
+          "avance"
+        ],
+        "title": "ProgresoObraSchema",
+        "type": "object"
+      },
+      "EstadisticasSchema": {
+        "properties": {
+          "cotizados": {
+            "title": "Cotizados",
+            "type": "integer"
+          },
+          "en_ejecucion": {
+            "title": "En Ejecucion",
+            "type": "integer"
+          },
+          "terminados": {
+            "title": "Terminados",
+            "type": "integer"
+          },
+          "trimestres": {
+            "items": {
+              "$ref": "#/components/schemas/TrimestreSchema"
+            },
+            "title": "Trimestres",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cotizados",
+          "en_ejecucion",
+          "terminados",
+          "trimestres"
+        ],
+        "title": "EstadisticasSchema",
+        "type": "object"
+      },
+      "TrimestreSchema": {
+        "properties": {
+          "clave": {
+            "title": "Clave",
+            "type": "string"
+          },
+          "etiqueta": {
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "creados": {
+            "title": "Creados",
+            "type": "integer"
+          },
+          "terminados": {
+            "title": "Terminados",
+            "type": "integer"
+          },
+          "ganancia_cotizadas": {
+            "default": 0,
+            "title": "Ganancia Cotizadas",
+            "type": "integer"
+          },
+          "ganancia_ejecucion": {
+            "default": 0,
+            "title": "Ganancia Ejecucion",
+            "type": "integer"
+          },
+          "ganancia_terminadas": {
+            "default": 0,
+            "title": "Ganancia Terminadas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clave",
+          "etiqueta",
+          "creados",
+          "terminados"
+        ],
+        "title": "TrimestreSchema",
+        "type": "object"
+      },
+      "CotizacionDetalladaSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "codigo_cotizacion": {
+            "title": "Codigo Cotizacion",
+            "type": "string"
+          },
+          "token_publico": {
+            "format": "uuid",
+            "title": "Token Publico",
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "title": "Cliente Nombre",
+            "type": "string"
+          },
+          "cliente_telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Telefono"
+          },
+          "cliente_rut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Rut"
+          },
+          "direccion_terreno": {
+            "title": "Direccion Terreno",
+            "type": "string"
+          },
+          "superficie_m2": {
+            "title": "Superficie M2",
+            "type": "number"
+          },
+          "distancia_flete_km": {
+            "title": "Distancia Flete Km",
+            "type": "number"
+          },
+          "base_terreno_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Terreno Id"
+          },
+          "base_terreno": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogoTipoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revestimiento_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento Id"
+          },
+          "revestimiento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogoTipoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costo_materiales": {
+            "title": "Costo Materiales",
+            "type": "number"
+          },
+          "costo_mano_obra": {
+            "title": "Costo Mano Obra",
+            "type": "number"
+          },
+          "costo_flete": {
+            "title": "Costo Flete",
+            "type": "number"
+          },
+          "costo_total": {
+            "title": "Costo Total",
+            "type": "number"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "tipo_proyecto": {
+            "default": "CASA",
+            "title": "Tipo Proyecto",
+            "type": "string"
+          },
+          "nivelacion_modalidad": {
+            "default": "",
+            "title": "Nivelacion Modalidad",
+            "type": "string"
+          },
+          "nivelacion_m3": {
+            "default": 0,
+            "title": "Nivelacion M3",
+            "type": "number"
+          },
+          "costo_nivelacion": {
+            "default": 0,
+            "title": "Costo Nivelacion",
+            "type": "number"
+          },
+          "ganancia_m2": {
+            "default": 0,
+            "title": "Ganancia M2",
+            "type": "number"
+          },
+          "m2_vigas_vista": {
+            "default": 0,
+            "title": "M2 Vigas Vista",
+            "type": "number"
+          },
+          "tarifas_personalizadas": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Tarifas Personalizadas",
+            "type": "object"
+          },
+          "radier_m2": {
+            "default": 0,
+            "title": "Radier M2",
+            "type": "number"
+          },
+          "ajuste_monto": {
+            "default": 0,
+            "title": "Ajuste Monto",
+            "type": "number"
+          },
+          "modo_lista": {
+            "default": false,
+            "title": "Modo Lista",
+            "type": "boolean"
+          },
+          "modo_tarifas": {
+            "default": false,
+            "title": "Modo Tarifas",
+            "type": "boolean"
+          },
+          "n_trabajadores": {
+            "default": 0,
+            "title": "N Trabajadores",
+            "type": "integer"
+          },
+          "dias_obra": {
+            "default": 0,
+            "title": "Dias Obra",
+            "type": "integer"
+          },
+          "lleva_radier": {
+            "default": false,
+            "title": "Lleva Radier",
+            "type": "boolean"
+          },
+          "tarifa_radier_m2": {
+            "default": 35000,
+            "title": "Tarifa Radier M2",
+            "type": "number"
+          },
+          "precio_litro": {
+            "default": 1650,
+            "title": "Precio Litro",
+            "type": "number"
+          },
+          "fecha_creacion": {
+            "format": "date-time",
+            "title": "Fecha Creacion",
+            "type": "string"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "integer"
+          },
+          "usuario": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsuarioSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tiene_contrato": {
+            "default": false,
+            "title": "Tiene Contrato",
+            "type": "boolean"
+          },
+          "hitos_pago": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HitoPagoSchema"
+            },
+            "title": "Hitos Pago",
+            "type": "array"
+          },
+          "detalles_insumo": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DetalleCotizacionInsumoSchema"
+            },
+            "title": "Detalles Insumo",
+            "type": "array"
+          },
+          "obras_ejecucion": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ObraEjecucionSchema"
+            },
+            "title": "Obras Ejecucion",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "codigo_cotizacion",
+          "token_publico",
+          "cliente_nombre",
+          "direccion_terreno",
+          "superficie_m2",
+          "distancia_flete_km",
+          "costo_materiales",
+          "costo_mano_obra",
+          "costo_flete",
+          "costo_total",
+          "estado",
+          "fecha_creacion",
+          "usuario_id"
+        ],
+        "title": "CotizacionDetalladaSchema",
+        "type": "object"
+      },
+      "DetalleCotizacionInsumoSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "cotizacion_id": {
+            "title": "Cotizacion Id",
+            "type": "integer"
+          },
+          "catalogo_tipo_id": {
+            "title": "Catalogo Tipo Id",
+            "type": "integer"
+          },
+          "catalogo_tipo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogoTipoSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "etapa_obra": {
+            "title": "Etapa Obra",
+            "type": "string"
+          },
+          "cantidad_calculada": {
+            "title": "Cantidad Calculada",
+            "type": "number"
+          },
+          "subtotal_costo": {
+            "title": "Subtotal Costo",
+            "type": "number"
+          },
+          "es_adicional": {
+            "default": false,
+            "title": "Es Adicional",
+            "type": "boolean"
+          },
+          "mano_obra_m2": {
+            "default": 0,
+            "title": "Mano Obra M2",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "cotizacion_id",
+          "catalogo_tipo_id",
+          "etapa_obra",
+          "cantidad_calculada",
+          "subtotal_costo"
+        ],
+        "title": "DetalleCotizacionInsumoSchema",
+        "type": "object"
+      },
+      "HitoPagoSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "cotizacion_id": {
+            "title": "Cotizacion Id",
+            "type": "integer"
+          },
+          "fase": {
+            "title": "Fase",
+            "type": "string"
+          },
+          "porcentaje": {
+            "title": "Porcentaje",
+            "type": "number"
+          },
+          "monto_pago": {
+            "title": "Monto Pago",
+            "type": "number"
+          },
+          "monto_abonado": {
+            "default": 0,
+            "title": "Monto Abonado",
+            "type": "number"
+          },
+          "monto_pendiente": {
+            "default": 0,
+            "title": "Monto Pendiente",
+            "type": "number"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha_pago": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Pago"
+          },
+          "comprobante_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comprobante Ref"
+          },
+          "registros": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RegistroPagoSchema"
+            },
+            "title": "Registros",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "cotizacion_id",
+          "fase",
+          "porcentaje",
+          "monto_pago",
+          "estado"
+        ],
+        "title": "HitoPagoSchema",
+        "type": "object"
+      },
+      "ObraEjecucionSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "cotizacion_id": {
+            "title": "Cotizacion Id",
+            "type": "integer"
+          },
+          "porcentaje_avance_real": {
+            "title": "Porcentaje Avance Real",
+            "type": "number"
+          },
+          "fecha_ultima_actualizacion": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Ultima Actualizacion"
+          },
+          "observaciones": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observaciones"
+          }
+        },
+        "required": [
+          "id",
+          "cotizacion_id",
+          "porcentaje_avance_real"
+        ],
+        "title": "ObraEjecucionSchema",
+        "type": "object"
+      },
+      "RegistroPagoSchema": {
+        "description": "Una fila del libro de pagos (detalle_registros): lo pagado en ese abono y cómo va el hito después de él.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "number"
+          },
+          "metodo": {
+            "title": "Metodo",
+            "type": "string"
+          },
+          "metodo_etiqueta": {
+            "title": "Metodo Etiqueta",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "nota": {
+            "default": "",
+            "title": "Nota",
+            "type": "string"
+          },
+          "tiene_comprobante": {
+            "default": false,
+            "title": "Tiene Comprobante",
+            "type": "boolean"
+          },
+          "comprobante_nombre": {
+            "default": "",
+            "title": "Comprobante Nombre",
+            "type": "string"
+          },
+          "usuario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario"
+          },
+          "acumulado": {
+            "title": "Acumulado",
+            "type": "number"
+          },
+          "saldo": {
+            "title": "Saldo",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "monto",
+          "metodo",
+          "metodo_etiqueta",
+          "fecha",
+          "acumulado",
+          "saldo"
+        ],
+        "title": "RegistroPagoSchema",
+        "type": "object"
+      },
+      "CotizacionEditSchema": {
+        "properties": {
+          "cliente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Nombre"
+          },
+          "cliente_telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Telefono"
+          },
+          "cliente_rut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Rut"
+          },
+          "direccion_terreno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direccion Terreno"
+          },
+          "superficie_m2": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 10000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superficie M2"
+          },
+          "distancia_flete_km": {
+            "anyOf": [
+              {
+                "maximum": 3000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancia Flete Km"
+          },
+          "base_terreno_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Terreno Id"
+          },
+          "revestimiento_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento Id"
+          },
+          "m2_vigas_vista": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M2 Vigas Vista"
+          },
+          "ganancia_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ganancia M2"
+          },
+          "radier_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radier M2"
+          },
+          "ajuste_monto": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ajuste Monto"
+          },
+          "n_trabajadores": {
+            "anyOf": [
+              {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Trabajadores"
+          },
+          "dias_obra": {
+            "anyOf": [
+              {
+                "maximum": 365,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dias Obra"
+          },
+          "lleva_radier": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lleva Radier"
+          },
+          "tarifa_radier_m2": {
+            "anyOf": [
+              {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarifa Radier M2"
+          },
+          "precio_litro": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 100000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precio Litro"
+          },
+          "tarifas_personalizadas": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarifas Personalizadas"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "aplicar": {
+            "default": false,
+            "title": "Aplicar",
+            "type": "boolean"
+          }
+        },
+        "title": "CotizacionEditSchema",
+        "type": "object"
+      },
+      "CotizacionEstadoUpdateSchema": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "estado"
+        ],
+        "title": "CotizacionEstadoUpdateSchema",
+        "type": "object"
+      },
+      "NivelacionInSchema": {
+        "properties": {
+          "espesor_cm": {
+            "title": "Espesor Cm",
+            "type": "number"
+          },
+          "superficie_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superficie M2"
+          },
+          "arido_empresa": {
+            "default": true,
+            "title": "Arido Empresa",
+            "type": "boolean"
+          },
+          "aplicar": {
+            "default": false,
+            "title": "Aplicar",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "espesor_cm"
+        ],
+        "title": "NivelacionInSchema",
+        "type": "object"
+      },
+      "CambioCotizacionSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "usuario": {
+            "title": "Usuario",
+            "type": "string"
+          },
+          "total_anterior": {
+            "title": "Total Anterior",
+            "type": "number"
+          },
+          "total_nuevo": {
+            "title": "Total Nuevo",
+            "type": "number"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fecha",
+          "usuario",
+          "total_anterior",
+          "total_nuevo",
+          "motivo"
+        ],
+        "title": "CambioCotizacionSchema",
+        "type": "object"
+      },
+      "CotizacionPublicaSchema": {
+        "description": "Lo que ve el cliente: resumen general del proyecto. No incluye materiales ni el desglose de costos de la empresa.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "codigo_cotizacion": {
+            "title": "Codigo Cotizacion",
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "title": "Cliente Nombre",
+            "type": "string"
+          },
+          "cliente_telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Telefono"
+          },
+          "direccion_terreno": {
+            "title": "Direccion Terreno",
+            "type": "string"
+          },
+          "superficie_m2": {
+            "title": "Superficie M2",
+            "type": "number"
+          },
+          "costo_total": {
+            "title": "Costo Total",
+            "type": "number"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "tipo_proyecto": {
+            "default": "CASA",
+            "title": "Tipo Proyecto",
+            "type": "string"
+          },
+          "nivelacion_modalidad": {
+            "default": "",
+            "title": "Nivelacion Modalidad",
+            "type": "string"
+          },
+          "nivelacion_m3": {
+            "default": 0,
+            "title": "Nivelacion M3",
+            "type": "number"
+          },
+          "fecha_creacion": {
+            "format": "date-time",
+            "title": "Fecha Creacion",
+            "type": "string"
+          },
+          "hitos_pago": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HitoPagoPublicoSchema"
+            },
+            "title": "Hitos Pago",
+            "type": "array"
+          },
+          "avance": {
+            "default": 0,
+            "title": "Avance",
+            "type": "number"
+          },
+          "tiene_contrato": {
+            "default": false,
+            "title": "Tiene Contrato",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "codigo_cotizacion",
+          "cliente_nombre",
+          "direccion_terreno",
+          "superficie_m2",
+          "costo_total",
+          "estado",
+          "fecha_creacion"
+        ],
+        "title": "CotizacionPublicaSchema",
+        "type": "object"
+      },
+      "HitoPagoPublicoSchema": {
+        "description": "Un hito de pago tal como lo ve el cliente en su ficha pública: solo montos, estado y fecha. No incluye el libro de pagos\n(notas internas, quién registró cada abono, nombres de comprobantes) ni referencias internas.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "fase": {
+            "title": "Fase",
+            "type": "string"
+          },
+          "porcentaje": {
+            "title": "Porcentaje",
+            "type": "number"
+          },
+          "monto_pago": {
+            "title": "Monto Pago",
+            "type": "number"
+          },
+          "monto_abonado": {
+            "default": 0,
+            "title": "Monto Abonado",
+            "type": "number"
+          },
+          "monto_pendiente": {
+            "default": 0,
+            "title": "Monto Pendiente",
+            "type": "number"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha_pago": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Pago"
+          }
+        },
+        "required": [
+          "id",
+          "fase",
+          "porcentaje",
+          "monto_pago",
+          "estado"
+        ],
+        "title": "HitoPagoPublicoSchema",
+        "type": "object"
+      },
+      "DetalleCotizacionInsumoInSchema": {
+        "properties": {
+          "catalogo_tipo_id": {
+            "title": "Catalogo Tipo Id",
+            "type": "integer"
+          },
+          "etapa_obra": {
+            "title": "Etapa Obra",
+            "type": "string"
+          },
+          "cantidad_calculada": {
+            "title": "Cantidad Calculada",
+            "type": "number"
+          },
+          "subtotal_costo": {
+            "title": "Subtotal Costo",
+            "type": "number"
+          }
+        },
+        "required": [
+          "catalogo_tipo_id",
+          "etapa_obra",
+          "cantidad_calculada",
+          "subtotal_costo"
+        ],
+        "title": "DetalleCotizacionInsumoInSchema",
+        "type": "object"
+      },
+      "RegistroPagoInSchema": {
+        "properties": {
+          "monto": {
+            "exclusiveMinimum": 0,
+            "maximum": 10000000000,
+            "title": "Monto",
+            "type": "number"
+          },
+          "metodo": {
+            "title": "Metodo",
+            "type": "string"
+          },
+          "fecha": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha"
+          },
+          "nota": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Nota",
+            "type": "string"
+          },
+          "comprobante": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comprobante"
+          },
+          "comprobante_nombre": {
+            "default": "",
+            "maxLength": 150,
+            "title": "Comprobante Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monto",
+          "metodo"
+        ],
+        "title": "RegistroPagoInSchema",
+        "type": "object"
+      },
+      "ConfirmarSchema": {
+        "description": "409 que pide confirmación: el cliente muestra `message`, pregunta y repite la petición con `forzar`.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "confirmar": {
+            "default": true,
+            "title": "Confirmar",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ConfirmarSchema",
+        "type": "object"
+      },
+      "ComprobanteInSchema": {
+        "properties": {
+          "comprobante": {
+            "title": "Comprobante",
+            "type": "string"
+          },
+          "comprobante_nombre": {
+            "default": "",
+            "maxLength": 150,
+            "title": "Comprobante Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "comprobante"
+        ],
+        "title": "ComprobanteInSchema",
+        "type": "object"
+      },
+      "HitoPagoUpdateSchema": {
+        "description": "Compatibilidad: el panel usa `RegistroPagoInSchema`. Aquí `monto_abonado` es el total recibido (nunca baja).",
+        "properties": {
+          "estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado"
+          },
+          "pago_completo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pago Completo"
+          },
+          "monto_abonado": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto Abonado"
+          },
+          "fecha_pago": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Pago"
+          },
+          "comprobante_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comprobante Ref"
+          },
+          "metodo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metodo"
+          }
+        },
+        "title": "HitoPagoUpdateSchema",
+        "type": "object"
+      },
+      "GananciasSchema": {
+        "properties": {
+          "neto_cobrado": {
+            "title": "Neto Cobrado",
+            "type": "number"
+          },
+          "costo_presupuestado": {
+            "title": "Costo Presupuestado",
+            "type": "number"
+          },
+          "ganancia_estimada": {
+            "title": "Ganancia Estimada",
+            "type": "number"
+          },
+          "avance_real": {
+            "title": "Avance Real",
+            "type": "number"
+          },
+          "avance_minimo": {
+            "title": "Avance Minimo",
+            "type": "integer"
+          },
+          "avance_maximo": {
+            "title": "Avance Maximo",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "neto_cobrado",
+          "costo_presupuestado",
+          "ganancia_estimada",
+          "avance_real",
+          "avance_minimo",
+          "avance_maximo"
+        ],
+        "title": "GananciasSchema",
+        "type": "object"
+      },
+      "ObraEjecucionInSchema": {
+        "properties": {
+          "porcentaje_avance_real": {
+            "default": 0.0,
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Porcentaje Avance Real",
+            "type": "number"
+          },
+          "fecha_ultima_actualizacion": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Ultima Actualizacion"
+          },
+          "observaciones": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observaciones"
+          }
+        },
+        "title": "ObraEjecucionInSchema",
+        "type": "object"
+      },
+      "BitacoraSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "porcentaje": {
+            "title": "Porcentaje",
+            "type": "number"
+          },
+          "comentario": {
+            "title": "Comentario",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "usuario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario"
+          },
+          "fotos": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fotos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "porcentaje",
+          "comentario",
+          "fecha"
+        ],
+        "title": "BitacoraSchema",
+        "type": "object"
+      },
+      "BitacoraInSchema": {
+        "properties": {
+          "porcentaje": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Porcentaje",
+            "type": "number"
+          },
+          "comentario": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Comentario",
+            "type": "string"
+          },
+          "imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Imagenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "porcentaje",
+          "comentario"
+        ],
+        "title": "BitacoraInSchema",
+        "type": "object"
+      },
+      "BitacoraFotosInSchema": {
+        "properties": {
+          "agregar_imagenes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Agregar Imagenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "agregar_imagenes"
+        ],
+        "title": "BitacoraFotosInSchema",
+        "type": "object"
+      },
+      "ContratoInSchema": {
+        "properties": {
+          "nombre_archivo": {
+            "default": "contrato.pdf",
+            "title": "Nombre Archivo",
+            "type": "string"
+          },
+          "pdf": {
+            "title": "Pdf",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pdf"
+        ],
+        "title": "ContratoInSchema",
+        "type": "object"
+      },
+      "PortafolioProyectoSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "ubicacion_comuna": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion Comuna"
+          },
+          "imagen_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagen Url"
+          },
+          "publicado": {
+            "title": "Publicado",
+            "type": "boolean"
+          },
+          "etiqueta": {
+            "default": "",
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "cotizacion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cotizacion Id"
+          },
+          "whatsapp_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Url"
+          },
+          "imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Imagenes",
+            "type": "array"
+          },
+          "superficie_m2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superficie M2"
+          },
+          "revestimiento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revestimiento"
+          }
+        },
+        "required": [
+          "id",
+          "titulo",
+          "publicado"
+        ],
+        "title": "PortafolioProyectoSchema",
+        "type": "object"
+      },
+      "PortafolioProyectoInSchema": {
+        "properties": {
+          "titulo": {
+            "maxLength": 150,
+            "minLength": 3,
+            "title": "Titulo",
+            "type": "string"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "ubicacion_comuna": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion Comuna"
+          },
+          "imagen_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagen Url"
+          },
+          "publicado": {
+            "default": true,
+            "title": "Publicado",
+            "type": "boolean"
+          },
+          "etiqueta": {
+            "default": "",
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "cotizacion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cotizacion Id"
+          },
+          "imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Imagenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "titulo"
+        ],
+        "title": "PortafolioProyectoInSchema",
+        "type": "object"
+      },
+      "PortafolioProyectoUpdateSchema": {
+        "properties": {
+          "titulo": {
+            "anyOf": [
+              {
+                "maxLength": 150,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "ubicacion_comuna": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ubicacion Comuna"
+          },
+          "publicado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publicado"
+          },
+          "etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etiqueta"
+          },
+          "agregar_imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Agregar Imagenes",
+            "type": "array"
+          },
+          "quitar_imagenes": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Quitar Imagenes",
+            "type": "array"
+          },
+          "quitar_portada": {
+            "default": false,
+            "title": "Quitar Portada",
+            "type": "boolean"
+          }
+        },
+        "title": "PortafolioProyectoUpdateSchema",
+        "type": "object"
+      },
+      "CasaCatalogoSchema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "etiqueta": {
+            "default": "",
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "m2": {
+            "default": 0,
+            "title": "M2",
+            "type": "integer"
+          },
+          "dormitorios": {
+            "default": 0,
+            "title": "Dormitorios",
+            "type": "integer"
+          },
+          "banos": {
+            "default": 0,
+            "title": "Banos",
+            "type": "integer"
+          },
+          "resumen": {
+            "default": "",
+            "title": "Resumen",
+            "type": "string"
+          },
+          "ideal": {
+            "default": "",
+            "title": "Ideal",
+            "type": "string"
+          },
+          "incluye": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Incluye",
+            "type": "array"
+          },
+          "personalizado": {
+            "default": false,
+            "title": "Personalizado",
+            "type": "boolean"
+          },
+          "publicado": {
+            "default": true,
+            "title": "Publicado",
+            "type": "boolean"
+          },
+          "orden": {
+            "default": 0,
+            "title": "Orden",
+            "type": "integer"
+          },
+          "imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Imagenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "nombre"
+        ],
+        "title": "CasaCatalogoSchema",
+        "type": "object"
+      },
+      "CasaCatalogoInSchema": {
+        "properties": {
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "etiqueta": {
+            "default": "",
+            "title": "Etiqueta",
+            "type": "string"
+          },
+          "m2": {
+            "default": 0,
+            "maximum": 1000,
+            "minimum": 0,
+            "title": "M2",
+            "type": "integer"
+          },
+          "dormitorios": {
+            "default": 0,
+            "maximum": 20,
+            "minimum": 0,
+            "title": "Dormitorios",
+            "type": "integer"
+          },
+          "banos": {
+            "default": 0,
+            "maximum": 20,
+            "minimum": 0,
+            "title": "Banos",
+            "type": "integer"
+          },
+          "resumen": {
+            "default": "",
+            "title": "Resumen",
+            "type": "string"
+          },
+          "ideal": {
+            "default": "",
+            "title": "Ideal",
+            "type": "string"
+          },
+          "incluye": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Incluye",
+            "type": "array"
+          },
+          "personalizado": {
+            "default": false,
+            "title": "Personalizado",
+            "type": "boolean"
+          },
+          "publicado": {
+            "default": true,
+            "title": "Publicado",
+            "type": "boolean"
+          },
+          "orden": {
+            "default": 0,
+            "maximum": 999,
+            "minimum": 0,
+            "title": "Orden",
+            "type": "integer"
+          },
+          "imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Imagenes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "CasaCatalogoInSchema",
+        "type": "object"
+      },
+      "CasaCatalogoUpdateSchema": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "etiqueta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etiqueta"
+          },
+          "m2": {
+            "anyOf": [
+              {
+                "maximum": 1000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "M2"
+          },
+          "dormitorios": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dormitorios"
+          },
+          "banos": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Banos"
+          },
+          "resumen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resumen"
+          },
+          "ideal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ideal"
+          },
+          "incluye": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incluye"
+          },
+          "personalizado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Personalizado"
+          },
+          "publicado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publicado"
+          },
+          "orden": {
+            "anyOf": [
+              {
+                "maximum": 999,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orden"
+          },
+          "agregar_imagenes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Agregar Imagenes",
+            "type": "array"
+          },
+          "quitar_imagenes": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Quitar Imagenes",
+            "type": "array"
+          }
+        },
+        "title": "CasaCatalogoUpdateSchema",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "AuthBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "AuthAdmin": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "CronToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Cron-Token"
+      }
+    }
+  },
+  "servers": []
+}
