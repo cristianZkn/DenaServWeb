@@ -62,7 +62,8 @@ def datos_invalidos(request, exc):
         msg = str(e.get("msg", "")).removeprefix("Value error, ")
         if e.get("type") in traduccion:
             try:
-                msg = traduccion[e["type"]].format(**(e.get("ctx") or {}))
+                ctx = {k: int(x) if isinstance(x, float) and x.is_integer() else x for k, x in (e.get("ctx") or {}).items()}  # 100.0 -> 100
+                msg = traduccion[e["type"]].format(**ctx)
             except KeyError:
                 pass
         msgs.append(msg if msg.startswith(("El ", "La ")) else f"{campo}: {msg}")
