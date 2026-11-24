@@ -31,6 +31,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string>("");
+  const [userNombre, setUserNombre] = useState<string>("");
   const [autorizado, setAutorizado] = useState(false);
   const [rol, setRol] = useState<Rol>("OPERADOR");
   const [abierto, setAbierto] = useState(false); // menú lateral en pantallas angostas
@@ -43,7 +44,8 @@ export default function DashboardLayout({
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((u) => {
         if (!activo) return;
-        setUserEmail(u.email || u.nombre_completo || "");
+        setUserEmail(u.email || "");
+        setUserNombre(u.nombre_completo || u.email || "");
         setRol(u.rol === "ADMIN" ? "ADMIN" : "OPERADOR");
         setAutorizado(true);
       })
@@ -128,7 +130,12 @@ export default function DashboardLayout({
           <div className={colapsado ? "lg:hidden space-y-3" : "space-y-3"}>
             <Link href="/" target="_blank" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Ver sitio público<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></Link>
             {rol === "ADMIN" && <a href="/api/docs" target="_blank" rel="noreferrer" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Documentación de la API<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></a>}
-            {userEmail && <p className="text-xs text-blue-200/70 truncate" title={userEmail}>{userEmail} · {rol === "ADMIN" ? "Admin" : "Operador"}</p>}
+            {userNombre && (
+              <div className="min-w-0" title={userEmail}>
+                <p className="text-sm font-bold text-white truncate">{userNombre}</p>
+                <span className="mt-1 inline-block rounded-full bg-amber-400/20 px-2.5 py-0.5 text-xs font-bold text-amber-300 ring-1 ring-inset ring-amber-300/40">{rol === "ADMIN" ? "Admin" : "Operador"}</span>
+              </div>
+            )}
           </div>
           <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
             className="w-full !min-h-0 border border-white/25 hover:bg-white/10 text-white text-sm py-2 rounded-lg font-semibold transition cursor-pointer flex items-center justify-center gap-2">

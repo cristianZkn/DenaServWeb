@@ -129,13 +129,17 @@ export default function UsuariosPage() {
                 onChange={(e) => set("email", "us-email", e.target.value)} />
               <ErrorCampo id="us-email" texto={errores["us-email"]} />
             </div>
-            <div>
-              <label className={lbl} htmlFor="us-rol">Rol</label>
-              <select id="us-rol" value={form.rol} onChange={(e) => set("rol", "us-rol", e.target.value)}>
-                <option value="OPERADOR">Operador: cotiza y registra pagos; no gestiona usuarios ni proveedores</option>
-                <option value="ADMIN">Admin: acceso completo</option>
-              </select>
-            </div>
+            <fieldset>
+              <legend className={lbl}>Rol *</legend>
+              <div className="space-y-2">
+                {([["OPERADOR", "Operador", "Cotiza y registra pagos. No gestiona usuarios ni proveedores, ni edita materiales."], ["ADMIN", "Admin", "Acceso completo, incluida la gestión de usuarios."]] as const).map(([valor, titulo, texto]) => (
+                  <label key={valor} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer ${form.rol === valor ? "border-blue-700 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                    <input type="radio" name="us-rol" className="!w-4 !min-h-0 mt-1" checked={form.rol === valor} onChange={() => set("rol", "us-rol", valor)} />
+                    <span><span className="block font-bold text-slate-900">{titulo}</span><span className="block text-slate-600">{texto}</span></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
               <input type="checkbox" className="!w-4 !min-h-0" checked={form.activo} onChange={(e) => set("activo", "us-activo", e.target.checked)} />
               Acceso activo
