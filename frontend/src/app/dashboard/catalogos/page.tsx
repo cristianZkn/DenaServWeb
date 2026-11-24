@@ -6,6 +6,7 @@ import { CATEGORIAS } from "@/lib/categorias";
 import Paginador from "@/components/Paginador";
 import EncabezadoPagina from "@/components/EncabezadoPagina";
 import Insignia from "@/components/Insignia";
+import Icono, { type NombreIcono } from "@/components/Icono";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -157,7 +158,7 @@ export default function CatalogosPage() {
 
   return (
     <div className="space-y-4">
-      <EncabezadoPagina icono="🧱" titulo="Materiales y precios"
+      <EncabezadoPagina icono="ladrillo" titulo="Materiales y precios"
         descripcion={<>Precios obtenidos de la ficha de cada producto. Última actualización:{" "}
           <strong className={ultima.dias > 8 ? "text-amber-700" : "text-slate-800"}>
             {estado?.ultima_actualizacion ? `${new Date(estado.ultima_actualizacion).toLocaleDateString("es-CL")} · ${ultima.texto.toLowerCase()}` : "nunca"}
@@ -219,7 +220,7 @@ export default function CatalogosPage() {
                 }`}
               >
                 {g.label} <span className="opacity-70">{n}</span>
-                {falta && <span title="Falta un producto verificado" className="ml-1 text-amber-500">●</span>}
+                {falta && <span title="Falta un producto verificado" className="ml-1.5 inline-block h-2 w-2 rounded-full bg-amber-500 align-middle" />}
               </button>
             );
           })}
@@ -271,14 +272,14 @@ export default function CatalogosPage() {
                       <tr className={`hover:bg-slate-50 ${i.activo ? "" : "opacity-60"}`}>
                         <td className="px-4 py-2.5 max-w-sm">
                           <div className="font-semibold text-slate-900 truncate" title={i.nombre}>
-                            {i.url ? <a href={urlSegura(i.url)} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre} ↗</a> : i.nombre}
+                            {i.url ? <a href={urlSegura(i.url)} target="_blank" rel="noreferrer" className="hover:underline">{i.nombre}<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></a> : i.nombre}
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                             <span className="text-xs text-slate-500">Se vende por {etiquetaUnidad(i.unidad_medida).toLowerCase()}</span>
                             {!i.activo && <Insignia tono="gris">{i.verificado ? "Desactivado" : "Por confirmar"}</Insignia>}
                             {i.activo && !i.verificado && <Insignia tono="ambar">Sin verificar</Insignia>}
                           </div>
-                          {i.ultimo_error && <div className="text-xs text-red-700" title={i.ultimo_error}>⚠ {i.ultimo_error.slice(0, 70)}</div>}
+                          {i.ultimo_error && <div className="text-xs text-red-700" title={i.ultimo_error}><Icono nombre="alerta" className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />{i.ultimo_error.slice(0, 70)}</div>}
                         </td>
                         <td className="px-4 py-2.5 text-slate-700">{i.proveedor ?? "—"}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
@@ -404,8 +405,8 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
   const etiqueta = "block text-sm font-semibold text-slate-700 mb-1";
   const ayuda = "text-sm text-slate-500 mt-1";
   const tarjeta = "rounded-xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm";
-  const titulo = (icono: string, texto: string) => (
-    <h3 className="flex items-center gap-2 text-base font-extrabold text-blue-900"><span aria-hidden className="text-lg">{icono}</span>{texto}</h3>
+  const titulo = (icono: NombreIcono, texto: string) => (
+    <h3 className="flex items-center gap-2 text-base font-extrabold text-blue-900"><Icono nombre={icono} className="h-5 w-5 text-amber-500" />{texto}</h3>
   );
   const conFicha = !manual;
   return (
@@ -414,12 +415,12 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
       {dialogo}
       <form onSubmit={guardar} className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden ring-1 ring-black/10">
         <header className="flex items-start gap-3 bg-gradient-to-r from-blue-900 to-blue-700 px-5 py-4 text-white">
-          <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-2xl">🧱</span>
+          <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15"><Icono nombre="ladrillo" className="h-6 w-6" /></span>
           <div className="min-w-0 mr-auto">
             <h2 id="m-titulo" className="text-xl font-extrabold leading-tight">{item ? "Editar material" : "Agregar material"}</h2>
             <p className="truncate text-sm text-blue-100">{item ? item.nombre : "Complete los datos del producto para poder cotizarlo."}</p>
           </div>
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="!min-h-0 h-9 w-9 shrink-0 rounded-lg text-lg text-blue-100 hover:bg-white/15 cursor-pointer">✕</button>
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="!min-h-0 h-9 w-9 shrink-0 rounded-lg text-lg text-blue-100 hover:bg-white/15 cursor-pointer"><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
@@ -427,7 +428,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
 
           {/* Producto */}
           <section className={tarjeta}>
-            {titulo("📦", "Producto")}
+            {titulo("caja", "Producto")}
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className={etiqueta} htmlFor="m-cat">Categoría</label>
@@ -496,7 +497,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
 
           {/* Precio */}
           <section className={tarjeta}>
-            {titulo("💲", "Precio y descuento")}
+            {titulo("dolar", "Precio y descuento")}
             {manual ? (
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -528,7 +529,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
 
           {/* Instalación */}
           <section className={tarjeta}>
-            {titulo("🔨", "Mano de obra por instalación")}
+            {titulo("herramienta", "Mano de obra por instalación")}
             <div>
               <label className={etiqueta} htmlFor="m-mo">Tarifa por m² instalado (opcional)</label>
               <input id="m-mo" type="number" min="0" step="100" value={f.mano_obra_m2} onFocus={(e) => e.target.select()}
@@ -542,7 +543,7 @@ function FormularioMaterial({ item, proveedores, onCerrar, onGuardado }: {
 
           {/* Estado */}
           <section className={tarjeta}>
-            {titulo("✅", "Estado")}
+            {titulo("check-circulo", "Estado")}
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="checkbox" className="!w-5 !min-h-0 mt-0.5" checked={f.verificado} onChange={(e) => set("verificado", e.target.checked)} />
               <span><strong>Confirmo que es el producto correcto.</strong> <span className="text-sm text-slate-500">Al marcarlo se vuelve a leer el precio de la ficha.</span></span>

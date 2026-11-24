@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -82,7 +83,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
           <p>{error || "No se encontró el proyecto."}</p>
         </div>
         <Link href="/" className="mt-4 text-blue-900 underline font-semibold text-sm">
-          ← Volver al sitio web
+          <Icono nombre="flecha-izq" className="inline h-4 w-4 -mt-0.5 mr-1" />Volver al sitio web
         </Link>
       </div>
     );
@@ -100,7 +101,7 @@ export default function FichaCotizacion({ params }: { params: Promise<{ uuid: st
             onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))} 
             className="text-blue-900 font-bold hover:underline cursor-pointer"
           >
-            ← Volver Atrás
+            <Icono nombre="flecha-izq" className="inline h-4 w-4 -mt-0.5 mr-1" />Volver Atrás
           </button>
           <span className="font-mono text-xs text-slate-500 font-semibold">
             REF: {cotizacion.codigo_cotizacion}

@@ -1,5 +1,6 @@
 "use client";
 
+import Icono, { type NombreIcono } from "@/components/Icono";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { TarjetaObra, VisorObra, type Obra } from "@/components/GaleriaObra";
@@ -28,11 +29,11 @@ const VENTAJAS = [
 
 const FRASES = ["Cotización clara", "Precios al día", "Avance con fotos", "Pagos por etapas", "Tu casa, tu presupuesto", "Atención cercana", "Calidad que perdura", "Servicio con garantías", "Recomendados por nuestros clientes"];
 
-const SERVICIOS = [
-  { icono: "🏠", titulo: "Casas prefabricadas", texto: "Fabricación y armado de casas a la medida de su terreno y su presupuesto." },
-  { icono: "🧱", titulo: "Radieres", texto: "Base de hormigón firme y bien nivelada, lista para recibir su casa." },
-  { icono: "🛡️", titulo: "Revestimientos", texto: "Smart Panel, siding y terminaciones pensadas para el clima del sur." },
-  { icono: "🏗️", titulo: "Cubiertas y techumbres", texto: "Cerchas, zinc y estructura de techo con materiales de calidad." },
+const SERVICIOS: { icono: NombreIcono; titulo: string; texto: string }[] = [
+  { icono: "casa", titulo: "Casas prefabricadas", texto: "Fabricación y armado de casas a la medida de su terreno y su presupuesto." },
+  { icono: "ladrillo", titulo: "Radieres", texto: "Base de hormigón firme y bien nivelada, lista para recibir su casa." },
+  { icono: "escudo", titulo: "Revestimientos", texto: "Smart Panel, siding y terminaciones pensadas para el clima del sur." },
+  { icono: "obra", titulo: "Cubiertas y techumbres", texto: "Cerchas, zinc y estructura de techo con materiales de calidad." },
 ];
 
 const METAS = [
@@ -155,7 +156,7 @@ export default function PortafolioPage() {
               Acceso de la empresa
             </Link>
             <button type="button" onClick={() => setMenu((m) => !m)} aria-label="Abrir menú" aria-expanded={menu}
-              className="lg:hidden !min-h-0 h-10 w-10 rounded-lg border border-white/25 text-white cursor-pointer">{menu ? "✕" : "☰"}</button>
+              className="lg:hidden !min-h-0 h-10 w-10 rounded-lg border border-white/25 text-white cursor-pointer">{menu ? <Icono nombre="cerrar" className="h-5 w-5 mx-auto" /> : <Icono nombre="menu" className="h-5 w-5 mx-auto" />}</button>
           </div>
         </div>
         {menu && (
@@ -223,7 +224,7 @@ export default function PortafolioPage() {
           {[0, 1].map((k) => (
             <div key={k} className="flex gap-10">
               {FRASES.map((x) => (
-                <span key={`${k}-${x}`} className="flex items-center gap-10">{x}<span className="text-amber-500">◆</span></span>
+                <span key={`${k}-${x}`} className="flex items-center gap-10">{x}<span className="inline-block h-1.5 w-1.5 rotate-45 bg-amber-500" /></span>
               ))}
             </div>
           ))}
@@ -298,7 +299,7 @@ export default function PortafolioPage() {
             {SERVICIOS.map((s, i) => (
               <Reveal key={s.titulo} delay={i * 120} className="h-full">
               <div className="group h-full rounded-2xl bg-slate-50 ring-1 ring-slate-200 p-6 hover:bg-blue-900 hover:ring-blue-900 hover:-translate-y-1 hover:shadow-xl transition duration-300">
-                <div className="h-12 w-12 rounded-xl bg-blue-900 group-hover:bg-white/15 text-2xl flex items-center justify-center transition-colors" aria-hidden>{s.icono}</div>
+                <div className="h-12 w-12 rounded-xl bg-blue-900 group-hover:bg-white/15 text-white flex items-center justify-center transition-colors" aria-hidden><Icono nombre={s.icono} className="h-6 w-6" /></div>
                 <h3 className="mt-4 text-lg font-extrabold text-blue-900 group-hover:text-white transition-colors">{s.titulo}</h3>
                 <p className="mt-2 text-sm text-slate-600 group-hover:text-blue-100 transition-colors">{s.texto}</p>
               </div>
@@ -346,7 +347,7 @@ export default function PortafolioPage() {
                       <p className="text-sm text-slate-600">{m.resumen}</p>
                       <ul className="space-y-1.5 text-sm text-slate-700">
                         {m.incluye.map((x) => (
-                          <li key={x} className="flex gap-2"><span aria-hidden className="mt-0.5 text-emerald-600">✓</span>{x}</li>
+                          <li key={x} className="flex gap-2"><Icono nombre="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{x}</li>
                         ))}
                       </ul>
                       <p className="mt-auto pt-2 text-xs font-semibold text-slate-500"><span className="text-amber-600">Ideal para:</span> {m.ideal}</p>
@@ -420,7 +421,7 @@ export default function PortafolioPage() {
             <h2 className="text-3xl sm:text-4xl font-black leading-tight">¿Listo para construir su casa?</h2>
             <p className="mt-4 text-lg text-blue-100">Cuéntenos su idea y su terreno. Le respondemos con una cotización clara y sin compromiso.</p>
             <a href={WHATSAPP_GENERAL} target="_blank" rel="noopener noreferrer" className="brillo-boton mt-8 inline-flex items-center gap-2 rounded-full bg-green-600 hover:bg-green-500 text-white font-black px-8 py-3.5 shadow-lg hover:-translate-y-0.5 transition">
-              <span aria-hidden>💬</span> Escribir por WhatsApp
+              <Icono nombre="mensaje" className="h-5 w-5" /> Escribir por WhatsApp
             </a>
           </Reveal>
 
@@ -477,6 +478,8 @@ export default function PortafolioPage() {
           <p className="font-medium">&copy; {new Date().getFullYear()} DenaServ. Todos los derechos reservados.</p>
           <div className="flex items-center gap-5 font-semibold">
             <Link href="/privacidad" className="hover:text-white hover:underline">Política de privacidad</Link>
+            <Link href="/terminos" className="hover:text-white hover:underline">Términos y condiciones</Link>
+            <button type="button" onClick={() => window.dispatchEvent(new Event("cookies:abrir"))} className="!min-h-0 font-semibold hover:text-white hover:underline cursor-pointer">Preferencias de cookies</button>
             <Link href="/login" className="hover:text-white hover:underline">Acceso de la empresa</Link>
           </div>
         </div>

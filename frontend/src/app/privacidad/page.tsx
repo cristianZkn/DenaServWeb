@@ -1,3 +1,4 @@
+import Icono from "@/components/Icono";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -18,7 +19,7 @@ const SECCIONES = [
     lista: [
       "Datos de contacto que usted nos entrega al pedir una cotización o escribirnos por WhatsApp o correo: nombre, teléfono, dirección del terreno y, cuando se formaliza un proyecto, RUT.",
       "Datos del proyecto: metros cuadrados, materiales, valores, pagos y comprobantes de pago, fotografías del avance de la obra y contrato.",
-      "Navegar por la página pública no requiere entregar datos. No usamos cookies de publicidad ni de seguimiento.",
+      "Navegar por la página pública no requiere entregar datos. No usamos cookies de publicidad. Solo si usted acepta el aviso de cookies, usamos Google Analytics para medir las visitas del sitio (páginas vistas, tipo de dispositivo y origen) de forma agregada; si no acepta, no se carga. Puede cambiar su decisión en «Preferencias de cookies», en el pie de página.",
       "El personal autorizado de la empresa inicia sesión con su cuenta de Google; se usa una cookie de sesión técnica, necesaria para mantener la sesión y que no se utiliza para otros fines.",
     ],
   },
@@ -70,7 +71,7 @@ export default function PrivacidadPage() {
       <header className="bg-blue-950 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="font-black text-xl tracking-tighter">DENASERV<span className="text-amber-400">.</span></Link>
-          <Link href="/" className="text-sm font-semibold text-blue-100 hover:text-white">← Volver al inicio</Link>
+          <Link href="/" className="text-sm font-semibold text-blue-100 hover:text-white"><Icono nombre="flecha-izq" className="inline h-4 w-4 -mt-0.5 mr-1" />Volver al inicio</Link>
         </div>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-12 pt-6">
           <p className="text-sm font-bold uppercase tracking-widest text-amber-300">Legal</p>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useEffect, useMemo, useState } from "react";
 import Aviso, { useAviso } from "@/components/Aviso";
 import { useDialogo } from "@/components/ConfirmDialog";
@@ -135,7 +136,7 @@ export default function ProveedoresPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      <EncabezadoPagina icono="🏢" titulo="Proveedores" descripcion="Empresas a las que se les compran los materiales. Cada material elige su proveedor y lleva su propio descuento."
+      <EncabezadoPagina icono="edificio" titulo="Proveedores" descripcion="Empresas a las que se les compran los materiales. Cada material elige su proveedor y lleva su propio descuento."
         resumen={[{ texto: "Total", valor: proveedores.length }, { texto: "Activos", valor: proveedores.filter((p) => p.activo).length }]} />
       <Aviso texto={exito.texto} />
 
@@ -143,7 +144,7 @@ export default function ProveedoresPage() {
         {/* Formulario */}
         <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm lg:sticky lg:top-6">
           <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
-            <span aria-hidden className="text-amber-500">{isEditing ? "✎" : "＋"}</span>
+            <Icono nombre={isEditing ? "lapiz" : "mas"} className="h-5 w-5 text-amber-500" />
             {isEditing ? "Editar proveedor" : "Registrar proveedor"}
           </h2>
           <form onSubmit={handleSubmit} noValidate className="space-y-4 text-sm">

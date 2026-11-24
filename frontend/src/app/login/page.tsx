@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/api";
 
@@ -122,7 +123,7 @@ export default function LoginPage() {
             El acceso está restringido a los correos autorizados por la empresa.
           </p>
           <a href="/" className="mt-4 inline-flex w-fit items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline">
-            ← Volver al portafolio
+            <Icono nombre="flecha-izq" className="inline h-4 w-4 -mt-0.5 mr-1" />Volver al portafolio
           </a>
         </div>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { reducirImagen } from "@/lib/imagenes";
 
 /** Selector de fotos para los formularios del portafolio: muestra las ya guardadas y las nuevas, con botón para quitar cada una.
@@ -35,7 +36,7 @@ export default function SelectorFotos({ existentes, nuevas, max, onAgregar, onQu
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={u} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
               {i === 0 && <span className="absolute bottom-1 left-1 rounded bg-amber-400 px-1.5 text-[10px] font-black text-blue-950">Portada</span>}
-              <button type="button" onClick={() => onQuitarExistente(u)} aria-label={`Quitar foto ${i + 1}`} className={quitar}>✕</button>
+              <button type="button" onClick={() => onQuitarExistente(u)} aria-label={`Quitar foto ${i + 1}`} className={quitar}><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
             </li>
           ))}
           {nuevas.map((u, i) => (
@@ -43,7 +44,7 @@ export default function SelectorFotos({ existentes, nuevas, max, onAgregar, onQu
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={u} alt={`Foto nueva ${i + 1}`} className="w-full h-full object-cover" />
               <span className="absolute bottom-1 left-1 rounded bg-green-600 px-1.5 text-[10px] font-black text-white">Nueva</span>
-              <button type="button" onClick={() => onQuitarNueva(i)} aria-label={`Quitar foto nueva ${i + 1}`} className={quitar}>✕</button>
+              <button type="button" onClick={() => onQuitarNueva(i)} aria-label={`Quitar foto nueva ${i + 1}`} className={quitar}><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
             </li>
           ))}
         </ul>

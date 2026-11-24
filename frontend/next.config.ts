@@ -6,11 +6,11 @@ const dev = process.env.NODE_ENV !== "production";
 // 'unsafe-inline' en scripts lo exige Next.js para sus datos de hidratación (no hay nonce); 'unsafe-eval' solo en desarrollo.
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${dev ? "'unsafe-eval' " : ""}https://accounts.google.com`,
+  `script-src 'self' 'unsafe-inline' ${dev ? "'unsafe-eval' " : ""}https://accounts.google.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline' https://accounts.google.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://accounts.google.com",
+  "connect-src 'self' https://accounts.google.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com",
   "frame-src https://accounts.google.com blob:",
   "object-src 'self' blob:", // visor de PDF del navegador (contratos y comprobantes se abren como blob:)
   "base-uri 'self'",

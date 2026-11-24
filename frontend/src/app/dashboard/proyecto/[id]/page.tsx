@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useDialogo } from "@/components/ConfirmDialog";
 import { urlSegura } from "@/lib/url";
 
@@ -185,7 +186,7 @@ function MaterialesProyecto({ cot }: { cot: Detalle }) {
                   <tr key={l.id} className="hover:bg-slate-50 transition-colors">
                     <td className="py-2.5 px-4 sm:px-5 font-semibold text-slate-900">
                       {l.catalogo_tipo?.fuente_url ? (
-                        <a href={urlSegura(l.catalogo_tipo.fuente_url)} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre} ↗</a>
+                        <a href={urlSegura(l.catalogo_tipo.fuente_url)} target="_blank" rel="noreferrer" className="hover:underline">{l.catalogo_tipo.nombre}<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></a>
                       ) : (
                         l.catalogo_tipo?.nombre ?? "Material eliminado"
                       )}
@@ -438,7 +439,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
       {/* Resumen siempre a la vista a la izquierda: no hay que volver arriba para ver el valor ni descargar fichas */}
       <aside className="lg:sticky lg:top-6 space-y-3">
         <Link href="/dashboard/proyectos" className="inline-block text-base font-semibold text-blue-800 hover:underline">
-          ← Proyectos
+          <Icono nombre="flecha-izq" className="inline h-4 w-4 -mt-0.5 mr-1" />Proyectos
         </Link>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <div>
@@ -700,7 +701,7 @@ export default function ProyectoInternoPage({ params }: { params: Promise<{ id: 
           <ul className="divide-y divide-slate-200 pt-3">
             {cambios.map((c) => (
               <li key={c.id} className="py-3 text-base">
-                <strong>{clp(c.total_anterior)} → {clp(c.total_nuevo)}</strong> · {c.motivo}
+                <strong>{clp(c.total_anterior)} <Icono nombre="flecha-der" className="inline h-3.5 w-3.5 -mt-0.5" /> {clp(c.total_nuevo)}</strong> · {c.motivo}
                 <div className="text-sm text-slate-500">{c.usuario} · {new Date(c.fecha).toLocaleDateString("es-CL")}</div>
               </li>
             ))}

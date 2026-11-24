@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -56,7 +57,12 @@ export default function DashboardLayout({
     };
   }, [router]);
 
-  useEffect(() => setAbierto(false), [pathname]);
+  // En pantallas anchas el menú se reduce a íconos al entrar al cotizador (necesita todo el ancho); se puede abrir con el botón de la base del menú.
+  const [manual, setManual] = useState<boolean | null>(null); // null = automático
+  useEffect(() => {
+    setAbierto(false);
+    setManual(null);
+  }, [pathname]);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -65,6 +71,7 @@ export default function DashboardLayout({
 
   if (!autorizado) return null;
 
+  const colapsado = manual ?? pathname.startsWith("/dashboard/cotizador");
   const seccion = NAV.find((n) => (n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href)));
 
   return (
@@ -81,10 +88,12 @@ export default function DashboardLayout({
       {abierto && <div className="lg:hidden fixed inset-0 z-40 bg-black/50 animate-aparecer" onClick={() => setAbierto(false)} aria-hidden />}
 
       {/* Menú lateral: la sección actual queda resaltada con una barra ámbar y el resto se atenúa */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-blue-950 to-blue-900 text-white flex flex-col shadow-xl transition-transform duration-300 lg:translate-x-0 ${abierto ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="h-16 flex items-center justify-between px-5 border-b border-white/10">
-          <Link href="/dashboard" className="text-xl font-extrabold tracking-tight">DENA<span className="text-amber-400">SERV</span></Link>
-          <button type="button" onClick={() => setAbierto(false)} aria-label="Cerrar menú" className="lg:hidden !min-h-0 h-8 w-8 rounded-lg text-blue-200 hover:bg-white/10 cursor-pointer">✕</button>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 ${colapsado ? "lg:w-[4.5rem]" : "lg:w-64"} bg-gradient-to-b from-blue-950 to-blue-900 text-white flex flex-col shadow-xl transition-[transform,width] duration-300 lg:translate-x-0 ${abierto ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className={`h-16 flex items-center justify-between px-5 border-b border-white/10 ${colapsado ? "lg:justify-center lg:px-0" : ""}`}>
+          <Link href="/dashboard" className="text-xl font-extrabold tracking-tight" aria-label="DenaServ, inicio">
+            {colapsado ? <><span className="lg:hidden">DENA<span className="text-amber-400">SERV</span></span><span className="hidden lg:inline text-amber-400">D</span></> : <>DENA<span className="text-amber-400">SERV</span></>}
+          </Link>
+          <button type="button" onClick={() => setAbierto(false)} aria-label="Cerrar menú" className="lg:hidden !min-h-0 h-8 w-8 rounded-lg text-blue-200 hover:bg-white/10 cursor-pointer"><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
         </div>
 
         <nav aria-label="Secciones del panel" className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
@@ -95,29 +104,37 @@ export default function DashboardLayout({
                 key={n.href}
                 href={n.href}
                 aria-current={activo ? "page" : undefined}
-                className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-base font-semibold transition-all duration-200 ${
+                title={colapsado ? n.label : undefined}
+                className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-base font-semibold transition-all duration-200 ${colapsado ? "lg:justify-center lg:px-0" : ""} ${
                   activo ? "bg-white/15 text-white shadow-inner" : "text-blue-200/70 hover:bg-white/10 hover:text-white hover:translate-x-0.5"
                 }`}
               >
                 <span aria-hidden className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-amber-400 origin-center transition-transform duration-300 ${activo ? "scale-y-100" : "scale-y-0"}`} />
                 <span className={`transition-colors ${activo ? "text-amber-300" : "group-hover:text-amber-200"}`}>{n.icono}</span>
-                {n.label}
+                <span className={colapsado ? "lg:sr-only" : ""}>{n.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/10 space-y-3">
-          <Link href="/" target="_blank" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Ver sitio público ↗</Link>
-          {userEmail && <p className="text-xs text-blue-200/70 truncate" title={userEmail}>{userEmail}</p>}
-          <button onClick={handleLogout} className="w-full !min-h-0 border border-white/25 hover:bg-white/10 text-white text-sm py-2 rounded-lg font-semibold transition cursor-pointer">
-            Cerrar sesión
+        <div className={`p-4 border-t border-white/10 space-y-3 ${colapsado ? "lg:px-2" : ""}`}>
+          <div className={colapsado ? "lg:hidden space-y-3" : "space-y-3"}>
+            <Link href="/" target="_blank" className="block text-sm font-semibold text-blue-200/80 hover:text-white transition-colors">Ver sitio público<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></Link>
+            {userEmail && <p className="text-xs text-blue-200/70 truncate" title={userEmail}>{userEmail}</p>}
+          </div>
+          <button onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión"
+            className="w-full !min-h-0 border border-white/25 hover:bg-white/10 text-white text-sm py-2 rounded-lg font-semibold transition cursor-pointer flex items-center justify-center gap-2">
+            <Icono nombre="salir" className="h-4 w-4" /><span className={colapsado ? "lg:hidden" : ""}>Cerrar sesión</span>
+          </button>
+          <button type="button" onClick={() => setManual(!colapsado)} aria-label={colapsado ? "Expandir menú" : "Minimizar menú"} title={colapsado ? "Expandir menú" : "Minimizar menú"}
+            className="hidden lg:flex w-full !min-h-0 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold text-blue-200/80 hover:bg-white/10 hover:text-white transition cursor-pointer">
+            <Icono nombre={colapsado ? "chevron-der" : "chevron-izq"} className="h-4 w-4" />{!colapsado && "Minimizar"}
           </button>
         </div>
       </aside>
 
       {/* Contenido: los bloques de cada sección aparecen con un breve escalonado (ver .panel-anim en globals.css) */}
-      <main className="lg:pl-64">
+      <main className={`${colapsado ? "lg:pl-[4.5rem]" : "lg:pl-64"} transition-[padding] duration-300`}>
         <div key={pathname} className="panel-anim w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useCallback, useEffect, useState } from "react";
 import { useDialogo } from "@/components/ConfirmDialog";
 import { fotoPrivadaADataUrl, reducirImagen } from "@/lib/imagenes";
@@ -158,7 +159,7 @@ export default function BitacoraAvance({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={f} alt={`Foto nueva ${i + 1}`} className="w-full h-full object-cover" />
                     <button type="button" onClick={() => setFotos((p) => p.filter((_, k) => k !== i))} aria-label={`Quitar foto ${i + 1}`}
-                      className="absolute top-1 right-1 bg-black/70 text-white w-6 h-6 rounded-full text-sm leading-none cursor-pointer !min-h-0">✕</button>
+                      className="absolute top-1 right-1 bg-black/70 text-white w-6 h-6 rounded-full text-sm leading-none cursor-pointer !min-h-0"><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
                   </li>
                 ))}
               </ul>

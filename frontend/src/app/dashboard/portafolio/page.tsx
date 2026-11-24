@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useDialogo } from "@/components/ConfirmDialog";
 import CatalogoAdmin from "@/components/CatalogoAdmin";
 import SelectorFotos from "@/components/SelectorFotos";
@@ -85,7 +86,7 @@ export default function PortafolioAdminPage() {
             <h1 className="text-2xl font-extrabold">Portafolio y catálogo</h1>
             <p className="text-blue-100 mt-1">Lo que se muestra en la página pública: obras terminadas y casas prediseñadas.</p>
           </div>
-          <a href="/" target="_blank" className="rounded-lg border border-white/30 hover:bg-white/10 px-4 py-2 font-semibold transition">Ver página pública ↗</a>
+          <a href="/" target="_blank" className="rounded-lg border border-white/30 hover:bg-white/10 px-4 py-2 font-semibold transition">Ver página pública<Icono nombre="externo" className="inline h-3.5 w-3.5 ml-1 -mt-0.5" /></a>
         </div>
         <dl className="relative mt-5 grid grid-cols-3 gap-3 max-w-xl">
           {[["Obras publicadas", `${visibles} de ${proyectos.length}`], ["Casas en el catálogo", String(nCasas)], ["Fotos en obras", String(proyectos.reduce((t, p) => t + p.imagenes.length, 0))]].map(([k, v]) => (
@@ -149,7 +150,7 @@ export default function PortafolioAdminPage() {
                   </div>
                   <div className="p-4 flex-1 flex flex-col gap-2">
                     <h2 className="font-bold text-lg leading-tight">{p.titulo}</h2>
-                    {p.ubicacion_comuna && <p className="text-sm text-slate-500">📍 {p.ubicacion_comuna}</p>}
+                    {p.ubicacion_comuna && <p className="flex items-center gap-1 text-sm text-slate-500"><Icono nombre="pin" className="h-4 w-4" />{p.ubicacion_comuna}</p>}
                     <span className={`self-start px-2 py-0.5 rounded border text-sm font-bold ${p.publicado ? "bg-green-100 text-green-900 border-green-600" : "bg-slate-100 text-slate-700 border-slate-400"}`}>
                       {p.publicado ? "Visible en la web" : "Oculto"}
                     </span>

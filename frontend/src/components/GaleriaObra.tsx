@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ETIQUETAS } from "@/lib/empresa";
 
@@ -104,7 +105,7 @@ export function TarjetaObra({ obra, onAbrir }: { obra: Obra; onAbrir: () => void
       <div className="p-5 sm:p-6 flex-grow flex flex-col gap-3 text-white">
         <div>
           <h3 className="text-xl font-black leading-tight">{obra.titulo}</h3>
-          {obra.ubicacion_comuna && <p className="mt-1 text-sm font-semibold text-blue-200">📍 {obra.ubicacion_comuna}</p>}
+          {obra.ubicacion_comuna && <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-blue-200"><Icono nombre="pin" className="h-4 w-4" />{obra.ubicacion_comuna}</p>}
         </div>
         {datos.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Datos de la obra">
@@ -144,7 +145,7 @@ export function VisorObra({ obra, onCerrar }: { obra: Obra; onCerrar: () => void
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-blue-950/90 backdrop-blur-sm p-3 sm:p-6 animate-aparecer" role="dialog" aria-modal="true" aria-label={obra.titulo} onClick={onCerrar}>
       <div className="relative w-full max-w-6xl max-h-full overflow-y-auto rounded-3xl bg-gradient-to-br from-blue-900/90 via-blue-950/90 to-blue-900/80 backdrop-blur-xl ring-1 ring-white/20 text-white shadow-2xl shadow-black/40 grid lg:grid-cols-[1.5fr_1fr] animate-subir" onClick={(e) => e.stopPropagation()}>
         <button ref={cerrarRef} type="button" onClick={onCerrar} aria-label="Cerrar galería"
-          className="absolute top-3 right-3 z-10 !min-h-0 h-10 w-10 rounded-full bg-black/55 hover:bg-black/80 text-white text-lg cursor-pointer">✕</button>
+          className="absolute top-3 right-3 z-10 !min-h-0 h-10 w-10 rounded-full bg-black/55 hover:bg-black/80 text-white text-lg cursor-pointer"><Icono nombre="cerrar" className="h-4 w-4 mx-auto" /></button>
 
         <div className="bg-black/30 flex flex-col">
           <div className="relative aspect-[4/3] lg:aspect-auto lg:flex-1 lg:min-h-[28rem] overflow-hidden" {...c.gestos}>
@@ -182,7 +183,7 @@ export function VisorObra({ obra, onCerrar }: { obra: Obra; onCerrar: () => void
           {obra.descripcion && <p className="text-blue-100 whitespace-pre-line">{obra.descripcion}</p>}
           <a href={obra.whatsapp_url || "https://wa.me/"} target="_blank" rel="noopener noreferrer"
             className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 transition-colors shadow-md">
-            <span aria-hidden>💬</span> Consultar por esta obra
+            <Icono nombre="mensaje" className="h-5 w-5" /> Consultar por esta obra
           </a>
         </div>
       </div>

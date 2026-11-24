@@ -108,7 +108,7 @@ export default function TarifasPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      <EncabezadoPagina icono="💲" titulo="Tarifas del cálculo"
+      <EncabezadoPagina icono="dolar" titulo="Tarifas del cálculo"
         descripcion="Valores fijos con los que el cotizador calcula el precio de cada obra. Un cambio rige para los proyectos que se cotizan desde ese momento; los ya guardados mantienen su valor, salvo que se les modifique el monto. Cada cotización también puede ajustar algunas de estas tarifas solo para sí misma, desde «Tarifas de esta cotización»." />
 
       <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" aria-labelledby="comb-titulo">

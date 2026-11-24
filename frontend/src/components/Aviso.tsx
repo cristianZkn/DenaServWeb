@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useEffect, useRef, useState } from "react";
 
 /** Aviso de éxito que se muestra unos segundos («Usuario registrado correctamente.») y luego se oculta solo. */
@@ -19,7 +20,7 @@ export default function Aviso({ texto }: { texto: string }) {
   if (!texto) return null;
   return (
     <div role="status" className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 font-semibold text-green-900">
-      <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-sm text-white">✓</span>
+      <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-white"><Icono nombre="check" className="h-4 w-4" /></span>
       {texto}
     </div>
   );

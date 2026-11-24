@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import EncabezadoPagina from "@/components/EncabezadoPagina";
 import { useDialogo } from "@/components/ConfirmDialog";
 
@@ -175,7 +176,7 @@ export default function ProyectosPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      <EncabezadoPagina icono="📁" titulo="Proyectos" descripcion="Cotizaciones y obras: valor, pagos, estado y ficha del cliente."
+      <EncabezadoPagina icono="carpeta" titulo="Proyectos" descripcion="Cotizaciones y obras: valor, pagos, estado y ficha del cliente."
         resumen={ESTADOS_PROYECTO.map((e) => ({ texto: e.plural, valor: cuenta(e.key as string) }))}
         acciones={
           <Link href="/dashboard/cotizador"
@@ -326,7 +327,7 @@ export default function ProyectosPage() {
                 </p>
               </div>
               <button onClick={() => setVisita(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">
-                ✕
+                <Icono nombre="cerrar" className="h-4 w-4 mx-auto" />
               </button>
             </div>
             <div>
@@ -387,7 +388,7 @@ export default function ProyectosPage() {
                 onClick={() => setModalHitosAbierto(false)}
                 className="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer"
               >
-                ✕
+                <Icono nombre="cerrar" className="h-4 w-4 mx-auto" />
               </button>
             </div>
 

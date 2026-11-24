@@ -1,5 +1,6 @@
 "use client";
 
+import Icono from "@/components/Icono";
 import { useEffect, useState } from "react";
 import Aviso, { useAviso } from "@/components/Aviso";
 import { useDialogo } from "@/components/ConfirmDialog";
@@ -99,14 +100,14 @@ export default function UsuariosPage() {
   return (
     <div className="space-y-4">
       {dialogo}
-      <EncabezadoPagina icono="👥" titulo="Usuarios" descripcion="Correos de Google autorizados para ingresar al panel interno."
+      <EncabezadoPagina icono="usuarios" titulo="Usuarios" descripcion="Correos de Google autorizados para ingresar al panel interno."
         resumen={[{ texto: "Total", valor: usuarios.length }, { texto: "Con acceso", valor: usuarios.filter((u) => u.activo).length }]} />
       <Aviso texto={exito.texto} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] gap-6 items-start">
         <section className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm lg:sticky lg:top-6">
           <h2 className="text-lg font-bold text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
-            <span aria-hidden className="text-amber-500">{editando ? "✎" : "＋"}</span>
+            <Icono nombre={editando ? "lapiz" : "mas"} className="h-5 w-5 text-amber-500" />
             {editando ? "Editar usuario" : "Autorizar usuario"}
           </h2>
           <form onSubmit={guardar} noValidate className="space-y-4 text-sm">

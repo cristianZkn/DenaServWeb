@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Icono from "@/components/Icono";
 
 /** Material del catálogo tal como lo necesita el selector. `precio_neto` ya trae el descuento del proveedor. */
 export interface MaterialCatalogo {
@@ -60,57 +61,68 @@ export default function SelectorMaterial({ catalogo, etiquetasCategoria, selecci
   }, [catalogo, busqueda, categorias, proveedores, orden]);
 
   const filtrosActivos = categorias.length + proveedores.length;
+  const conteoCategoria = useMemo(() => catalogo.reduce<Record<string, number>>((acc, m) => ({ ...acc, [m.categoria]: (acc[m.categoria] ?? 0) + 1 }), {}), [catalogo]);
   const etiquetaCategoria = (c: string) => (etiquetasCategoria[c] ?? c).replace(/\s*\(.*\)$/, "");
 
   return (
     <div className="border-2 border-slate-300 rounded-xl overflow-hidden bg-white">
-      <div className="p-3 border-b border-slate-200 space-y-3">
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar material o proveedor…"
-          aria-label="Buscar material o proveedor"
-        />
-        <details>
-          <summary className="cursor-pointer select-none font-semibold text-slate-700">
-            Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ""}
-          </summary>
-          <div className="mt-3 grid sm:grid-cols-2 gap-4">
-            <fieldset>
-              <legend className="text-sm font-semibold text-slate-600 mb-1">Categoría</legend>
-              {todasCategorias.map((c) => (
-                <label key={c} className="flex items-center gap-2 py-1 cursor-pointer">
-                  <input type="checkbox" className="!w-5 !min-h-0" checked={categorias.includes(c)} onChange={() => setCategorias((p) => alternar(p, c))} />
-                  <span>{etiquetaCategoria(c)}</span>
-                </label>
-              ))}
-            </fieldset>
-            <fieldset>
-              <legend className="text-sm font-semibold text-slate-600 mb-1">Proveedor</legend>
-              {todosProveedores.map((p) => (
-                <label key={p} className="flex items-center gap-2 py-1 cursor-pointer">
-                  <input type="checkbox" className="!w-5 !min-h-0" checked={proveedores.includes(p)} onChange={() => setProveedores((x) => alternar(x, p))} />
-                  <span>{p}</span>
-                </label>
-              ))}
-            </fieldset>
+      <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
+        <div className="relative">
+          <Icono nombre="buscar" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar material o proveedor…"
+            aria-label="Buscar material o proveedor" className="!pl-10" />
+        </div>
+
+        {/* Los filtros están siempre a la vista: un toque activa o quita cada uno */}
+        <div>
+          <p className="mb-1.5 text-xs font-bold text-slate-500">Categoría</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por categoría">
+            {todasCategorias.map((c) => {
+              const activa = categorias.includes(c);
+              return (
+                <button key={c} type="button" aria-pressed={activa} onClick={() => setCategorias((p) => alternar(p, c))}
+                  className={`!min-h-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset transition cursor-pointer ${
+                    activa ? "bg-blue-900 text-white ring-blue-900" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-100"}`}>
+                  {activa && <Icono nombre="check" className="h-3.5 w-3.5" />}{etiquetaCategoria(c)}
+                  <span className={`text-xs ${activa ? "text-blue-200" : "text-slate-400"}`}>{conteoCategoria[c] ?? 0}</span>
+                </button>
+              );
+            })}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-600">Ordenar por</span>
-              <select value={orden} onChange={(e) => setOrden(e.target.value as "nombre" | "precio")} className="!w-auto">
-                <option value="nombre">Nombre</option>
-                <option value="precio">Precio (menor a mayor)</option>
-              </select>
-            </label>
+        </div>
+        <div>
+          <p className="mb-1.5 text-xs font-bold text-slate-500">Proveedor</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por proveedor">
+            {todosProveedores.map((p) => {
+              const activo = proveedores.includes(p);
+              return (
+                <button key={p} type="button" aria-pressed={activo} onClick={() => setProveedores((x) => alternar(x, p))}
+                  className={`!min-h-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset transition cursor-pointer ${
+                    activo ? "bg-amber-400 text-blue-950 ring-amber-400" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-100"}`}>
+                  {activo && <Icono nombre="check" className="h-3.5 w-3.5" />}{p}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="text-slate-600"><strong className="text-slate-900">{visibles.length}</strong> de {catalogo.length} materiales</span>
+          <div className="flex flex-wrap items-center gap-3">
             {filtrosActivos > 0 && (
-              <button type="button" onClick={() => { setCategorias([]); setProveedores([]); }} className="text-blue-800 font-semibold hover:underline cursor-pointer">
-                Limpiar filtros
+              <button type="button" onClick={() => { setCategorias([]); setProveedores([]); }} className="!min-h-0 inline-flex items-center gap-1 font-semibold text-blue-800 hover:underline cursor-pointer">
+                <Icono nombre="cerrar" className="h-3.5 w-3.5" />Limpiar filtros ({filtrosActivos})
               </button>
             )}
+            <label className="flex items-center gap-2">
+              <span className="font-semibold text-slate-600">Ordenar</span>
+              <select value={orden} onChange={(e) => setOrden(e.target.value as "nombre" | "precio")} className="!w-auto !min-h-0 !h-9 !py-0 text-sm">
+                <option value="nombre">Por nombre</option>
+                <option value="precio">Precio: menor a mayor</option>
+              </select>
+            </label>
           </div>
-        </details>
+        </div>
       </div>
 
       <div role="radiogroup" aria-label="Materiales disponibles" className="max-h-80 overflow-y-auto divide-y divide-slate-100">
@@ -134,7 +146,7 @@ export default function SelectorMaterial({ catalogo, etiquetasCategoria, selecci
         ))}
       </div>
       <p className="px-3 py-2 text-sm text-slate-500 bg-slate-50 border-t border-slate-200">
-        {visibles.length} de {catalogo.length} materiales · precios netos, con el descuento del proveedor
+        {visibles.length} de {catalogo.length} materiales · precios netos, con el descuento de cada producto
       </p>
     </div>
   );
