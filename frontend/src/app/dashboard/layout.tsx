@@ -78,8 +78,10 @@ export default function DashboardLayout({
 
   const tituloSeccion = NAV.find((n) => (n.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(n.href)))?.label;
   useEffect(() => {
-    document.title = `${tituloSeccion ?? "Panel"} | DenaServ`;   // cada pantalla anuncia su nombre al lector de pantalla
-  }, [tituloSeccion]);
+    // Next vuelve al título general al navegar: se fija un instante después. Así cada pantalla anuncia su nombre al lector de pantalla.
+    const id = window.setTimeout(() => { document.title = `${tituloSeccion ?? "Panel"} | DenaServ`; }, 100);
+    return () => window.clearTimeout(id);
+  }, [tituloSeccion, pathname]);
   const menu = NAV.filter((n) => !n.soloAdmin || rol === "ADMIN");
   const sinPermiso = rol !== "ADMIN" && NAV.some((n) => n.soloAdmin && pathname.startsWith(n.href));
   if (!autorizado) return null;

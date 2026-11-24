@@ -7,7 +7,7 @@ import Insignia from "@/components/Insignia";
 interface Registro {
   id: number;
   usuario_nombre: string;
-  accion: "CREAR" | "MODIFICAR" | "ELIMINAR";
+  accion: "CREAR" | "MODIFICAR" | "ELIMINAR" | "EXPORTAR";
   entidad: string;
   entidad_id: number;
   detalle: string;
@@ -20,7 +20,7 @@ const ENTIDADES: [string, string][] = [
   ["BitacoraAvance", "Bitácora"], ["Proveedor", "Proveedores"], ["CatalogoTipo", "Materiales"], ["Usuario", "Usuarios"],
   ["PortafolioProyecto", "Portafolio"], ["CasaCatalogo", "Catálogo de casas"], ["Tarifa", "Tarifas"], ["ContratoNotarial", "Contratos"],
 ];
-const ACCIONES = { CREAR: { texto: "Creó", tono: "verde" }, MODIFICAR: { texto: "Modificó", tono: "azul" }, ELIMINAR: { texto: "Eliminó", tono: "rojo" } } as const;
+const ACCIONES = { CREAR: { texto: "Creó", tono: "verde" }, MODIFICAR: { texto: "Modificó", tono: "azul" }, ELIMINAR: { texto: "Eliminó", tono: "rojo" }, EXPORTAR: { texto: "Exportó", tono: "ambar" } } as const;
 const nombreEntidad = (e: string) => ENTIDADES.find(([k]) => k === e)?.[1] ?? e;
 
 /** Historial de cambios del sistema (solo Admin): quién creó, modificó o eliminó qué, y cuándo. */
@@ -95,7 +95,7 @@ export default function AuditoriaPage() {
                   <td className="px-4 py-2.5 font-semibold text-slate-900">{r.usuario_nombre}</td>
                   <td className="px-4 py-2.5"><Insignia tono={ACCIONES[r.accion].tono}>{ACCIONES[r.accion].texto}</Insignia></td>
                   <td className="px-4 py-2.5 text-sm">
-                    <span className="font-semibold text-slate-800">{nombreEntidad(r.entidad)} n.º {r.entidad_id}</span>
+                    <span className="font-semibold text-slate-800">{nombreEntidad(r.entidad)}{r.accion === "EXPORTAR" ? "" : ` n.º ${r.entidad_id}`}</span>
                     <span className="block text-slate-500 break-words">{r.detalle}</span>
                   </td>
                 </tr>

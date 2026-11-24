@@ -78,7 +78,8 @@ class Command(BaseCommand):
 
         hitos, registros, obras = [], [], []
         for cot, (dias, total) in zip(cotizaciones, plan):
-            avance_pagos = min(1.0, dias / 240) * rng.uniform(0.55, 1.15)      # cuánto del proyecto ya se cobró según su antigüedad
+            # Cuánto del proyecto ya se cobró según su antigüedad; ~55 % de las cotizaciones nunca se concreta (no pagan el anticipo).
+            avance_pagos = 0 if rng.random() < 0.55 else min(1.0, dias / 240) * rng.uniform(0.55, 1.15)
             for fase, pct, monto in calculo.hitos(total):
                 inicio = cot.fecha_creacion.date()
                 fecha = inicio + timedelta(days=int({"ANTICIPO_40": 6, "AVANCE_30": 60, "ENTREGA_30": 110}[fase] * rng.uniform(0.7, 1.4)))

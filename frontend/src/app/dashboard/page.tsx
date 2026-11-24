@@ -168,6 +168,7 @@ export default function DashboardPage() {
   const [progreso, setProgreso] = useState<ProgresoObra[]>([]);
   const [stats, setStats] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
+  const [limite, setLimite] = useState(12); // con cientos de obras solo se dibujan unas pocas a la vez
   const [errores, setErrores] = useState<string[]>([]);
 
   const cargar = useCallback(async () => {
@@ -235,7 +236,7 @@ export default function DashboardPage() {
           </p>
         ) : (
           <ul className="mt-4 grid lg:grid-cols-2 gap-4" aria-label="Avance de cada obra">
-            {progreso.map((p) => {
+            {progreso.slice(0, limite).map((p) => {
               const av = Math.max(0, Math.min(100, Number(p.avance)));
               const e = etapa(av);
               return (
@@ -255,6 +256,13 @@ export default function DashboardPage() {
               );
             })}
           </ul>
+        )}
+        {progreso.length > limite && (
+          <div className="mt-4 text-center">
+            <button type="button" onClick={() => setLimite((n) => n + 12)} className="font-semibold text-blue-800 border border-blue-200 hover:bg-blue-50 px-5 h-11 rounded-lg cursor-pointer">
+              Mostrar más obras ({limite} de {progreso.length})
+            </button>
+          </div>
         )}
       </section>
 

@@ -182,7 +182,7 @@ export default function ReportesPage() {
               {!cargando && datos?.filas.map((f, i) => (
                 <tr key={i} className="hover:bg-slate-50">
                   {f.map((v, k) => (
-                    <td key={k} className={`px-4 py-2.5 ${["pesos", "numero", "porcentaje"].includes(datos.columnas[k].tipo) ? "text-right tabular-nums" : ""}`}>{celda(v, datos.columnas[k].tipo)}</td>
+                    <td key={k} className={`px-4 py-2.5 ${["pesos", "numero", "porcentaje"].includes(datos.columnas[k].tipo) ? "text-right tabular-nums" : ""} ${["fecha", "mes"].includes(datos.columnas[k].tipo) ? "whitespace-nowrap" : ""}`}>{celda(v, datos.columnas[k].tipo)}</td>
                   ))}
                 </tr>
               ))}

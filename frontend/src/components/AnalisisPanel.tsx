@@ -18,9 +18,9 @@ const valorIndicador = (i: Indicador) => (i.unidad === "$" ? pesos(i.valor) : i.
 const COLOR_ESTADO: Record<string, string> = { BORRADOR: "bg-amber-400", ACEPTADA: "bg-blue-500", FINALIZADA: "bg-green-500" };
 
 /** Gráfico con descripción para lector de pantalla y una tabla con sus datos (WCAG: ninguna información solo en el dibujo). */
-function Tarjeta({ titulo, descripcion, tabla, children }: { titulo: string; descripcion: string; tabla: { columnas: string[]; filas: (string | number)[][] }; children: React.ReactNode }) {
+function Tarjeta({ titulo, descripcion, tabla, children, className = "" }: { className?: string; titulo: string; descripcion: string; tabla: { columnas: string[]; filas: (string | number)[][] }; children: React.ReactNode }) {
   return (
-    <figure className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <figure className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-5 ${className}`}>
       <figcaption className="text-lg font-bold text-slate-900">{titulo}</figcaption>
       <div role="img" aria-label={`${titulo}. ${descripcion}`} className="mt-4">{children}</div>
       <details className="mt-4 text-sm">
@@ -96,7 +96,7 @@ export default function AnalisisPanel() {
             {datos.indicadores.map((i) => (
               <li key={i.clave} className="bg-white rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-slate-600">{i.nombre}</p>
-                <p className="text-2xl font-black tabular-nums text-slate-900">{valorIndicador(i)}</p>
+                <p className="text-lg xl:text-xl font-black tabular-nums text-slate-900 whitespace-nowrap">{valorIndicador(i)}</p>
                 <details className="mt-1 text-xs text-slate-600">
                   <summary className="cursor-pointer font-semibold text-blue-800">Cómo se calcula</summary>
                   <p className="mt-1"><strong>Pregunta:</strong> {i.pregunta}</p>
@@ -107,7 +107,7 @@ export default function AnalisisPanel() {
           </ul>
 
           <div className="grid lg:grid-cols-2 gap-4">
-            <Tarjeta titulo="Venta neta y cobro por mes" tabla={{ columnas: ["Mes", "Cotizaciones", "Venta neta", "Cobrado"], filas: datos.mensual.map((m) => [mesCorto(m.mes), m.cotizaciones, pesos(m.neto), pesos(m.cobrado)]) }}
+            <Tarjeta className="lg:col-span-2" titulo="Venta neta y cobro por mes" tabla={{ columnas: ["Mes", "Cotizaciones", "Venta neta", "Cobrado"], filas: datos.mensual.map((m) => [mesCorto(m.mes), m.cotizaciones, pesos(m.neto), pesos(m.cobrado)]) }}
               descripcion={datos.mensual.length ? `Por mes de creación de la cotización, venta neta y monto cobrado. Mayor venta: ${mesCorto(datos.mensual.reduce((a, b) => (b.neto > a.neto ? b : a)).mes)}.` : "Sin datos en el período."}>
               {datos.mensual.length === 0 ? <p className="text-slate-500">Sin datos en el período.</p> : (
                 <>
