@@ -49,11 +49,22 @@ def datos_invalidos(request, exc):
                  "direccion_terreno": "Dirección", "superficie_m2": "Superficie", "distancia_flete_km": "Distancia",
                  "telefono": "Teléfono", "email": "Correo", "rut_empresa": "RUT de la empresa", "razon_social": "Razón social",
                  "descuento_pct": "Descuento", "m2_vigas_vista": "Metros con vigas", "nombre": "Nombre", "unidad_medida": "Unidad", "categoria": "Categoría",
-                 "precio_base_unitario": "Precio", "fuente_url": "Dirección de la ficha", "comentario": "Comentario", "porcentaje": "Avance", "titulo": "Título"}
+                 "precio_base_unitario": "Precio", "fuente_url": "Dirección de la ficha", "comentario": "Comentario", "porcentaje": "Avance", "titulo": "Título",
+                 "monto": "Monto", "metodo": "Método de pago", "desde": "Fecha desde", "hasta": "Fecha hasta"}
+    # Mensajes de validación de los límites numéricos y de largo, en español (los de Pydantic vienen en inglés).
+    traduccion = {"greater_than": "debe ser mayor que {gt}", "greater_than_equal": "no puede ser menor que {ge}", "less_than": "debe ser menor que {lt}",
+                  "less_than_equal": "no puede ser mayor que {le}", "missing": "es obligatorio", "string_too_short": "debe tener al menos {min_length} caracteres",
+                  "string_too_long": "puede tener hasta {max_length} caracteres", "float_parsing": "debe ser un número", "int_parsing": "debe ser un número entero",
+                  "date_parsing": "debe ser una fecha válida (AAAA-MM-DD)", "date_from_datetime_parsing": "debe ser una fecha válida (AAAA-MM-DD)"}
     msgs = []
     for e in exc.errors:
         campo = etiquetas.get(str(e["loc"][-1]), str(e["loc"][-1]))
         msg = str(e.get("msg", "")).removeprefix("Value error, ")
+        if e.get("type") in traduccion:
+            try:
+                msg = traduccion[e["type"]].format(**(e.get("ctx") or {}))
+            except KeyError:
+                pass
         msgs.append(msg if msg.startswith(("El ", "La ")) else f"{campo}: {msg}")
     return api.create_response(request, {"message": " ".join(msgs), "detail": exc.errors}, status=422)
 
